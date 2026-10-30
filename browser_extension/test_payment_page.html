@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CardVault Autofill Demo Page</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #F1F5F9; padding: 40px 20px; display: flex; justify-content: center; }
+    .container { max-width: 650px; width: 100%; }
+    .card { background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); margin-bottom: 24px; }
+    h2 { margin-top: 0; color: #0F172A; font-size: 18px; margin-bottom: 4px; }
+    p.sub { color: #64748B; font-size: 13px; margin-bottom: 18px; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px; }
+    input { width: 100%; padding: 10px 14px; border: 1.5px solid #CBD5E1; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s; }
+    input:focus { border-color: #FF6F00; box-shadow: 0 0 0 3px rgba(255, 111, 0, 0.15); }
+    .row { display: flex; gap: 12px; }
+    .col { flex: 1; }
+    .badge { display: inline-block; padding: 4px 8px; background: #FFF7ED; color: #FF6F00; border-radius: 6px; font-size: 11px; font-weight: 800; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div style="text-align: center; margin-bottom: 20px;">
+      <span class="badge">TEST ENVIRONMENT</span>
+      <h1 style="color: #0F172A; margin: 0; font-size: 24px;">Autofill Verification Demo</h1>
+      <p style="color: #64748B; font-size: 13px; margin-top: 4px;">Click on any field below to test CardVault extension suggestions</p>
+    </div>
+
+    <!-- Form 1: Card Checkout -->
+    <div class="card">
+      <h2>💳 Card Payment Form</h2>
+      <p class="sub">Tests Card Number, Expiry Date, CVV, and Cardholder Name autofill</p>
+      
+      <div class="form-group">
+        <label>Cardholder Name</label>
+        <input type="text" name="card_holder" placeholder="Full name on card" autocomplete="cc-name" />
+      </div>
+
+      <div class="form-group">
+        <label>Card Number</label>
+        <input type="text" name="card_number" placeholder="16-digit card number" autocomplete="cc-number" />
+      </div>
+
+      <div class="row">
+        <div class="col form-group">
+          <label>Expiry Date (MM/YY)</label>
+          <input type="text" name="card_expiry" placeholder="MM/YY" autocomplete="cc-exp" />
+        </div>
+        <div class="col form-group">
+          <label>CVV / Security Code</label>
+          <input type="password" name="card_cvv" placeholder="CVV" autocomplete="cc-csc" maxlength="4" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Form 2: Bank Transfer -->
+    <div class="card">
+      <h2>🏦 Net Banking & Bank Transfer Form</h2>
+      <p class="sub">Tests Account Number, IFSC Code, User ID, and Password autofill</p>
+      
+      <div class="form-group">
+        <label>Beneficiary / Bank Account Number</label>
+        <input type="text" name="account_number" placeholder="Bank account number" />
+      </div>
+
+      <div class="form-group">
+        <label>IFSC Code</label>
+        <input type="text" name="ifsc_code" placeholder="e.g. HDFC0001234, SBIN0001234" />
+      </div>
+
+      <div class="row">
+        <div class="col form-group">
+          <label>Internet Banking User ID</label>
+          <input type="text" name="user_id" placeholder="Customer / User ID" autocomplete="username" />
+        </div>
+        <div class="col form-group">
+          <label>Login Password</label>
+          <input type="password" name="login_password" placeholder="Password" autocomplete="current-password" />
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

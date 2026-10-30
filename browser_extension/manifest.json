@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "CardVault Autofill - Secure Password & Card Manager",
+  "version": "1.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzR9ReZET7StZMbBdeAQBrH2TaEf5Y57wnne0yTelkShR6zcVlTKI9xh5QWZCz9Toysrzowqiw2mHI7bQUlTKE4ikf8Faebuiagom9GJSVo29M3qhvtc8flmwrIbrCdvjcCsdzhu47jsLM9h6ncxTTTJ1ayGq49G7V/YTZi6N4KVU9yG5GYX06DWa65UsnYk3BiDsdW5FvLkMjAHMMDTOVfuMggRgFVAzsGr0in3lDmZWgN00PjiubdUK3Lo4uJmuVoSOFkPUK3a4yYljydP7tyNb2XIVVrMmj1PTHVCn6bMrPic2eJpnhhANtxUgRtCHxhwI9XjhSkM9WueDsnSqPQIDAQAB",
+  "description": "Autofill credit cards, bank accounts, IFSC codes, and credentials with zero-knowledge encryption and CardVault mobile authorization.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "CardVault Autofill",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "identity"
+  ],
+  "oauth2": {
+    "client_id": "455353267035-ikc7gak770ubpgvdru3p1lo3j88i0f1s.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.appdata",
+      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile"
+    ]
+  },
+  "host_permissions": [
+    "https://www.googleapis.com/*",
+    "<all_urls>"
+  ]
+}

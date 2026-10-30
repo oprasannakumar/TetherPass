@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CardVault Windows Extension</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-badge">CV</span>
+        <span class="brand-title">CardVault</span>
+      </div>
+      <div id="statusBadge" class="status-badge locked">
+        <span id="statusDot" class="status-dot"></span>
+        <span id="statusText">Locked</span>
+      </div>
+    </header>
+
+    <div id="tabContextNotice" class="tab-notice" style="display: none;">
+      <span>💡 Tip: Click the <strong>CV</strong> icon in your browser toolbar to use autofill while browsing.</span>
+    </div>
+
+    <!-- ── Screen 1: Locked & Authorization Required ── -->
+    <div id="lockedView" class="view-panel active">
+      
+      <!-- ── STEP 1: GOOGLE DRIVE LINK (OAUTH 2.0) ── -->
+      <div class="setup-section">
+        <div class="section-badge-row">
+          <span class="step-pill">STEP 1</span>
+          <span class="section-title">Google Drive Account</span>
+        </div>
+        <p class="section-subtitle">
+          Vault data is fetched directly from your private Google Drive backup. Connect the Google Account used in CardVault on your phone.
+        </p>
+
+        <!-- Unlinked state -->
+        <div id="oauthUnlinkedBox" class="account-card">
+          <button id="googleOAuthBtn" class="btn btn-google">
+            <img src="icons/google_logo.svg" alt="G" class="google-logo" />
+            <span>Sign in with Google Account</span>
+          </button>
+
+          <div style="margin-top: 10px; text-align: center;">
+            <a href="#" id="toggleManualTokenLink" class="subtle-link">Paste Access Token or Select Local File</a>
+          </div>
+          <div id="manualTokenBox" style="display: none; margin-top: 10px;">
+            <div class="form-group" style="margin-bottom: 8px;">
+              <input type="password" id="customTokenInput" placeholder="Google OAuth Access Token (ya29...)" />
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button id="saveCustomTokenBtn" class="btn btn-sm btn-secondary" style="flex: 1;">Use Token</button>
+              <button id="pickFileFallbackBtn" class="btn btn-sm btn-secondary" style="flex: 1;">Pick Local File</button>
+            </div>
+            <input type="file" id="localBackupFileInput" accept=".json" style="display: none;" />
+          </div>
+        </div>
+
+        <!-- Linked state -->
+        <div id="oauthLinkedBox" class="account-card linked" style="display: none;">
+          <div class="account-row">
+            <div class="avatar-circle">
+              <span id="accountAvatarLetter">O</span>
+            </div>
+            <div class="account-details">
+              <div id="connectedEmailDisplay" class="account-email">oprasannak@gmail.com</div>
+              <div class="account-status">
+                <span class="status-indicator-dot"></span>
+                <span>Google Drive Connected</span>
+              </div>
+            </div>
+            <button id="disconnectOAuthBtn" class="btn-switch-account" title="Switch or disconnect account">Switch</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── STEP 2: MOBILE CONFIRMATION & MASTER PASSWORD ── -->
+      <div class="setup-section" style="margin-top: 14px;">
+        <div class="section-badge-row">
+          <span class="step-pill">STEP 2</span>
+          <span class="section-title">Mobile Approval & Decrypt</span>
+        </div>
+        <p class="section-subtitle">
+          Enter your Master Password and confirm access on your phone with Biometrics:
+        </p>
+
+        <div class="auth-box">
+          <div class="form-group">
+            <label for="passwordInput">Vault Master Password</label>
+            <input type="password" id="passwordInput" placeholder="Enter your Master Password" autocomplete="off" />
+          </div>
+
+          <!-- Multi-Mobile Device Selector (shown when multiple phones are registered) -->
+          <div id="deviceSelectorGroup" class="form-group" style="display: none; margin-bottom: 12px;">
+            <label for="targetDeviceSelect" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>Target Mobile Device:</span>
+              <span id="deviceCountBadge" style="color: #FF6F00; font-size: 10px; font-weight: 800;"></span>
+            </label>
+            <select id="targetDeviceSelect" class="device-select">
+              <option value="ALL">📡 All Mobile Devices</option>
+            </select>
+          </div>
+
+          <!-- Primary: Send Push Confirmation to Mobile -->
+          <div id="normalActionBox">
+            <button id="requestPushApprovalBtn" class="btn btn-primary">
+              <span class="btn-icon">📲</span> Send Confirmation Pop-up to Mobile
+            </button>
+            <div style="margin-top: 8px; text-align: center;">
+              <a href="#" id="toggleManualPinLink" style="font-size: 11px; color: #64748B; text-decoration: underline;">Use 6-digit PIN instead</a>
+            </div>
+          </div>
+
+          <!-- Secondary: Manual PIN Fallback -->
+          <div id="manualPinBox" style="display: none; margin-top: 10px;">
+            <div class="form-group">
+              <label for="pinInput">6-Digit Mobile PIN (from phone screen)</label>
+              <input type="text" id="pinInput" placeholder="e.g. 837507" maxlength="6" autocomplete="off" />
+            </div>
+            <button id="unlockWithPinBtn" class="btn btn-primary" style="margin-top: 4px;">
+              <span class="btn-icon">🔓</span> Authorize with PIN & Sync
+            </button>
+          </div>
+
+          <!-- Active Waiting State for Mobile Confirmation -->
+          <div id="waitingForMobileCard" class="waiting-card" style="display: none;">
+            <div class="pulse-ring"></div>
+            <div class="waiting-title">🔔 Check Your Mobile Phone!</div>
+            <p class="waiting-desc">
+              A confirmation pop-up has been sent to CardVault on your phone. Tap <strong>"Approve with Biometrics"</strong>.
+            </p>
+            <div id="waitingTimer" class="waiting-timer">Waiting for approval (60s)...</div>
+            <button id="cancelApprovalRequestBtn" class="btn btn-sm btn-outline-danger" style="margin-top: 10px;">Cancel Request</button>
+          </div>
+
+          <div id="authError" class="error-banner" style="display: none;"></div>
+          <div id="authSuccess" class="success-banner" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Screen 2: Unlocked & Vault Active ── -->
+    <div id="unlockedView" class="view-panel">
+      <!-- Redesigned Sleek Session Bar -->
+      <div class="session-bar">
+        <div class="session-left">
+          <div class="session-status-row">
+            <span class="session-pulse-dot"></span>
+            <span class="session-title">Vault Active</span>
+          </div>
+          <span id="sessionTimer" class="session-timer-pill">29 min left</span>
+        </div>
+        <button id="lockNowBtn" class="btn-lock-session" title="Lock extension immediately">
+          <span>🔒 Lock</span>
+        </button>
+      </div>
+
+      <!-- Search Bar -->
+      <div class="search-box">
+        <input type="text" id="searchBar" placeholder="Search cards, bank accounts, IFSC..." />
+      </div>
+
+      <!-- Category Filter Tabs -->
+      <div class="filter-tabs">
+        <button class="tab-btn active" data-tab="cards">Cards (<span id="cardsCount">0</span>)</button>
+        <button class="tab-btn" data-tab="banks">Banks (<span id="banksCount">0</span>)</button>
+        <button class="tab-btn" data-tab="passwords">Passwords (<span id="pwdCount">0</span>)</button>
+      </div>
+
+      <!-- Items List -->
+      <div id="vaultList" class="vault-items-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <script src="crypto_utils.js"></script>
+  <script src="drive_client.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+/**
+ * CardVault Autofill Dropdown Styles
+ */
+
+.cv-autofill-dropdown {
+  position: absolute !important;
+  z-index: 2147483647 !important;
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 13px !important;
+  color: #0F172A !important;
+  overflow: hidden !important;
+  max-width: 380px !important;
+  animation: cvFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-sizing: border-box !important;
+}
+
+@keyframes cvFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.cv-dropdown-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 8px 12px !important;
+  background: #F8FAFC !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+}
+
+.cv-header-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.cv-logo-badge {
+  background: #FF6F00 !important;
+  color: #FFFFFF !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  padding: 2px 5px !important;
+  border-radius: 4px !important;
+  letter-spacing: 0.5px !important;
+}
+
+.cv-title {
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  color: #0F172A !important;
+}
+
+.cv-status-tag {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  padding: 2px 7px !important;
+  border-radius: 10px !important;
+}
+
+.cv-status-tag.cv-authorized {
+  background: #DCFCE7 !important;
+  color: #15803D !important;
+}
+
+.cv-status-tag.cv-locked {
+  background: #FEE2E2 !important;
+  color: #B91C1C !important;
+}
+
+.cv-locked-notice {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 10px !important;
+  padding: 14px 12px !important;
+  background: #FFF7ED !important;
+  border-left: 3px solid #FF6F00 !important;
+}
+
+.cv-lock-icon {
+  font-size: 18px !important;
+  line-height: 1 !important;
+}
+
+.cv-lock-text strong {
+  display: block !important;
+  font-size: 12px !important;
+  color: #C2410C !important;
+  margin-bottom: 4px !important;
+}
+
+.cv-lock-text p {
+  margin: 0 !important;
+  font-size: 11px !important;
+  color: #64748B !important;
+  line-height: 1.4 !important;
+}
+
+.cv-items-list {
+  max-height: 220px !important;
+  overflow-y: auto !important;
+}
+
+.cv-item-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 10px 12px !important;
+  cursor: pointer !important;
+  border-bottom: 1px solid #F1F5F9 !important;
+  transition: background 0.15s ease !important;
+}
+
+.cv-item-row:last-child {
+  border-bottom: none !important;
+}
+
+.cv-item-row:hover {
+  background: #FFF7ED !important;
+}
+
+.cv-item-icon {
+  font-size: 18px !important;
+  flex-shrink: 0 !important;
+}
+
+.cv-item-info {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+.cv-item-title {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #0F172A !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.cv-item-sub {
+  font-size: 11px !important;
+  color: #64748B !important;
+  margin-top: 2px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  font-family: monospace, sans-serif !important;
+  letter-spacing: -0.2px !important;
+}
+
+.cv-empty-notice {
+  padding: 14px !important;
+  text-align: center !important;
+  color: #94A3B8 !important;
+  font-size: 12px !important;
+}

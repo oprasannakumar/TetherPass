@@ -1,0 +1,395 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:googleapis/drive/v3.dart' as drive;
+import 'package:http/http.dart' as http;
+
+import 'crypto_service.dart';
+import 'database_service.dart';
+import 'secure_backup_export_service.dart';
+import 'vault_security_service.dart';
+import 'device_identity_service.dart';
+
+class MasterPasswordRequiredException implements Exception {
+  final String payload;
+  const MasterPasswordRequiredException(this.payload);
+  @override
+  String toString() => 'Master Password required to decrypt this cloud backup.';
+}
+
+/// Handles Google Drive App Data backup and restore.
+class DriveService extends ChangeNotifier {
+  static const _backupFileName = 'card_vault_backup_v2.json';
+  static const _scopes = ['https://www.googleapis.com/auth/drive.appdata'];
+
+  final CryptoService cryptoService;
+  final DatabaseService databaseService;
+  final VaultSecurityService? vaultSecurityService;
+
+  DriveService({
+    required this.cryptoService,
+    required this.databaseService,
+    this.vaultSecurityService,
+  }) {
+    // Listen to Google Sign-In state changes in real time
+    _googleSignIn.onCurrentUserChanged.listen((account) {
+      _currentUser = account;
+      notifyListeners();
+    });
+
+    // Automatically restore signed-in Google account silently on app launch
+    trySilentSignIn();
+  }
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: _scopes);
+
+  GoogleSignInAccount? _currentUser;
+  bool get isSignedIn => _currentUser != null;
+  String? get userEmail => _currentUser?.email;
+  String? get userDisplayName => _currentUser?.displayName;
+  String? get userPhotoUrl => _currentUser?.photoUrl;
+  String? lastError;
+
+  // ─── Auth ─────────────────────────────────────────────────────────────────
+
+  Future<bool> signIn() async {
+    lastError = null;
+    try {
+      _currentUser = await _googleSignIn.signIn();
+      notifyListeners();
+      return _currentUser != null;
+    } catch (e) {
+      lastError = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> signOut() async {
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {}
+    _currentUser = null;
+    notifyListeners();
+  }
+
+  /// Attempts silent sign-in using cached credentials.
+  Future<bool> trySilentSignIn() async {
+    try {
+      _currentUser = await _googleSignIn.signInSilently();
+      if (_currentUser != null) {
+        notifyListeners();
+      }
+      return _currentUser != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ─── Drive API Client ─────────────────────────────────────────────────────
+
+  Future<drive.DriveApi> _getDriveApi() async {
+    final account = _currentUser;
+    if (account == null) throw Exception('Not signed in to Google.');
+    final authHeaders = await account.authHeaders;
+    final client = _GoogleAuthClient(authHeaders);
+    return drive.DriveApi(client);
+  }
+
+  // ─── Backup ───────────────────────────────────────────────────────────────
+
+  Future<void> backup() async {
+    final api = await _getDriveApi();
+    
+    // Encrypt with Master Password if available so backup can be restored across devices
+    String encryptedData;
+    final masterPwd = await vaultSecurityService?.getMasterPassword();
+    if (masterPwd != null && masterPwd.isNotEmpty) {
+      final items = await databaseService.getAllItems();
+      encryptedData = SecureBackupExportService.exportVaultWithPassword(
+        items: items,
+        userPassword: masterPwd,
+      );
+    } else {
+      encryptedData = await databaseService.exportEncryptedBackup();
+    }
+
+    final bytes = utf8.encode(encryptedData);
+    final stream = Stream.value(bytes);
+
+    final existing = await _findBackupFile(api);
+
+    final fileMetadata = drive.File()
+      ..name = _backupFileName
+      ..parents = existing == null ? ['appDataFolder'] : null;
+
+    final media = drive.Media(stream, bytes.length, contentType: 'text/plain');
+
+    if (existing == null) {
+      await api.files.create(fileMetadata, uploadMedia: media);
+    } else {
+      await api.files.update(
+        fileMetadata,
+        existing,
+        uploadMedia: media,
+      );
+    }
+  }
+
+  // ─── Restore ──────────────────────────────────────────────────────────────
+
+  /// Downloads raw backup payload string from Google Drive without decrypting
+  Future<String> downloadRawBackupPayload() async {
+    final api = await _getDriveApi();
+    final fileId = await _findBackupFile(api);
+    if (fileId == null) throw Exception('No backup file found in Google Drive.');
+
+    final response = await api.files.get(
+      fileId,
+      downloadOptions: drive.DownloadOptions.fullMedia,
+    ) as drive.Media;
+
+    final chunks = <int>[];
+    await for (final chunk in response.stream) {
+      chunks.addAll(chunk);
+    }
+
+    return utf8.decode(chunks).trim();
+  }
+
+  Future<int> restore({String? masterPassword}) async {
+    final encryptedPayload = await downloadRawBackupPayload();
+
+    // 1. If encrypted with Master Password via SecureBackupExportService
+    if (encryptedPayload.startsWith('{') && encryptedPayload.contains('CARDVAULT_SECURE_BACKUP_V1')) {
+      final pwd = masterPassword ?? await vaultSecurityService?.getMasterPassword();
+      if (pwd == null || pwd.isEmpty) {
+        throw MasterPasswordRequiredException(encryptedPayload);
+      }
+      final items = SecureBackupExportService.importVaultWithPassword(
+        backupPayload: encryptedPayload,
+        userPassword: pwd,
+      );
+      int count = 0;
+      for (final item in items) {
+        await databaseService.insertItem(item);
+        count++;
+      }
+      return count;
+    }
+
+    // 2. Legacy device-hardware-encrypted payload
+    return await databaseService.importEncryptedBackup(encryptedPayload, masterPassword: masterPassword);
+  }
+
+  // ─── Custom Text File Management (for Browser Extension Auth) ─────────────
+
+  Future<void> uploadTextFile(String fileName, String content) async {
+    final api = await _getDriveApi();
+    final bytes = utf8.encode(content);
+    final stream = Stream.value(bytes);
+    final existing = await _findNamedFile(api, fileName);
+
+    final fileMetadata = drive.File()
+      ..name = fileName
+      ..parents = existing == null ? ['appDataFolder'] : null;
+
+    final media = drive.Media(stream, bytes.length, contentType: 'application/json');
+
+    if (existing == null) {
+      await api.files.create(fileMetadata, uploadMedia: media);
+    } else {
+      await api.files.update(fileMetadata, existing, uploadMedia: media);
+    }
+  }
+
+  Future<String?> downloadTextFile(String fileName) async {
+    try {
+      final api = await _getDriveApi();
+      final fileId = await _findNamedFile(api, fileName);
+      if (fileId == null) return null;
+
+      final res = await api.files.get(
+        fileId,
+        downloadOptions: drive.DownloadOptions.fullMedia,
+      ) as drive.Media;
+
+      final bytes = <int>[];
+      await for (final chunk in res.stream) {
+        bytes.addAll(chunk);
+      }
+      return utf8.decode(bytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ─── Desktop Access Request & Mobile Pop-up Handshake ─────────────────────
+
+  static const accessRequestFileName = 'card_vault_access_request.json';
+  static const devicesFileName = 'card_vault_devices.json';
+
+  /// Registers this mobile device in Google Drive so Windows Extension can detect multiple devices.
+  Future<void> registerDeviceOnDrive() async {
+    if (!isSignedIn) return;
+    try {
+      final myId = await DeviceIdentityService.getDeviceId();
+      final myName = await DeviceIdentityService.getDeviceName();
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      List<dynamic> deviceList = [];
+      final existingText = await downloadTextFile(devicesFileName);
+      if (existingText != null && existingText.trim().isNotEmpty) {
+        try {
+          final data = jsonDecode(existingText) as Map<String, dynamic>;
+          deviceList = (data['devices'] as List<dynamic>?) ?? [];
+        } catch (_) {}
+      }
+
+      // Update or add this device
+      bool found = false;
+      for (int i = 0; i < deviceList.length; i++) {
+        final d = deviceList[i] as Map<String, dynamic>;
+        if (d['deviceId'] == myId) {
+          deviceList[i] = {
+            'deviceId': myId,
+            'deviceName': myName,
+            'platform': 'Android',
+            'lastActive': now,
+          };
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
+        deviceList.add({
+          'deviceId': myId,
+          'deviceName': myName,
+          'platform': 'Android',
+          'lastActive': now,
+        });
+      }
+
+      final payload = jsonEncode({'devices': deviceList});
+      await uploadTextFile(devicesFileName, payload);
+    } catch (_) {}
+  }
+
+  /// Checks Google Drive for pending desktop extension access requests.
+  /// Ignores requests targeted specifically at other mobile devices.
+  Future<Map<String, dynamic>?> checkForPendingAccessRequest() async {
+    if (!isSignedIn) return null;
+    try {
+      final text = await downloadTextFile(accessRequestFileName);
+      if (text == null || text.trim().isEmpty) return null;
+      final data = jsonDecode(text) as Map<String, dynamic>;
+      final status = data['status'] as String?;
+      final expiresAt = data['expiresAt'] as int?;
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      if (status == 'PENDING' && (expiresAt == null || now < expiresAt)) {
+        // Multi-device targeting check:
+        final targetDeviceId = data['targetDeviceId'] as String?;
+        final myId = await DeviceIdentityService.getDeviceId();
+
+        if (targetDeviceId != null &&
+            targetDeviceId != 'ALL' &&
+            targetDeviceId.isNotEmpty &&
+            targetDeviceId != myId) {
+          // Request is specifically intended for another mobile device
+          return null;
+        }
+
+        return data;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Checks status of a specific access request (useful for multi-device sync)
+  Future<String?> getAccessRequestStatus(String requestId) async {
+    if (!isSignedIn) return null;
+    try {
+      final text = await downloadTextFile(accessRequestFileName);
+      if (text == null || text.trim().isEmpty) return null;
+      final data = jsonDecode(text) as Map<String, dynamic>;
+      if (data['requestId'] == requestId) {
+        return data['status'] as String?;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Responds to the pending desktop extension access request.
+  /// Handles multi-mobile synchronization gracefully without conflicts.
+  Future<bool> respondToAccessRequest({
+    required String requestId,
+    required bool approved,
+    String? deviceName,
+  }) async {
+    if (!isSignedIn) return false;
+    try {
+      // Check if already approved or denied by another phone
+      final currentStatus = await getAccessRequestStatus(requestId);
+      if (currentStatus != null && currentStatus != 'PENDING') {
+        return true; // Already processed by another linked mobile device
+      }
+
+      final now = DateTime.now();
+      final payload = jsonEncode({
+        'requestId': requestId,
+        'status': approved ? 'APPROVED' : 'DENIED',
+        'approvedAt': now.millisecondsSinceEpoch,
+        'expiresAt': now.add(const Duration(minutes: 30)).millisecondsSinceEpoch,
+        'device': deviceName ?? 'Windows PC (CardVault Extension)',
+        'approvedByDevice': 'CardVault Mobile Client',
+      });
+      await uploadTextFile(accessRequestFileName, payload);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<String?> _findNamedFile(drive.DriveApi api, String fileName) async {
+    try {
+      final list = await api.files.list(
+        spaces: 'appDataFolder',
+        q: "name = '$fileName'",
+        $fields: 'files(id, name)',
+      );
+      final files = list.files;
+      if (files == null || files.isEmpty) return null;
+      return files.first.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+
+  Future<String?> _findBackupFile(drive.DriveApi api) async {
+    final list = await api.files.list(
+      spaces: 'appDataFolder',
+      q: "name = '$_backupFileName'",
+      $fields: 'files(id, name)',
+    );
+    final files = list.files;
+    if (files == null || files.isEmpty) return null;
+    return files.first.id;
+  }
+}
+
+class _GoogleAuthClient extends http.BaseClient {
+  final Map<String, String> _headers;
+  final http.Client _inner = http.Client();
+
+  _GoogleAuthClient(this._headers);
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    request.headers.addAll(_headers);
+    return _inner.send(request);
+  }
+}

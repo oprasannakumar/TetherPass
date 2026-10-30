@@ -1,0 +1,325 @@
+/**
+ * CardVault Content Script
+ * Detects payment, bank account, and credential input fields and renders
+ * floating inline autofill suggestion chips when authorized by mobile app.
+ */
+
+(function () {
+  let activeDropdown = null;
+  let activeInput = null;
+
+  // Field type classifiers
+  function classifyInput(input) {
+    if (!input || input.type === 'hidden' || input.type === 'submit' || input.type === 'button') return null;
+
+    const name = (input.name || '').toLowerCase();
+    const id = (input.id || '').toLowerCase();
+    const placeholder = (input.placeholder || '').toLowerCase();
+    const autocomplete = (input.getAttribute('autocomplete') || '').toLowerCase();
+    const ariaLabel = (input.getAttribute('aria-label') || '').toLowerCase();
+    const type = (input.type || '').toLowerCase();
+
+    const raw = `${name} ${id} ${placeholder} ${autocomplete} ${ariaLabel}`;
+    const norm = raw.replace(/[-_./]/g, ' ');
+
+    // 1. CVV / Security Code
+    if (
+      autocomplete.includes('cc-csc') || autocomplete.includes('security-code') ||
+      raw.includes('cvv') || raw.includes('cvc') || raw.includes('cid') || raw.includes('csc') ||
+      norm.includes('security code') || norm.includes('verification code')
+    ) {
+      return 'CVV';
+    }
+
+    // 2. Expiry Date
+    if (
+      autocomplete.includes('cc-exp') || raw.includes('expiry') || raw.includes('expire') ||
+      raw.includes('expiration') || norm.includes('exp date') || norm.includes('valid thru') ||
+      norm.includes('valid till') || raw.includes('mm/yy') || raw.includes('mm / yy') ||
+      raw.includes('ccexp') || raw.includes('card_exp')
+    ) {
+      return 'EXPIRY';
+    }
+
+    // 3. Card Number
+    if (
+      autocomplete.includes('cc-number') || raw.includes('cardnumber') || raw.includes('card_number') ||
+      raw.includes('card_no') || raw.includes('cardno') || norm.includes('card number') ||
+      norm.includes('card no') || raw.includes('cc_num') || raw.includes('cc-num') ||
+      (type === 'tel' && norm.includes('credit'))
+    ) {
+      return 'CARD_NUMBER';
+    }
+
+    // 4. Cardholder Name
+    if (
+      autocomplete.includes('cc-name') || raw.includes('cardholder') || raw.includes('card_holder') ||
+      norm.includes('name on card') || norm.includes('card holder')
+    ) {
+      return 'CARD_HOLDER';
+    }
+
+    // 5. Bank IFSC Code
+    if (raw.includes('ifsc') || norm.includes('ifsc code') || norm.includes('bank code')) {
+      return 'IFSC';
+    }
+
+    // 6. Bank Account Number
+    if (
+      raw.includes('account_number') || raw.includes('accountnumber') || raw.includes('acc_num') ||
+      raw.includes('acc_no') || norm.includes('account number') || norm.includes('account no') ||
+      norm.includes('bank account')
+    ) {
+      return 'ACCOUNT_NUMBER';
+    }
+
+    // 7. Password / MPIN
+    if (type === 'password' || raw.includes('mpin') || raw.includes('password') || raw.includes('passcode')) {
+      return 'PASSWORD';
+    }
+
+    // 8. User ID / Customer ID / Username
+    if (
+      raw.includes('customer_id') || raw.includes('cust_id') || raw.includes('userid') ||
+      raw.includes('user_id') || raw.includes('cif') || autocomplete.includes('username')
+    ) {
+      return 'USER_ID';
+    }
+
+    return null;
+  }
+
+  // Handle focus on fields
+  document.addEventListener('focusin', async (e) => {
+    const target = e.target;
+    if (!target || target.tagName !== 'INPUT') return;
+
+    const fieldType = classifyInput(target);
+    if (!fieldType) {
+      removeDropdown();
+      return;
+    }
+
+    activeInput = target;
+
+    // Ask background script for suggestions
+    chrome.runtime.sendMessage(
+      { action: 'GET_AUTOFILL_SUGGESTIONS', payload: { fieldType, domain: window.location.hostname } },
+      (response) => {
+        if (!response) return;
+        renderDropdown(target, fieldType, response);
+      }
+    );
+  });
+
+  // Close dropdown on outside click
+  document.addEventListener('mousedown', (e) => {
+    if (activeDropdown && !activeDropdown.contains(e.target) && e.target !== activeInput) {
+      removeDropdown();
+    }
+  });
+
+  function removeDropdown() {
+    if (activeDropdown) {
+      activeDropdown.remove();
+      activeDropdown = null;
+    }
+  }
+
+  function renderDropdown(targetInput, fieldType, data) {
+    removeDropdown();
+
+    const rect = targetInput.getBoundingClientRect();
+    const dropdown = document.createElement('div');
+    dropdown.className = 'cv-autofill-dropdown';
+    dropdown.style.left = `${window.scrollX + rect.left}px`;
+    dropdown.style.top = `${window.scrollY + rect.bottom + 6}px`;
+    dropdown.style.minWidth = `${Math.max(260, rect.width)}px`;
+
+    // ── Header ──
+    const header = document.createElement('div');
+    header.className = 'cv-dropdown-header';
+    header.innerHTML = `
+      <div class="cv-header-left">
+        <span class="cv-logo-badge">CV</span>
+        <span class="cv-title">CardVault</span>
+      </div>
+      <span class="cv-status-tag ${data.authorized ? 'cv-authorized' : 'cv-locked'}">
+        ${data.authorized ? '● Unlocked' : '🔒 Locked'}
+      </span>
+    `;
+    dropdown.appendChild(header);
+
+    // ── Content ──
+    if (!data.authorized) {
+      // Locked state: Must authorize from mobile application
+      const lockBox = document.createElement('div');
+      lockBox.className = 'cv-locked-notice';
+      lockBox.innerHTML = `
+        <div class="cv-lock-icon">🔒</div>
+        <div class="cv-lock-text">
+          <strong>Mobile Authorization Required</strong>
+          <p>Open <em>CardVault</em> on your phone → <strong>Settings → Browser Extension</strong> to unlock autofill.</p>
+        </div>
+      `;
+      dropdown.appendChild(lockBox);
+    } else {
+      const itemsList = document.createElement('div');
+      itemsList.className = 'cv-items-list';
+
+      // 1. CARDS (If card field or general payment)
+      if (['CARD_NUMBER', 'EXPIRY', 'CVV', 'CARD_HOLDER'].includes(fieldType) && data.cards && data.cards.length > 0) {
+        data.cards.forEach(card => {
+          const itemRow = document.createElement('div');
+          itemRow.className = 'cv-item-row';
+          const last4 = card.cardNumber.slice(-4) || '••••';
+          itemRow.innerHTML = `
+            <div class="cv-item-icon">💳</div>
+            <div class="cv-item-info">
+              <div class="cv-item-title">${escapeHtml(card.nickname)} (${escapeHtml(card.cardNetwork)})</div>
+              <div class="cv-item-sub">•••• ${last4} | Exp: ${escapeHtml(card.expiry || '••/••')}</div>
+            </div>
+          `;
+          itemRow.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            fillCardDetails(targetInput, card, fieldType);
+            removeDropdown();
+          });
+          itemsList.appendChild(itemRow);
+        });
+      }
+
+      // 2. BANK ACCOUNTS & IFSC (If account/IFSC field)
+      if (['ACCOUNT_NUMBER', 'IFSC', 'USER_ID', 'PASSWORD'].includes(fieldType) && data.bankAccounts && data.bankAccounts.length > 0) {
+        data.bankAccounts.forEach(bank => {
+          if (bank.accounts && bank.accounts.length > 0) {
+            bank.accounts.forEach((acc, i) => {
+              const itemRow = document.createElement('div');
+              itemRow.className = 'cv-item-row';
+              itemRow.innerHTML = `
+                <div class="cv-item-icon">🏦</div>
+                <div class="cv-item-info">
+                  <div class="cv-item-title">${escapeHtml(bank.bankName)} ${acc.accountNumber ? '• ' + acc.accountNumber.slice(-4) : ''}</div>
+                  <div class="cv-item-sub">A/C: ${escapeHtml(acc.accountNumber)} ${acc.ifscCode ? '| IFSC: ' + escapeHtml(acc.ifscCode) : ''}</div>
+                </div>
+              `;
+              itemRow.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                fillBankAccountDetails(targetInput, acc, bank, fieldType);
+                removeDropdown();
+              });
+              itemsList.appendChild(itemRow);
+            });
+          }
+
+          // User ID & Passwords
+          if (['USER_ID', 'PASSWORD'].includes(fieldType) && (bank.userId || bank.loginPassword)) {
+            const itemRow = document.createElement('div');
+            itemRow.className = 'cv-item-row';
+            itemRow.innerHTML = `
+              <div class="cv-item-icon">🔑</div>
+              <div class="cv-item-info">
+                <div class="cv-item-title">${escapeHtml(bank.bankName)} Login</div>
+                <div class="cv-item-sub">User: ${escapeHtml(bank.userId || '••••')}</div>
+              </div>
+            `;
+            itemRow.addEventListener('click', (ev) => {
+              ev.stopPropagation();
+              fillCredentials(targetInput, bank, fieldType);
+              removeDropdown();
+            });
+            itemsList.appendChild(itemRow);
+          }
+        });
+      }
+
+      if (itemsList.children.length === 0) {
+        const emptyNotice = document.createElement('div');
+        emptyNotice.className = 'cv-empty-notice';
+        emptyNotice.textContent = 'No matching items saved in your vault.';
+        itemsList.appendChild(emptyNotice);
+      }
+
+      dropdown.appendChild(itemsList);
+    }
+
+    document.body.appendChild(dropdown);
+    activeDropdown = dropdown;
+  }
+
+  // ── Auto-Filling Logic with Input Event Dispatching ──
+
+  function setInputValue(input, value) {
+    if (!input || value === undefined || value === null) return;
+    input.focus();
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+  }
+
+  function fillCardDetails(focusedInput, card, currentFieldType) {
+    const form = focusedInput.form || document;
+
+    // Fill current focused field first
+    if (currentFieldType === 'CARD_NUMBER') setInputValue(focusedInput, card.cardNumber);
+    if (currentFieldType === 'EXPIRY') setInputValue(focusedInput, card.expiry);
+    if (currentFieldType === 'CVV') setInputValue(focusedInput, card.cvv);
+    if (currentFieldType === 'CARD_HOLDER') setInputValue(focusedInput, card.cardHolder);
+
+    // Also scan form to auto-fill sister fields simultaneously!
+    const inputs = form.querySelectorAll('input');
+    inputs.forEach(inp => {
+      if (inp === focusedInput) return;
+      const t = classifyInput(inp);
+      if (t === 'CARD_NUMBER' && card.cardNumber) setInputValue(inp, card.cardNumber);
+      if (t === 'EXPIRY' && card.expiry) setInputValue(inp, card.expiry);
+      if (t === 'CVV' && card.cvv) setInputValue(inp, card.cvv);
+      if (t === 'CARD_HOLDER' && card.cardHolder) setInputValue(inp, card.cardHolder);
+    });
+  }
+
+  function fillBankAccountDetails(focusedInput, account, bank, currentFieldType) {
+    const form = focusedInput.form || document;
+
+    if (currentFieldType === 'ACCOUNT_NUMBER') setInputValue(focusedInput, account.accountNumber);
+    if (currentFieldType === 'IFSC') setInputValue(focusedInput, account.ifscCode);
+
+    // Scan sister fields
+    const inputs = form.querySelectorAll('input');
+    inputs.forEach(inp => {
+      if (inp === focusedInput) return;
+      const t = classifyInput(inp);
+      if (t === 'ACCOUNT_NUMBER' && account.accountNumber) setInputValue(inp, account.accountNumber);
+      if (t === 'IFSC' && account.ifscCode) setInputValue(inp, account.ifscCode);
+    });
+  }
+
+  function fillCredentials(focusedInput, bank, currentFieldType) {
+    const form = focusedInput.form || document;
+
+    if (currentFieldType === 'USER_ID') setInputValue(focusedInput, bank.userId);
+    if (currentFieldType === 'PASSWORD') setInputValue(focusedInput, bank.loginPassword || bank.profilePassword || bank.mpin);
+
+    const inputs = form.querySelectorAll('input');
+    inputs.forEach(inp => {
+      if (inp === focusedInput) return;
+      const t = classifyInput(inp);
+      if (t === 'USER_ID' && bank.userId) setInputValue(inp, bank.userId);
+      if (t === 'PASSWORD' && (bank.loginPassword || bank.profilePassword)) {
+        setInputValue(inp, bank.loginPassword || bank.profilePassword);
+      }
+    });
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>'"]/g, tag => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;'
+    }[tag] || tag));
+  }
+})();

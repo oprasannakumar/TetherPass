@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="autofill_item_bg">#1E293B</color>
+    <color name="autofill_item_stroke">#334155</color>
+    <color name="autofill_title_color">#FFFFFF</color>
+    <color name="autofill_subtitle_color">#E2E8F0</color>
+</resources>
