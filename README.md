@@ -94,7 +94,7 @@ card_vault/
 **Build & Run:**
 ```bash
 # Clone the repository
-git clone https://github.com/Gathin23/CardVault.git
+git clone https://github.com/oprasannakumar/CardVault.git
 cd CardVault
 
 # Install dependencies
