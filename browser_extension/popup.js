@@ -156,22 +156,6 @@ function initUI() {
   document.getElementById('disconnectOAuthBtn')?.addEventListener('click', handleDisconnectOAuth);
   document.getElementById('editDesktopNameBtn')?.addEventListener('click', handleEditDesktopName);
 
-  // Manual token & file fallback toggles
-  document.getElementById('toggleManualTokenLink')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    const box = document.getElementById('manualTokenBox');
-    if (box) box.style.display = box.style.display === 'none' ? 'block' : 'none';
-  });
-
-  document.getElementById('saveCustomTokenBtn')?.addEventListener('click', handleSaveCustomToken);
-
-  const pickFileBtn = document.getElementById('pickFileFallbackBtn');
-  const fileInput = document.getElementById('localBackupFileInput');
-  if (pickFileBtn && fileInput) {
-    pickFileBtn.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', handleFileSelected);
-  }
-
   // Push confirmation to mobile phone
   document.getElementById('requestPushApprovalBtn')?.addEventListener('click', handleRequestMobilePushApproval);
   document.getElementById('cancelApprovalRequestBtn')?.addEventListener('click', cancelApprovalPolling);

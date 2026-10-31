@@ -428,6 +428,46 @@ class DriveClient {
   }
 
   /**
+   * Marks a specific desktop session as LOCKED in Google Drive.
+   * Called immediately when the user manually locks the browser extension.
+   * This ensures the mobile app sees the lock in real-time.
+   */
+  async markSessionLocked(sessionId) {
+    if (!this.token || !sessionId) return;
+    try {
+      const file = await this.findFile(DRIVE_SESSIONS_FILENAME);
+      if (!file) return;
+
+      const content = await this.downloadFileContent(file.id);
+      const data = JSON.parse(content);
+      const sessions = data.sessions || [];
+
+      let updated = false;
+      for (const s of sessions) {
+        if (s && s.sessionId === sessionId) {
+          s.status = 'LOCKED';
+          s.lockedAt = Date.now();
+          updated = true;
+          break;
+        }
+      }
+
+      if (!updated) return; // Session not found in registry, nothing to update
+
+      const payload = JSON.stringify({
+        version: 1,
+        updatedAt: Date.now(),
+        sessions
+      });
+
+      await this.uploadAppDataFile(DRIVE_SESSIONS_FILENAME, payload);
+      console.log('[TetherPass] Session marked as LOCKED on Drive:', sessionId);
+    } catch (e) {
+      console.warn('[TetherPass] markSessionLocked failed:', e.message);
+    }
+  }
+
+  /**
    * Checks if session expiration was extended remotely from mobile app
    */
   async getRemoteSessionExpiresAt(sessionId, authMode) {

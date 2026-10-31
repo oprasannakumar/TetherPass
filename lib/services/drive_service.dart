@@ -574,7 +574,7 @@ class DriveService extends ChangeNotifier {
         final expiresAt = (s['expiresAt'] as num?)?.toInt() ?? 0;
         final rawStatus = (s['status'] as String? ?? 'ACTIVE').toUpperCase();
         final bool isExpired = now > expiresAt;
-        final bool isTerminated = rawStatus == 'TERMINATED' || rawStatus == 'REVOKED';
+        final bool isTerminated = rawStatus == 'TERMINATED' || rawStatus == 'REVOKED' || rawStatus == 'LOCKED';
         final bool isActive = !isTerminated && !isExpired;
 
         s['isCurrentlyActive'] = isActive;
@@ -582,7 +582,7 @@ class DriveService extends ChangeNotifier {
           s['status'] = 'ACTIVE';
           s['minutesRemaining'] = ((expiresAt - now) / 60000).ceil().clamp(0, 30);
         } else if (isTerminated) {
-          s['status'] = 'TERMINATED';
+          s['status'] = rawStatus == 'LOCKED' ? 'LOCKED' : 'TERMINATED';
           s['minutesRemaining'] = 0;
         } else {
           s['status'] = 'EXPIRED';

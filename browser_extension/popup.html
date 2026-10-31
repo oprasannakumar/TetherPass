@@ -43,20 +43,6 @@
             <img src="icons/google_logo.svg" alt="G" class="google-logo" />
             <span>Sign in with Google Account</span>
           </button>
-
-          <div style="margin-top: 6px; text-align: center;">
-            <a href="#" id="toggleManualTokenLink" class="subtle-link">Paste Access Token or Select Local File</a>
-          </div>
-          <div id="manualTokenBox" style="display: none; margin-top: 6px;">
-            <div class="form-group" style="margin-bottom: 5px;">
-              <input type="password" id="customTokenInput" placeholder="Google OAuth Access Token (ya29...)" />
-            </div>
-            <div style="display: flex; gap: 6px;">
-              <button id="saveCustomTokenBtn" class="btn btn-sm btn-secondary" style="flex: 1;">Use Token</button>
-              <button id="pickFileFallbackBtn" class="btn btn-sm btn-secondary" style="flex: 1;">Pick Local File</button>
-            </div>
-            <input type="file" id="localBackupFileInput" accept=".json" style="display: none;" />
-          </div>
         </div>
 
         <!-- Linked state -->

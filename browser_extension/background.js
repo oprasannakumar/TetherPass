@@ -250,6 +250,8 @@ async function verifyMobileAuth() {
 }
 
 async function lockVault(reason = 'Vault locked') {
+  const sessionIdToLock = memoryVault.sessionId;
+
   memoryVault.isAuthorized = false;
   memoryVault.isUnlocked = false;
   memoryVault.items = [];
@@ -263,6 +265,16 @@ async function lockVault(reason = 'Vault locked') {
 
   await clearPersistedSession();
   console.log('[TetherPass]', reason);
+
+  // ── Mark session as LOCKED in Google Drive so mobile app sees it immediately ──
+  if (sessionIdToLock) {
+    try {
+      await driveClient.markSessionLocked(sessionIdToLock);
+    } catch (e) {
+      console.warn('[TetherPass] Could not mark session locked on Drive:', e.message);
+    }
+  }
+
   notifyAllTabsStatusChange();
 
   // Internal runtime message to instantly notify popup if open

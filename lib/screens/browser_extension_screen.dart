@@ -865,9 +865,9 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                       ),
                     ] else ...[
                       Text(
-                        status == 'TERMINATED' ? '● Terminated' : '○ Expired',
+                        status == 'TERMINATED' || status == 'LOCKED' ? '● Locked' : '○ Expired',
                         style: TextStyle(
-                          color: status == 'TERMINATED' ? Colors.red.shade700 : const Color(0xFF94A3B8),
+                          color: status == 'TERMINATED' || status == 'LOCKED' ? Colors.red.shade700 : const Color(0xFF94A3B8),
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
