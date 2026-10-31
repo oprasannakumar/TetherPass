@@ -203,7 +203,9 @@ function setConnectedGoogleAccount(email, picture = null, save = true) {
   const emailDisplay = document.getElementById('connectedEmailDisplay');
   const avatarLetter = document.getElementById('accountAvatarLetter');
   const profileImg = document.getElementById('accountProfileImg');
+  const step1Sub = document.getElementById('step1Subtitle');
 
+  if (step1Sub) step1Sub.style.display = 'none';
   if (unlinkedBox) unlinkedBox.style.display = 'none';
   if (linkedBox) linkedBox.style.display = 'block';
   if (emailDisplay) emailDisplay.textContent = email;
@@ -483,6 +485,8 @@ async function handleDisconnectOAuth() {
 
   const unlinkedBox = document.getElementById('oauthUnlinkedBox');
   const linkedBox = document.getElementById('oauthLinkedBox');
+  const step1Sub = document.getElementById('step1Subtitle');
+  if (step1Sub) step1Sub.style.display = 'block';
   if (unlinkedBox) unlinkedBox.style.display = 'block';
   if (linkedBox) linkedBox.style.display = 'none';
 }

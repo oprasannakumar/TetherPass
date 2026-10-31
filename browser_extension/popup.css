@@ -10,11 +10,11 @@
 }
 
 body {
-  width: 380px;
-  min-height: 520px;
+  width: 385px;
   background: #F8FAFC;
   color: #0F172A;
   overflow-x: hidden;
+  overflow-y: hidden;
 }
 
 .popup-container {
@@ -27,7 +27,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 8px 14px;
   background: #FFFFFF;
   border-bottom: 1px solid #E2E8F0;
 }
@@ -84,7 +84,7 @@ body {
 /* Views */
 .view-panel {
   display: none;
-  padding: 16px;
+  padding: 10px 12px;
 }
 
 .view-panel.active {
@@ -95,16 +95,16 @@ body {
 .setup-section {
   background: #FFFFFF;
   border: 1px solid #E2E8F0;
-  border-radius: 14px;
-  padding: 14px 16px;
+  border-radius: 12px;
+  padding: 10px 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
 .section-badge-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 6px;
+  margin-bottom: 3px;
 }
 
 .step-pill {
@@ -118,7 +118,7 @@ body {
 }
 
 .section-title {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 800;
   color: #0F172A;
 }
@@ -126,23 +126,23 @@ body {
 .section-subtitle {
   font-size: 11px;
   color: #64748B;
-  line-height: 1.4;
-  margin-bottom: 12px;
+  line-height: 1.35;
+  margin-bottom: 8px;
 }
 
 /* Method Tabs */
 .method-tabs {
   display: flex;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   background: #F1F5F9;
-  padding: 3px;
+  padding: 2px;
   border-radius: 8px;
 }
 
 .method-tab {
   flex: 1;
-  padding: 6px 4px;
+  padding: 5px 4px;
   font-size: 11px;
   font-weight: 700;
   border: none;
@@ -310,25 +310,27 @@ body {
 .account-card.linked {
   background: #F0FDF4;
   border-color: #86EFAC;
+  padding: 8px 10px;
+  border-radius: 10px;
   box-shadow: 0 1px 3px rgba(16, 185, 129, 0.08);
 }
 
 .account-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .avatar-circle {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: linear-gradient(135deg, #FF6F00, #EA580C);
   color: #FFFFFF;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 800;
   flex-shrink: 0;
   box-shadow: 0 2px 6px rgba(234, 88, 12, 0.25);
@@ -341,11 +343,11 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .account-email {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: #0F172A;
   white-space: nowrap;
@@ -354,12 +356,12 @@ body {
 }
 
 .account-status {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   color: #16A34A;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .status-indicator-dot {
@@ -372,11 +374,11 @@ body {
 }
 
 .btn-switch-account {
-  padding: 5px 12px;
+  padding: 4px 10px;
   background: #FFFFFF;
   border: 1px solid #CBD5E1;
-  border-radius: 8px;
-  font-size: 11px;
+  border-radius: 6px;
+  font-size: 10px;
   font-weight: 700;
   color: #475569;
   cursor: pointer;
@@ -473,36 +475,47 @@ body {
 
 /* Forms */
 .form-group {
-  margin-bottom: 10px;
+  margin-bottom: 7px;
 }
 
 .form-group label {
   display: block;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   color: #475569;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .form-group input {
   width: 100%;
-  padding: 8px 10px;
-  font-size: 13px;
+  padding: 6px 9px;
+  font-size: 12px;
   border: 1px solid #CBD5E1;
-  border-radius: 8px;
+  border-radius: 7px;
   background: #F8FAFC;
   color: #0F172A;
   outline: none;
 }
 
-.form-group input:focus {
+.device-select {
+  width: 100%;
+  padding: 6px 9px;
+  font-size: 12px;
+  border: 1px solid #CBD5E1;
+  border-radius: 7px;
+  background: #F8FAFC;
+  color: #0F172A;
+  outline: none;
+}
+
+.form-group input:focus, .device-select:focus {
   border-color: #FF6F00;
   background: #FFFFFF;
 }
 
 #pinInput {
   font-family: monospace;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 900;
   letter-spacing: 4px;
   text-align: center;
@@ -514,8 +527,8 @@ body {
   justify-content: center;
   gap: 6px;
   width: 100%;
-  padding: 10px 14px;
-  font-size: 13px;
+  padding: 8px 12px;
+  font-size: 12px;
   font-weight: 700;
   border-radius: 8px;
   cursor: pointer;
