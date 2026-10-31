@@ -1245,7 +1245,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           accountNumber: primaryAcc,
           ifscCode: primaryIfsc,
           accounts: accounts,
-          userId: _nbUserIdCtrl.text.trim().toUpperCase(),
+          userId: _nbUserIdCtrl.text.trim(), // User ID preserved with exact casing as entered
           loginPassword: _nbLoginPasswordCtrl.text.trim(), // passwords preserved as-is
           profilePassword: _nbProfilePasswordCtrl.text.trim(), // passwords preserved as-is
           mpin: _nbMpinCtrl.text.trim(), // pin preserved as-is
@@ -1992,9 +1992,12 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           _buildTextField(
             _nbUserIdCtrl,
             'User ID / Customer ID',
-            'e.g. 104928374',
+            'e.g. 104928374 or username',
             Icons.badge_rounded,
             errorText: _nbUserIdError,
+            textCapitalization: TextCapitalization.none,
+            autocorrect: false,
+            keyboardType: TextInputType.text,
             onChanged: (val) {
               if (_nbUserIdError != null) setState(() => _nbUserIdError = null);
             },
