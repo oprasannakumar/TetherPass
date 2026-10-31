@@ -124,13 +124,18 @@ function initUI() {
     });
   }
 
-  // Periodic poller while popup is open so revocations take effect immediately
-  setInterval(async () => {
+  // Smooth second-by-second countdown timer for active session (zero network spam)
+  setInterval(() => {
     const unlockedView = document.getElementById('unlockedView');
     if (unlockedView && unlockedView.classList.contains('active')) {
-      await refreshStatus();
+      updateCountdownDisplay();
     }
-  }, 2500);
+  }, 1000);
+
+  // When popup window regains focus, refresh status
+  window.addEventListener('focus', () => {
+    refreshStatus();
+  });
 }
 
 function setAuthMethod(method, save = true) {
@@ -720,6 +725,25 @@ async function handleUnlockWithPin() {
   }
 }
 
+let cachedAuthExpiresAt = null;
+
+function updateCountdownDisplay() {
+  if (!cachedAuthExpiresAt) return;
+  const remainingMs = cachedAuthExpiresAt - Date.now();
+  const timer = document.getElementById('sessionTimer');
+  if (remainingMs <= 0) {
+    if (timer) timer.textContent = 'Session Expired';
+    cachedAuthExpiresAt = null;
+    handleLock();
+    return;
+  }
+  const mins = Math.floor(remainingMs / 60000);
+  const secs = Math.floor((remainingMs % 60000) / 1000);
+  if (timer) {
+    timer.textContent = mins > 0 ? `Expires in ${mins}m ${secs}s` : `Expires in ${secs}s`;
+  }
+}
+
 async function refreshStatus() {
   const status = await sendExtensionMessage({ action: 'GET_STATUS' });
 
@@ -735,10 +759,8 @@ async function refreshStatus() {
     unlockedView?.classList.add('active');
 
     if (status.authExpiresAt) {
-      const remainingMs = status.authExpiresAt - Date.now();
-      const mins = Math.max(1, Math.round(remainingMs / 60000));
-      const timer = document.getElementById('sessionTimer');
-      if (timer) timer.textContent = `Expires in ~${mins} min`;
+      cachedAuthExpiresAt = status.authExpiresAt;
+      updateCountdownDisplay();
     }
 
     const res = await sendExtensionMessage({ action: 'GET_AUTOFILL_SUGGESTIONS', payload: { fieldType: 'ALL' } });
@@ -748,6 +770,7 @@ async function refreshStatus() {
       renderVaultList();
     }
   } else {
+    cachedAuthExpiresAt = null;
     if (statusBadge) statusBadge.className = 'status-badge locked';
     if (statusText) statusText.textContent = 'Locked';
     lockedView?.classList.add('active');

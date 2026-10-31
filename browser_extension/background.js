@@ -1,13 +1,20 @@
 /**
- * CardVault Extension Service Worker (Manifest V3)
- * Manages volatile RAM cache of vault items and enforces Mobile Authorization.
+ * TetherPass Extension Service Worker (Manifest V3)
+ * Manages encrypted session cache of vault items and enforces Mobile Authorization.
  */
 
 importScripts('crypto_utils.js', 'drive_client.js');
 
 const driveClient = new DriveClient();
 
-// Volatile in-memory cache (RAM only, destroyed on service worker termination / lock)
+// Restrict session storage access strictly to trusted extension contexts (background & popup)
+if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+  if (chrome.storage.session.setAccessLevel) {
+    chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' }).catch(() => {});
+  }
+}
+
+// In-memory cache (restored from chrome.storage.session across service worker restarts)
 let memoryVault = {
   isAuthorized: false,
   isUnlocked: false,
@@ -16,33 +23,114 @@ let memoryVault = {
   authExpiresAt: null,
   masterPassword: null,
   activePin: null,
+  authMode: null,
+  sessionStartTime: null,
+  activeRequestId: null,
 };
+
+// ── Session Storage Persistence (Survives Service Worker Restarts & Inactivity) ──
+async function persistSession() {
+  if (typeof chrome === 'undefined' || !chrome.storage?.session) return;
+  try {
+    await chrome.storage.session.set({
+      tetherpass_session: {
+        isAuthorized: memoryVault.isAuthorized,
+        isUnlocked: memoryVault.isUnlocked,
+        items: memoryVault.items,
+        lastSyncedAt: memoryVault.lastSyncedAt,
+        authExpiresAt: memoryVault.authExpiresAt,
+        masterPassword: memoryVault.masterPassword,
+        activePin: memoryVault.activePin,
+        authMode: memoryVault.authMode,
+        sessionStartTime: memoryVault.sessionStartTime,
+        activeRequestId: memoryVault.activeRequestId,
+      }
+    });
+  } catch (err) {
+    console.warn('[TetherPass] Session persist warning:', err);
+  }
+}
+
+async function restoreSessionIfNeeded() {
+  const now = Date.now();
+
+  // If already unlocked in RAM, verify expiry timestamp
+  if (memoryVault.isAuthorized && memoryVault.isUnlocked) {
+    if (memoryVault.authExpiresAt && now > memoryVault.authExpiresAt) {
+      await lockVault('Authorization session expired.');
+      return false;
+    }
+    return true;
+  }
+
+  // Restore session from RAM-backed chrome.storage.session if service worker restarted
+  if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+    try {
+      const data = await chrome.storage.session.get('tetherpass_session');
+      const sess = data?.tetherpass_session;
+      if (sess && sess.isAuthorized && sess.isUnlocked) {
+        if (sess.authExpiresAt && now > sess.authExpiresAt) {
+          await lockVault('Authorization session expired.');
+          return false;
+        }
+
+        memoryVault = {
+          isAuthorized: true,
+          isUnlocked: true,
+          items: sess.items || [],
+          lastSyncedAt: sess.lastSyncedAt || now,
+          authExpiresAt: sess.authExpiresAt,
+          masterPassword: sess.masterPassword || null,
+          activePin: sess.activePin || null,
+          authMode: sess.authMode || null,
+          sessionStartTime: sess.sessionStartTime || now,
+          activeRequestId: sess.activeRequestId || null,
+        };
+        return true;
+      }
+    } catch (err) {
+      console.warn('[TetherPass] Session restore notice:', err);
+    }
+  }
+
+  return false;
+}
+
+async function clearPersistedSession() {
+  if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+    try {
+      await chrome.storage.session.remove('tetherpass_session');
+    } catch (_) {}
+  }
+}
 
 // Auto-lock timer / Periodic validation of mobile auth status
 async function verifyMobileAuth() {
+  await restoreSessionIfNeeded();
   if (!memoryVault.isAuthorized || !memoryVault.isUnlocked) return;
 
   // Check expiration timestamp
   if (memoryVault.authExpiresAt && Date.now() > memoryVault.authExpiresAt) {
-    lockVault('Mobile authorization session expired.');
+    await lockVault('Mobile authorization session expired.');
     return;
   }
 
-  // Poll Google Drive revocation or status
+  // Poll Google Drive revocation or status with cooldown
   try {
     const isRevoked = await driveClient.isAuthorizationRevoked(
       memoryVault.authMode,
       memoryVault.sessionStartTime
     );
     if (isRevoked) {
-      lockVault('Authorization revoked from TetherPass mobile application.');
+      await lockVault('Authorization revoked from TetherPass mobile application.');
       return;
     }
 
     if (memoryVault.authMode === 'PIN' && memoryVault.activePin) {
       const authStatus = await driveClient.checkMobileAuthorization();
-      if (!authStatus.authorized) {
-        lockVault('Authorization revoked from TetherPass mobile application.');
+      // Only lock if explicitly revoked or locked from mobile, NOT on network/rate-limit errors
+      if (!authStatus.authorized && (authStatus.reason === 'REVOKED' || authStatus.reason === 'LOCKED')) {
+        await lockVault('Authorization revoked from TetherPass mobile application.');
         return;
       }
     }
@@ -51,7 +139,7 @@ async function verifyMobileAuth() {
   }
 }
 
-function lockVault(reason = 'Vault locked') {
+async function lockVault(reason = 'Vault locked') {
   memoryVault.isAuthorized = false;
   memoryVault.isUnlocked = false;
   memoryVault.items = [];
@@ -61,7 +149,9 @@ function lockVault(reason = 'Vault locked') {
   memoryVault.authMode = null;
   memoryVault.sessionStartTime = null;
   memoryVault.activeRequestId = null;
-  console.log('[CardVault]', reason);
+
+  await clearPersistedSession();
+  console.log('[TetherPass]', reason);
   notifyAllTabsStatusChange();
 
   // Internal runtime message to instantly notify popup if open
@@ -90,21 +180,11 @@ function notifyAllTabsStatusChange() {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const { action, payload } = message;
 
-  if (action === 'GET_STATUS') {
-    (async () => {
-      // Immediate check on revocation if active
-      if (memoryVault.isAuthorized && memoryVault.isUnlocked) {
-        try {
-          const isRevoked = await driveClient.isAuthorizationRevoked(
-            memoryVault.authMode,
-            memoryVault.sessionStartTime
-          );
-          if (isRevoked) {
-            lockVault('Authorization revoked from TetherPass mobile application.');
-          }
-        } catch (_) {}
-      }
+  (async () => {
+    // Always restore session state first before processing any message
+    await restoreSessionIfNeeded();
 
+    if (action === 'GET_STATUS') {
       sendResponse({
         isAuthorized: memoryVault.isAuthorized,
         isUnlocked: memoryVault.isUnlocked,
@@ -114,90 +194,120 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         activePin: memoryVault.activePin,
         authMode: memoryVault.authMode,
       });
-    })();
-    return true;
-  }
+      return;
+    }
 
-  if (action === 'LOCK_VAULT') {
-    lockVault('User requested desktop lock');
-    sendResponse({ success: true });
-    return true;
-  }
+    if (action === 'LOCK_VAULT') {
+      await lockVault('User requested desktop lock');
+      sendResponse({ success: true });
+      return;
+    }
 
-  if (action === 'GET_REGISTERED_DEVICES') {
-    if (payload?.token) driveClient.setToken(payload.token);
-    driveClient.fetchRegisteredDevices()
-      .then(devices => sendResponse({ success: true, devices }))
-      .catch(err => sendResponse({ success: false, devices: [], error: err.message }));
-    return true;
-  }
+    if (action === 'GET_REGISTERED_DEVICES') {
+      if (payload?.token) driveClient.setToken(payload.token);
+      try {
+        const devices = await driveClient.fetchRegisteredDevices();
+        sendResponse({ success: true, devices });
+      } catch (err) {
+        sendResponse({ success: false, devices: [], error: err.message });
+      }
+      return;
+    }
 
-  if (action === 'REMOVE_REGISTERED_DEVICE') {
-    if (payload?.token) driveClient.setToken(payload.token);
-    driveClient.removeRegisteredDevice(payload.deviceId)
-      .then(devices => sendResponse({ success: true, devices }))
-      .catch(err => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
+    if (action === 'REMOVE_REGISTERED_DEVICE') {
+      if (payload?.token) driveClient.setToken(payload.token);
+      try {
+        const devices = await driveClient.removeRegisteredDevice(payload.deviceId);
+        sendResponse({ success: true, devices });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
 
-  if (action === 'RENAME_REGISTERED_DEVICE') {
-    if (payload?.token) driveClient.setToken(payload.token);
-    driveClient.renameRegisteredDevice(payload.deviceId, payload.newName)
-      .then(devices => sendResponse({ success: true, devices }))
-      .catch(err => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
+    if (action === 'RENAME_REGISTERED_DEVICE') {
+      if (payload?.token) driveClient.setToken(payload.token);
+      try {
+        const devices = await driveClient.renameRegisteredDevice(payload.deviceId, payload.newName);
+        sendResponse({ success: true, devices });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
 
-  if (action === 'START_MOBILE_APPROVAL_REQUEST') {
-    handleStartMobileApprovalRequest(payload)
-      .then(res => sendResponse(res))
-      .catch(err => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
+    if (action === 'START_MOBILE_APPROVAL_REQUEST') {
+      try {
+        const res = await handleStartMobileApprovalRequest(payload);
+        sendResponse(res);
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
 
-  if (action === 'POLL_MOBILE_APPROVAL') {
-    handlePollMobileApproval(payload)
-      .then(res => sendResponse(res))
-      .catch(err => sendResponse({ status: 'ERROR', error: err.message }));
-    return true;
-  }
+    if (action === 'POLL_MOBILE_APPROVAL') {
+      try {
+        const res = await handlePollMobileApproval(payload);
+        sendResponse(res);
+      } catch (err) {
+        sendResponse({ status: 'ERROR', error: err.message });
+      }
+      return;
+    }
 
-  if (action === 'SYNC_AND_UNLOCK') {
-    handleSyncAndUnlock(payload)
-      .then(result => sendResponse(result))
-      .catch(err => sendResponse({ success: false, error: err.message }));
-    return true; // Asynchronous response
-  }
+    if (action === 'SYNC_AND_UNLOCK') {
+      try {
+        const res = await handleSyncAndUnlock(payload);
+        sendResponse(res);
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
 
-  if (action === 'AUTHORIZE_WITH_PIN') {
-    handleAuthorizeWithPin(payload)
-      .then(result => sendResponse(result))
-      .catch(err => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
+    if (action === 'AUTHORIZE_WITH_PIN') {
+      try {
+        const res = await handleAuthorizeWithPin(payload);
+        sendResponse(res);
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
 
-  if (action === 'GET_AUTOFILL_SUGGESTIONS') {
-    handleGetAutofillSuggestions(payload)
-      .then(result => sendResponse(result))
-      .catch(err => sendResponse({ authorized: false, items: [] }));
-    return true;
-  }
+    if (action === 'GET_AUTOFILL_SUGGESTIONS') {
+      try {
+        const res = await handleGetAutofillSuggestions(payload);
+        sendResponse(res);
+      } catch (_) {
+        sendResponse({ authorized: false, items: [] });
+      }
+      return;
+    }
 
-  if (action === 'SAVE_NEW_PASSWORD') {
-    handleSaveNewPassword(payload)
-      .then(result => sendResponse(result))
-      .catch(err => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
+    if (action === 'SAVE_NEW_PASSWORD') {
+      try {
+        const res = await handleSaveNewPassword(payload);
+        sendResponse(res);
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
 
-  if (action === 'CHECK_BREACH') {
-    checkPasswordBreached(payload.password)
-      .then(result => sendResponse(result))
-      .catch(err => sendResponse({ isPwned: false, error: err.message }));
-    return true;
-  }
+    if (action === 'CHECK_BREACH') {
+      try {
+        const res = await checkPasswordBreached(payload.password);
+        sendResponse(res);
+      } catch (err) {
+        sendResponse({ isPwned: false, error: err.message });
+      }
+      return;
+    }
+  })();
 
-  return false;
+  return true; // Asynchronous sendResponse channel
 });
 
 async function handleStartMobileApprovalRequest({ token, deviceName, targetDeviceId }) {
@@ -240,7 +350,7 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
     const backupPayload = await driveClient.fetchEncryptedVaultBackup();
     const decryptedItems = await decryptCardVaultBackup(backupPayload, effectivePassword);
 
-    // Save in RAM
+    // Save in RAM and session storage
     memoryVault.isAuthorized = true;
     memoryVault.isUnlocked = true;
     memoryVault.items = decryptedItems;
@@ -250,6 +360,8 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
     memoryVault.activeRequestId = requestId;
     memoryVault.authMode = 'PUSH';
     memoryVault.sessionStartTime = Date.now();
+
+    await persistSession();
 
     notifyAllTabsStatusChange();
 
@@ -346,7 +458,7 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
   // 5. Decrypt Vault with Master Password
   const decryptedItems = await decryptCardVaultBackup(backupPayload, effectivePassword);
 
-  // 5. Store exclusively in RAM
+  // 5. Store in RAM and session storage
   memoryVault.isAuthorized = true;
   memoryVault.isUnlocked = true;
   memoryVault.items = decryptedItems;
@@ -356,6 +468,8 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
   memoryVault.activePin = cleanPin;
   memoryVault.authMode = 'PIN';
   memoryVault.sessionStartTime = Date.now();
+
+  await persistSession();
 
   notifyAllTabsStatusChange();
 
@@ -404,7 +518,7 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
 
   // Check expiration
   if (memoryVault.authExpiresAt && Date.now() > memoryVault.authExpiresAt) {
-    lockVault('Session expired');
+    await lockVault('Session expired');
     return {
       authorized: false,
       message: 'Mobile session expired. Please re-authorize on phone.',
@@ -570,9 +684,12 @@ async function handleSaveNewPassword({ website, username, password, nickname, to
     console.warn('[TetherPass] Could not upload updated backup to Drive:', err);
   }
 
+  // Persist updated vault items into session storage
+  await persistSession();
+
   notifyAllTabsStatusChange();
   return { success: true, updated: existingIndex >= 0, title: newItem.nickname };
 }
 
-// Periodic check every 2.5 seconds so revocations from mobile take effect immediately
-setInterval(verifyMobileAuth, 2500);
+// Periodic check every 25 seconds so revocations from mobile take effect without spamming Drive
+setInterval(verifyMobileAuth, 25000);

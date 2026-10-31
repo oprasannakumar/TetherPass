@@ -310,6 +310,13 @@ class DriveClient {
    * @param {number} sessionStartTime timestamp when current session was unlocked
    */
   async isAuthorizationRevoked(authMode, sessionStartTime) {
+    const now = Date.now();
+    // Cache revocation check results for 15 seconds to prevent spamming Google Drive
+    if (this._lastRevokeCheckTime && (now - this._lastRevokeCheckTime < 15000)) {
+      return this._lastRevokeResult || false;
+    }
+    this._lastRevokeCheckTime = now;
+
     try {
       // 1. If unlocked via PIN, only inspect the PIN authorization record (card_vault_extension_auth.json)
       if (authMode === 'PIN' || !authMode) {
@@ -318,40 +325,33 @@ class DriveClient {
           const authContent = await this.downloadFileContent(authFile.id);
           const auth = JSON.parse(authContent);
           if (auth.status === 'REVOKED' || auth.status === 'LOCKED') {
-            if (!sessionStartTime || !auth.revoked_at || auth.revoked_at >= sessionStartTime) {
+            if (auth.revoked_at && sessionStartTime && auth.revoked_at >= sessionStartTime) {
+              this._lastRevokeResult = true;
               return true;
             }
           }
         }
       }
 
-      // 2. If unlocked via PUSH approval, inspect both records
+      // 2. If unlocked via PUSH approval, inspect push request record
       if (authMode === 'PUSH') {
         const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
         if (reqFile) {
           const reqContent = await this.downloadFileContent(reqFile.id);
           const req = JSON.parse(reqContent);
           if (req.status === 'REVOKED' || req.status === 'LOCKED') {
-            if (!sessionStartTime || !req.revoked_at || req.revoked_at >= sessionStartTime) {
-              return true;
-            }
-          }
-        }
-
-        const authFile = await this.findFile(DRIVE_AUTH_FILENAME);
-        if (authFile) {
-          const authContent = await this.downloadFileContent(authFile.id);
-          const auth = JSON.parse(authContent);
-          if (auth.status === 'REVOKED' || auth.status === 'LOCKED') {
-            if (!sessionStartTime || !auth.revoked_at || auth.revoked_at >= sessionStartTime) {
+            if (req.revoked_at && sessionStartTime && req.revoked_at >= sessionStartTime) {
+              this._lastRevokeResult = true;
               return true;
             }
           }
         }
       }
 
+      this._lastRevokeResult = false;
       return false;
     } catch (_) {
+      // Soft error (network timeout or rate limit) - do NOT falsely revoke
       return false;
     }
   }
