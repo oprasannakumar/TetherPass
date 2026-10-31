@@ -235,7 +235,8 @@ class DriveClient {
       status: req.status, // 'PENDING', 'APPROVED', 'DENIED', 'LOCKED'
       approvedAt: req.approvedAt,
       expiresAt: req.expiresAt,
-      message: req.message
+      message: req.message,
+      request_sealed_key: req.request_sealed_key
     };
   }
 
@@ -317,7 +318,8 @@ class DriveClient {
           pin: auth.pairing_pin,
           expiresAt: auth.expires_at,
           authorizedAt: auth.authorized_at,
-          device: auth.device
+          device: auth.device,
+          pin_sealed_key: auth.pin_sealed_key
         };
       } else {
         return {

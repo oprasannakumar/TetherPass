@@ -74,11 +74,8 @@ class VaultSecurityService {
     final actualHash = _hashWithSalt(password, salt);
     final matches = actualHash == expectedHash;
     if (matches) {
-      // Ensure master password is saved encrypted for export/import
-      final existingEnc = await _storage.read(key: _keyMasterPasswordEncrypted);
-      if (existingEnc == null) {
-        await _storage.write(key: _keyMasterPasswordEncrypted, value: cryptoService.encrypt(password));
-      }
+      // Ensure master password is saved encrypted for export/import and extension authorization
+      await _storage.write(key: _keyMasterPasswordEncrypted, value: cryptoService.encrypt(password));
     }
     return matches;
   }
