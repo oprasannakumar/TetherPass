@@ -1095,19 +1095,32 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
 
     final isPush = authMode.toUpperCase() == 'PUSH';
 
+    final borderColor = isActive
+        ? (isPush ? const Color(0xFF3B82F6) : const Color(0xFFF97316))
+        : (isPush ? const Color(0xFFBFDBFE) : const Color(0xFFFFEDD5));
+    final bannerBg = isActive
+        ? (isPush ? const Color(0xFFEFF6FF) : const Color(0xFFFFF7ED))
+        : const Color(0xFFF8FAFC);
+    final bannerBorderBottom = isActive
+        ? (isPush ? const Color(0xFFDBEAFE) : const Color(0xFFFFEDD5))
+        : const Color(0xFFE2E8F0);
+    final iconColor = isActive
+        ? (isPush ? const Color(0xFF2563EB) : const Color(0xFFEA580C))
+        : const Color(0xFF64748B);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: isActive ? Colors.white : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isActive ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0),
-          width: isActive ? 1.5 : 1,
+          color: borderColor,
+          width: isActive ? 2.0 : 1.0,
         ),
         boxShadow: isActive
             ? [
                 BoxShadow(
-                  color: Colors.green.withValues(alpha: 0.08),
+                  color: (isPush ? Colors.blue : Colors.orange).withValues(alpha: 0.08),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -1117,66 +1130,33 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Device Name Header Banner
+          // Device Name Header Banner (Distinguished by color, labels removed)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
-              color: isActive ? const Color(0xFFF0FDF4) : const Color(0xFFF1F5F9),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+              color: bannerBg,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
               border: Border(
-                bottom: BorderSide(
-                  color: isActive ? const Color(0xFFDCFCE7) : const Color(0xFFE2E8F0),
-                ),
+                bottom: BorderSide(color: bannerBorderBottom),
               ),
             ),
             child: Row(
               children: [
                 Icon(
-                  Icons.desktop_windows_rounded,
-                  color: isActive ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                  isPush ? Icons.touch_app_rounded : Icons.dialpad_rounded,
+                  color: iconColor,
                   size: 20,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'DESKTOP DEVICE',
-                        style: TextStyle(
-                          color: Color(0xFF64748B),
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                      Text(
-                        deviceName,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: isActive ? const Color(0xFF0F172A) : const Color(0xFF475569),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isPush ? const Color(0xFFEFF6FF) : const Color(0xFFFFF7ED),
-                    borderRadius: BorderRadius.circular(5),
-                    border: Border.all(color: isPush ? const Color(0xFFBFDBFE) : const Color(0xFFFFEDD5)),
-                  ),
                   child: Text(
-                    isPush ? 'PUSH APPROVAL' : 'PIN PAIRING',
+                    deviceName,
                     style: TextStyle(
-                      color: isPush ? const Color(0xFF1D4ED8) : const Color(0xFFC2410C),
-                      fontSize: 9,
                       fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: isActive ? const Color(0xFF0F172A) : const Color(0xFF475569),
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
