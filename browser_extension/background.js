@@ -28,24 +28,31 @@ let memoryVault = {
   activeRequestId: null,
 };
 
-// ── Session Storage Persistence (Survives Service Worker Restarts & Inactivity) ──
+// ── Persistent Storage (Survives Service Worker Restarts & Inactivity for full 30 mins) ──
 async function persistSession() {
-  if (typeof chrome === 'undefined' || !chrome.storage?.session) return;
+  const sessionData = {
+    isAuthorized: memoryVault.isAuthorized,
+    isUnlocked: memoryVault.isUnlocked,
+    items: memoryVault.items,
+    lastSyncedAt: memoryVault.lastSyncedAt,
+    authExpiresAt: memoryVault.authExpiresAt,
+    masterPassword: memoryVault.masterPassword,
+    activePin: memoryVault.activePin,
+    authMode: memoryVault.authMode,
+    sessionStartTime: memoryVault.sessionStartTime,
+    activeRequestId: memoryVault.activeRequestId,
+  };
+
   try {
-    await chrome.storage.session.set({
-      tetherpass_session: {
-        isAuthorized: memoryVault.isAuthorized,
-        isUnlocked: memoryVault.isUnlocked,
-        items: memoryVault.items,
-        lastSyncedAt: memoryVault.lastSyncedAt,
-        authExpiresAt: memoryVault.authExpiresAt,
-        masterPassword: memoryVault.masterPassword,
-        activePin: memoryVault.activePin,
-        authMode: memoryVault.authMode,
-        sessionStartTime: memoryVault.sessionStartTime,
-        activeRequestId: memoryVault.activeRequestId,
-      }
-    });
+    if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+      await chrome.storage.session.set({ tetherpass_session: sessionData });
+    }
+  } catch (_) {}
+
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      await chrome.storage.local.set({ tetherpass_session: sessionData });
+    }
   } catch (err) {
     console.warn('[TetherPass] Session persist warning:', err);
   }
@@ -54,7 +61,7 @@ async function persistSession() {
 async function restoreSessionIfNeeded() {
   const now = Date.now();
 
-  // If already unlocked in RAM, verify expiry timestamp
+  // If already unlocked in RAM, verify expiry timestamp (guaranteed 30 minutes)
   if (memoryVault.isAuthorized && memoryVault.isUnlocked) {
     if (memoryVault.authExpiresAt && now > memoryVault.authExpiresAt) {
       await lockVault('Authorization session expired.');
@@ -63,45 +70,56 @@ async function restoreSessionIfNeeded() {
     return true;
   }
 
-  // Restore session from RAM-backed chrome.storage.session if service worker restarted
-  if (typeof chrome !== 'undefined' && chrome.storage?.session) {
-    try {
+  // Restore session from chrome.storage.session or chrome.storage.local when service worker wakes up
+  try {
+    let sess = null;
+    if (typeof chrome !== 'undefined' && chrome.storage?.session) {
       const data = await chrome.storage.session.get('tetherpass_session');
-      const sess = data?.tetherpass_session;
-      if (sess && sess.isAuthorized && sess.isUnlocked) {
-        if (sess.authExpiresAt && now > sess.authExpiresAt) {
-          await lockVault('Authorization session expired.');
-          return false;
-        }
-
-        memoryVault = {
-          isAuthorized: true,
-          isUnlocked: true,
-          items: sess.items || [],
-          lastSyncedAt: sess.lastSyncedAt || now,
-          authExpiresAt: sess.authExpiresAt,
-          masterPassword: sess.masterPassword || null,
-          activePin: sess.activePin || null,
-          authMode: sess.authMode || null,
-          sessionStartTime: sess.sessionStartTime || now,
-          activeRequestId: sess.activeRequestId || null,
-        };
-        return true;
-      }
-    } catch (err) {
-      console.warn('[TetherPass] Session restore notice:', err);
+      sess = data?.tetherpass_session;
     }
+    if (!sess && typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const data = await chrome.storage.local.get('tetherpass_session');
+      sess = data?.tetherpass_session;
+    }
+
+    if (sess && sess.isAuthorized && sess.isUnlocked) {
+      if (sess.authExpiresAt && now > sess.authExpiresAt) {
+        await lockVault('Authorization session expired.');
+        return false;
+      }
+
+      memoryVault = {
+        isAuthorized: true,
+        isUnlocked: true,
+        items: sess.items || [],
+        lastSyncedAt: sess.lastSyncedAt || now,
+        authExpiresAt: sess.authExpiresAt,
+        masterPassword: sess.masterPassword || null,
+        activePin: sess.activePin || null,
+        authMode: sess.authMode || null,
+        sessionStartTime: sess.sessionStartTime || now,
+        activeRequestId: sess.activeRequestId || null,
+      };
+      return true;
+    }
+  } catch (err) {
+    console.warn('[TetherPass] Session restore notice:', err);
   }
 
   return false;
 }
 
 async function clearPersistedSession() {
-  if (typeof chrome !== 'undefined' && chrome.storage?.session) {
-    try {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.session) {
       await chrome.storage.session.remove('tetherpass_session');
-    } catch (_) {}
-  }
+    }
+  } catch (_) {}
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      await chrome.storage.local.remove('tetherpass_session');
+    }
+  } catch (_) {}
 }
 
 // Auto-lock timer / Periodic validation of mobile auth status
@@ -109,13 +127,13 @@ async function verifyMobileAuth() {
   await restoreSessionIfNeeded();
   if (!memoryVault.isAuthorized || !memoryVault.isUnlocked) return;
 
-  // Check expiration timestamp
+  // Enforce desktop session expiration timestamp (full 30 minutes)
   if (memoryVault.authExpiresAt && Date.now() > memoryVault.authExpiresAt) {
     await lockVault('Mobile authorization session expired.');
     return;
   }
 
-  // Poll Google Drive revocation or status with cooldown
+  // Poll Google Drive for intentional remote revocation only
   try {
     const isRevoked = await driveClient.isAuthorizationRevoked(
       memoryVault.authMode,
@@ -124,15 +142,6 @@ async function verifyMobileAuth() {
     if (isRevoked) {
       await lockVault('Authorization revoked from TetherPass mobile application.');
       return;
-    }
-
-    if (memoryVault.authMode === 'PIN' && memoryVault.activePin) {
-      const authStatus = await driveClient.checkMobileAuthorization();
-      // Only lock if explicitly REVOKED from mobile settings, NOT on network/rate-limit/local lock
-      if (!authStatus.authorized && authStatus.reason === 'REVOKED') {
-        await lockVault('Authorization revoked from TetherPass mobile application.');
-        return;
-      }
     }
   } catch (_) {
     // Soft error, rely on local timeout

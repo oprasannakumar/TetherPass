@@ -324,9 +324,9 @@ class DriveClient {
         if (authFile) {
           const authContent = await this.downloadFileContent(authFile.id);
           const auth = JSON.parse(authContent);
-          // ONLY trigger on explicit REVOKED action from mobile settings
+          // ONLY trigger on explicit REVOKED action from mobile settings strictly AFTER session was unlocked
           if (auth.status === 'REVOKED') {
-            if (auth.revoked_at && sessionStartTime && auth.revoked_at >= sessionStartTime) {
+            if (auth.revoked_at && sessionStartTime && auth.revoked_at > (sessionStartTime + 2000)) {
               this._lastRevokeResult = true;
               return true;
             }
@@ -340,9 +340,9 @@ class DriveClient {
         if (reqFile) {
           const reqContent = await this.downloadFileContent(reqFile.id);
           const req = JSON.parse(reqContent);
-          // ONLY trigger on explicit REVOKED action from mobile settings
+          // ONLY trigger on explicit REVOKED action from mobile settings strictly AFTER session was unlocked
           if (req.status === 'REVOKED') {
-            if (req.revoked_at && sessionStartTime && req.revoked_at >= sessionStartTime) {
+            if (req.revoked_at && sessionStartTime && req.revoked_at > (sessionStartTime + 2000)) {
               this._lastRevokeResult = true;
               return true;
             }
