@@ -101,8 +101,26 @@
     return null;
   }
 
+  function isInputFilled(input) {
+    if (!input) return false;
+    if (typeof input.value === 'string' && input.value.trim().length > 0) return true;
+    if (input.dataset && input.dataset.tpFilled === 'true') return true;
+    try {
+      if (input.matches && (input.matches(':-webkit-autofill') || input.matches(':autofill'))) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  function clearInputFilledState(input) {
+    if (input && input.dataset) {
+      delete input.dataset.tpFilled;
+    }
+  }
+
   function requestSuggestionsForInput(target, fieldType) {
-    if (!target || (target.value && target.value.trim().length > 0)) {
+    if (!target || isInputFilled(target)) {
       removeDropdown();
       return;
     }
@@ -110,21 +128,24 @@
     chrome.runtime.sendMessage(
       { action: 'GET_AUTOFILL_SUGGESTIONS', payload: { fieldType, domain: window.location.hostname } },
       (response) => {
-        // Double check target is still active element and still empty before rendering
+        // Double check target is still active element and still completely empty before rendering
         if (!response || document.activeElement !== target) return;
-        if (target.value && target.value.trim().length > 0) return;
+        if (isInputFilled(target)) {
+          removeDropdown();
+          return;
+        }
         renderDropdown(target, fieldType, response);
       }
     );
   }
 
-  // Handle focus on fields: Only suggest if field is empty
+  // Handle focus on fields: Only suggest if field is completely empty
   document.addEventListener('focusin', async (e) => {
     const target = e.target;
     if (!target || target.tagName !== 'INPUT') return;
 
     // Do NOT suggest if credentials are already present in the box
-    if (target.value && target.value.trim().length > 0) {
+    if (isInputFilled(target)) {
       removeDropdown();
       return;
     }
@@ -139,18 +160,27 @@
     requestSuggestionsForInput(target, fieldType);
   });
 
+  // Handle click on fields: If clicked an already filled field, dismiss suggestions
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+    if (target && target.tagName === 'INPUT' && isInputFilled(target)) {
+      removeDropdown();
+    }
+  });
+
   // Handle typing, clearing, and pasting in fields
   document.addEventListener('input', (e) => {
     const target = e.target;
     if (!target || target.tagName !== 'INPUT') return;
 
     // If text box now contains text/credentials, dismiss suggestions immediately
-    if (target.value && target.value.trim().length > 0) {
+    if (isInputFilled(target)) {
       removeDropdown();
       return;
     }
 
     // If text box is cleared (empty), and user is actively focused on it, re-trigger suggestions
+    clearInputFilledState(target);
     if (document.activeElement === target && (!target.value || target.value.trim().length === 0)) {
       const fieldType = classifyInput(target);
       if (fieldType) {
@@ -167,6 +197,12 @@
     const target = e.target;
     if (!target || target.tagName !== 'INPUT') return;
 
+    if (isInputFilled(target)) {
+      removeDropdown();
+      return;
+    }
+
+    clearInputFilledState(target);
     if (document.activeElement === target && (!target.value || target.value.trim().length === 0)) {
       if (!activeDropdown) {
         const fieldType = classifyInput(target);
@@ -196,7 +232,7 @@
     removeDropdown();
 
     // Guard: do not render if input already has credentials / value
-    if (targetInput && targetInput.value && targetInput.value.trim().length > 0) {
+    if (!targetInput || isInputFilled(targetInput)) {
       return;
     }
 
@@ -253,6 +289,8 @@
           `;
           itemRow.addEventListener('click', (ev) => {
             ev.stopPropagation();
+            ev.preventDefault();
+            removeDropdown();
             fillCardDetails(targetInput, card, fieldType);
             removeDropdown();
           });
@@ -276,6 +314,8 @@
               `;
               itemRow.addEventListener('click', (ev) => {
                 ev.stopPropagation();
+                ev.preventDefault();
+                removeDropdown();
                 fillBankAccountDetails(targetInput, acc, bank, fieldType);
                 removeDropdown();
               });
@@ -296,6 +336,8 @@
             `;
             itemRow.addEventListener('click', (ev) => {
               ev.stopPropagation();
+              ev.preventDefault();
+              removeDropdown();
               fillCredentials(targetInput, bank, fieldType);
               removeDropdown();
             });
@@ -320,6 +362,8 @@
           `;
           itemRow.addEventListener('click', (ev) => {
             ev.stopPropagation();
+            ev.preventDefault();
+            removeDropdown();
             if (fieldType === 'TOTP' && pwd.totpCode) {
               setInputValue(targetInput, pwd.totpCode);
               try { navigator.clipboard.writeText(pwd.totpCode); } catch (_) {}
@@ -350,11 +394,10 @@
 
   function setInputValue(input, value) {
     if (!input || value === undefined || value === null) return;
-    input.focus();
     input.value = value;
+    if (input.dataset) input.dataset.tpFilled = 'true';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
-    input.dispatchEvent(new Event('blur', { bubbles: true }));
   }
 
   function fillCardDetails(focusedInput, card, currentFieldType) {
