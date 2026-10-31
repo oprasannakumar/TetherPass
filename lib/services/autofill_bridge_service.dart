@@ -16,6 +16,7 @@ class AutofillBridgeService {
   }) async {
     try {
       List<Map<String, String>>? cardMaps;
+      List<Map<String, String>>? pwdMaps;
       if (isUnlocked && items != null) {
         cardMaps = items
             .where((item) => item.isCard && item.cardNumber.isNotEmpty)
@@ -28,13 +29,24 @@ class AutofillBridgeService {
                   'cardHolder': item.cardHolder.trim(),
                 })
             .toList();
+
+        pwdMaps = items
+            .where((item) => item.isPassword)
+            .map((item) => {
+                  'nickname': item.nickname.trim().isEmpty ? item.bankName : item.nickname,
+                  'website': item.website.trim(),
+                  'username': item.userId.trim(),
+                  'password': item.loginPassword.trim(),
+                })
+            .toList();
       }
 
       await _channel.invokeMethod('syncVaultState', {
         'isUnlocked': isUnlocked,
         'cards': cardMaps,
+        'passwords': pwdMaps,
       });
-      developer.log('AutofillBridge synchronized (isUnlocked: $isUnlocked, cards: ${cardMaps?.length ?? 0})', name: 'AutofillBridge');
+      developer.log('AutofillBridge synchronized (isUnlocked: $isUnlocked, cards: ${cardMaps?.length ?? 0}, passwords: ${pwdMaps?.length ?? 0})', name: 'AutofillBridge');
     } catch (e) {
       developer.log('Error syncing autofill bridge: $e', name: 'AutofillBridge');
     }

@@ -33,7 +33,7 @@
           <span class="step-pill">STEP 1</span>
           <span class="section-title">Google Drive Account</span>
         </div>
-        <p id="step1Subtitle" class="section-subtitle" style="margin-bottom: 8px;">
+        <p id="step1Subtitle" class="section-subtitle" style="margin-bottom: 6px;">
           Connect the Google Account used in CardVault on your phone.
         </p>
 
@@ -44,11 +44,11 @@
             <span>Sign in with Google Account</span>
           </button>
 
-          <div style="margin-top: 8px; text-align: center;">
+          <div style="margin-top: 6px; text-align: center;">
             <a href="#" id="toggleManualTokenLink" class="subtle-link">Paste Access Token or Select Local File</a>
           </div>
-          <div id="manualTokenBox" style="display: none; margin-top: 8px;">
-            <div class="form-group" style="margin-bottom: 6px;">
+          <div id="manualTokenBox" style="display: none; margin-top: 6px;">
+            <div class="form-group" style="margin-bottom: 5px;">
               <input type="password" id="customTokenInput" placeholder="Google OAuth Access Token (ya29...)" />
             </div>
             <div style="display: flex; gap: 6px;">
@@ -75,18 +75,18 @@
             </div>
             <button id="disconnectOAuthBtn" class="btn-switch-account" title="Disconnect Google Drive account">Disconnect</button>
           </div>
-          <div class="account-devices-bar" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #CBD5E1; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+          <div class="account-devices-bar" style="margin-top: 4px; padding-top: 4px; border-top: 1px dashed #CBD5E1; display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
             <span style="color: #475569; display: flex; align-items: center; gap: 4px;">
               <span>📱</span> <strong id="headerDeviceCount">0 Phones Linked</strong>
             </span>
-            <button type="button" id="openDeviceManagerFromHeaderBtn" class="btn-manage-link" style="color: #FF6F00; font-weight: 700; cursor: pointer; background: transparent; border: none; padding: 2px 4px;">⚙️ Manage Devices</button>
+            <button type="button" id="openDeviceManagerFromHeaderBtn" class="btn-manage-link" style="color: #FF6F00; font-weight: 700; cursor: pointer; background: transparent; border: none; padding: 1px 3px;">⚙️ Manage Devices</button>
           </div>
         </div>
       </div>
 
       <!-- ── STEP 2: MOBILE CONFIRMATION & MASTER PASSWORD ── -->
-      <div class="setup-section" style="margin-top: 8px;">
-        <div class="section-badge-row">
+      <div class="setup-section" style="margin-top: 6px;">
+        <div class="section-badge-row" style="margin-bottom: 5px;">
           <span class="step-pill">STEP 2</span>
           <span class="section-title">Mobile Approval & Decrypt</span>
         </div>
@@ -105,22 +105,22 @@
           <!-- ── MODE A: PUSH CONFIRMATION (Default) ── -->
           <div id="pushModeContainer">
             <!-- Compact This Computer Device Row -->
-            <div style="display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 4px 8px; margin-bottom: 7px; font-size: 11px;">
-              <span style="color: #475569; display: inline-flex; align-items: center; gap: 5px; min-width: 0;">
-                <span style="font-size: 12px;">💻</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 3px 7px; margin-bottom: 5px; font-size: 10.5px;">
+              <span style="color: #475569; display: inline-flex; align-items: center; gap: 4px; min-width: 0;">
+                <span style="font-size: 11px;">💻</span>
                 <span style="color: #0F172A; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="desktopDeviceNameText">Windows PC (Chrome)</span>
               </span>
-              <button type="button" id="editDesktopNameBtn" style="background: none; border: none; color: #FF6F00; font-size: 10px; font-weight: 700; cursor: pointer; padding: 0 4px; flex-shrink: 0;" title="Rename this device">✏️ Rename</button>
+              <button type="button" id="editDesktopNameBtn" style="background: none; border: none; color: #FF6F00; font-size: 10px; font-weight: 700; cursor: pointer; padding: 0 3px; flex-shrink: 0;" title="Rename this device">✏️ Rename</button>
             </div>
 
             <!-- Master Password -->
-            <div class="form-group" style="margin-bottom: 7px;">
+            <div class="form-group" style="margin-bottom: 5px;">
               <label for="passwordInput" style="margin-bottom: 2px;">Vault Master Password</label>
               <input type="password" id="passwordInput" placeholder="Enter your Master Password" autocomplete="off" />
             </div>
 
             <!-- Multi-Mobile Device Selector -->
-            <div id="deviceSelectorGroup" class="form-group" style="margin-bottom: 9px;">
+            <div id="deviceSelectorGroup" class="form-group" style="margin-bottom: 7px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
                 <label for="targetDeviceSelect" style="margin-bottom: 0;">Target Mobile Phone:</label>
                 <span id="deviceCountBadge" style="color: #64748B; font-size: 10px; font-weight: 600;"></span>

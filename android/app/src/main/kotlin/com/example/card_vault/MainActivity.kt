@@ -30,7 +30,8 @@ class MainActivity: FlutterFragmentActivity() {
                 "syncVaultState" -> {
                     val isUnlocked = call.argument<Boolean>("isUnlocked") ?: false
                     val cards = call.argument<List<Map<String, Any?>>>("cards")
-                    AutofillBridge.sync(isUnlocked, cards)
+                    val passwords = call.argument<List<Map<String, Any?>>>("passwords")
+                    AutofillBridge.sync(isUnlocked, cards, passwords)
                     result.success(true)
                 }
                 "isAutofillEnabled" -> {

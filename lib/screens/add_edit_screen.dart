@@ -1259,12 +1259,13 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           await db.updateItem(nb);
         }
       } else {
+        final rawWebsite = _pwdWebsiteCtrl.text.replaceAll(' ', '').trim();
         final pwd = VaultItem(
           id: widget.initialItem?.id ?? const Uuid().v4(),
           type: VaultItemType.password,
           bankName: _pwdNicknameCtrl.text.trim(),
           nickname: _pwdNicknameCtrl.text.trim(),
-          website: _pwdWebsiteCtrl.text.trim(),
+          website: rawWebsite,
           userId: _pwdUsernameCtrl.text.trim(),
           loginPassword: _pwdPasswordCtrl.text.trim(),
           notes: _pwdNotesCtrl.text.trim(),
@@ -2432,10 +2433,13 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           _buildTextField(
             _pwdWebsiteCtrl,
             'Website Address / URL',
-            'e.g. https://github.com or google.com',
+            'e.g. https://github.com or amazon.in',
             Icons.language_rounded,
             errorText: _pwdWebsiteError,
             keyboardType: TextInputType.url,
+            textCapitalization: TextCapitalization.none,
+            autocorrect: false,
+            enableSuggestions: false,
             onChanged: (val) {
               if (_pwdWebsiteError != null) setState(() => _pwdWebsiteError = null);
             },
@@ -2443,7 +2447,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           const Padding(
             padding: EdgeInsets.only(left: 4, top: 4),
             child: Text(
-              'Domain is matched automatically when you open this website in the browser.',
+              'Domain is matched automatically when you open this website or mobile app.',
               style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontStyle: FontStyle.italic),
             ),
           ),
@@ -2457,6 +2461,9 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
             Icons.alternate_email_rounded,
             errorText: _pwdUsernameError,
             keyboardType: TextInputType.emailAddress,
+            textCapitalization: TextCapitalization.none,
+            autocorrect: false,
+            enableSuggestions: true,
             onChanged: (val) {
               if (_pwdUsernameError != null) setState(() => _pwdUsernameError = null);
             },
@@ -2680,6 +2687,9 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
     bool isNotes = false,
     TextInputType keyboardType = TextInputType.text,
     TextInputAction textInputAction = TextInputAction.next,
+    TextCapitalization? textCapitalization,
+    bool? autocorrect,
+    bool? enableSuggestions,
     int maxLines = 1,
     String? errorText,
     ValueChanged<String>? onChanged,
@@ -2687,13 +2697,20 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
     FocusNode? focusNode,
     List<TextInputFormatter>? inputFormatters,
   }) {
+    final bool isUrlOrEmail = keyboardType == TextInputType.emailAddress || keyboardType == TextInputType.url;
+    final bool effectiveAutocorrect = autocorrect ?? (!isPassword && !isUrlOrEmail);
+    final TextCapitalization effectiveCapitalization = textCapitalization ??
+        ((isPassword || isNotes || isUrlOrEmail) ? TextCapitalization.none : TextCapitalization.characters);
+
     return TextField(
       controller: controller,
       focusNode: focusNode,
       obscureText: isPassword,
       keyboardType: keyboardType,
       textInputAction: textInputAction,
-      textCapitalization: (isPassword || isNotes) ? TextCapitalization.none : TextCapitalization.characters,
+      textCapitalization: effectiveCapitalization,
+      autocorrect: effectiveAutocorrect,
+      enableSuggestions: enableSuggestions ?? !isPassword,
       maxLines: maxLines,
       onChanged: onChanged,
       onTap: onTap,
