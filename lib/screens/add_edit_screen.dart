@@ -12,6 +12,7 @@ import '../services/card_scanner_service.dart';
 import '../services/database_service.dart';
 import '../services/drive_service.dart';
 import '../services/nfc_card_scanner_service.dart';
+import '../services/totp_service.dart';
 import '../widgets/card_input_formatter.dart';
 import '../widgets/card_widget.dart';
 import '../widgets/spotlight_tour.dart';
@@ -105,6 +106,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
   final _pwdWebsiteCtrl = TextEditingController();
   final _pwdUsernameCtrl = TextEditingController();
   final _pwdPasswordCtrl = TextEditingController();
+  final _pwdTotpCtrl = TextEditingController();
   final _pwdNotesCtrl = TextEditingController();
   bool _pwdPasswordVisible = false;
 
@@ -256,6 +258,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
         _pwdWebsiteCtrl.text = it.website;
         _pwdUsernameCtrl.text = it.userId;
         _pwdPasswordCtrl.text = it.loginPassword;
+        _pwdTotpCtrl.text = it.totpSecret;
         _pwdNotesCtrl.text = it.notes;
       } else if (it.isCard) {
         _cardNicknameCtrl.text = it.nickname;
@@ -365,6 +368,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
     _pwdWebsiteCtrl.dispose();
     _pwdUsernameCtrl.dispose();
     _pwdPasswordCtrl.dispose();
+    _pwdTotpCtrl.dispose();
     _pwdNotesCtrl.dispose();
     super.dispose();
   }
@@ -1268,6 +1272,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           website: rawWebsite,
           userId: _pwdUsernameCtrl.text.trim(),
           loginPassword: _pwdPasswordCtrl.text.trim(),
+          totpSecret: TotpService.cleanKey(_pwdTotpCtrl.text),
           notes: _pwdNotesCtrl.text.trim(),
           createdAt: widget.initialItem?.createdAt ?? now,
           updatedAt: now,
@@ -2558,6 +2563,125 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                     ],
                   ),
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 4b. Two-Factor Authentication (TOTP / 2FA)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6F00).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.lock_clock_rounded, color: Color(0xFFFF6F00), size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Two-Factor Authentication (2FA / TOTP)',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                          Text(
+                            'Optional: Generates rolling 6-digit authenticator codes',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _pwdTotpCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.2,
+                    fontSize: 13,
+                    color: Color(0xFF0F172A),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    labelText: '2FA Secret Key or URI',
+                    hintText: 'e.g. JBSWY3DPEHPK3PXP or otpauth://...',
+                    hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.paste_rounded, color: Color(0xFFFF6F00), size: 20),
+                      tooltip: 'Paste 2FA Secret Key',
+                      onPressed: () async {
+                        final data = await Clipboard.getData(Clipboard.kTextPlain);
+                        if (data?.text != null) {
+                          final parsed = TotpService.cleanKey(data!.text!);
+                          setState(() {
+                            _pwdTotpCtrl.text = parsed;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                if (TotpService.isValidSecret(_pwdTotpCtrl.text)) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFECFDF5),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFA7F3D0)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Active Code: ${TotpService.generateCode(_pwdTotpCtrl.text)}',
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF065F46),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          '${TotpService.getRemainingSeconds()}s left',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF059669), fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

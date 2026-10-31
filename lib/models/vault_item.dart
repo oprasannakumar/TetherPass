@@ -108,6 +108,7 @@ class VaultItem {
   final DateTime? loginPasswordExpiry;
   final DateTime? profilePasswordExpiry;
   final DateTime? mpinExpiry;
+  final String totpSecret; // Base32 2FA authenticator secret key (RFC 6238)
 
   VaultItem({
     required this.id,
@@ -143,12 +144,14 @@ class VaultItem {
     this.loginPasswordExpiry,
     this.profilePasswordExpiry,
     this.mpinExpiry,
+    this.totpSecret = '',
   });
 
   bool get isCard => type == VaultItemType.card;
   bool get isNetBanking => type == VaultItemType.netBanking;
   bool get isBank => type == VaultItemType.netBanking;
   bool get isPassword => type == VaultItemType.password;
+  bool get hasTotp => totpSecret.trim().isNotEmpty;
   String get username => isPassword ? userId : '';
   String get password => isPassword ? loginPassword : '';
 
@@ -374,6 +377,7 @@ class VaultItem {
     DateTime? loginPasswordExpiry,
     DateTime? profilePasswordExpiry,
     DateTime? mpinExpiry,
+    String? totpSecret,
   }) {
     return VaultItem(
       id: id ?? this.id,
@@ -407,6 +411,7 @@ class VaultItem {
       loginPasswordExpiry: loginPasswordExpiry ?? this.loginPasswordExpiry,
       profilePasswordExpiry: profilePasswordExpiry ?? this.profilePasswordExpiry,
       mpinExpiry: mpinExpiry ?? this.mpinExpiry,
+      totpSecret: totpSecret ?? this.totpSecret,
     );
   }
 
@@ -443,6 +448,7 @@ class VaultItem {
       'login_password_expiry': loginPasswordExpiry?.toIso8601String(),
       'profile_password_expiry': profilePasswordExpiry?.toIso8601String(),
       'mpin_expiry': mpinExpiry?.toIso8601String(),
+      'totp_secret': totpSecret,
     };
   }
 
@@ -506,6 +512,7 @@ class VaultItem {
       mpinExpiry: map['mpin_expiry'] != null
           ? DateTime.tryParse(map['mpin_expiry'] as String)
           : null,
+      totpSecret: map['totp_secret'] as String? ?? '',
     );
   }
 

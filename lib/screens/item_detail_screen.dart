@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +8,8 @@ import 'package:share_plus/share_plus.dart';
 import '../models/vault_item.dart';
 import '../services/card_detector.dart';
 import '../services/database_service.dart';
+import '../services/totp_service.dart';
+import '../services/breach_watch_service.dart';
 import '../widgets/card_input_formatter.dart';
 import '../widgets/spotlight_tour.dart';
 import 'add_edit_screen.dart';
@@ -26,6 +29,10 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   bool _isLoginPasswordRevealed = false;
   bool _isProfilePasswordRevealed = false;
   bool _isMpinRevealed = false;
+
+  Timer? _totpTimer;
+  BreachResult? _breachResult;
+  bool _isCheckingBreach = false;
 
   // GlobalKeys for pointing directly to card and bank elements in the spotlight tour
   final GlobalKey _cardNumKey = GlobalKey();
@@ -156,6 +163,34 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   void initState() {
     super.initState();
     _item = widget.item;
+    if (_item.hasTotp) {
+      _startTotpTimer();
+    }
+  }
+
+  void _startTotpTimer() {
+    _totpTimer?.cancel();
+    _totpTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _totpTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkBreachStatus() async {
+    if (_item.loginPassword.isEmpty) return;
+    setState(() => _isCheckingBreach = true);
+    final res = await BreachWatchService.checkPassword(_item.loginPassword);
+    if (mounted) {
+      setState(() {
+        _breachResult = res;
+        _isCheckingBreach = false;
+      });
+    }
   }
 
   void _copyToClipboard(String label, String value) {
@@ -651,6 +686,168 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
                 ),
               ],
             ),
+          ),
+
+          // ── Two-Factor Authentication (TOTP / 2FA Live Card) ──
+          if (_item.hasTotp) ...[
+            const SizedBox(height: 12),
+            Builder(builder: (context) {
+              final code = TotpService.generateCode(_item.totpSecret);
+              final remaining = TotpService.getRemainingSeconds();
+              final progress = TotpService.getProgress();
+              final formattedCode = code.length == 6
+                  ? '${code.substring(0, 3)} ${code.substring(3)}'
+                  : code;
+
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  children: [
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: 32,
+                          height: 32,
+                          child: CircularProgressIndicator(
+                            value: progress,
+                            strokeWidth: 3,
+                            backgroundColor: Colors.white12,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              remaining <= 5 ? Colors.redAccent : const Color(0xFF10B981),
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '$remaining',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: remaining <= 5 ? Colors.redAccent : const Color(0xFF10B981),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text('2FA CODE (TOTP)', style: TextStyle(color: hintColor, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text('ROLLING 30s', style: TextStyle(color: Color(0xFF34D399), fontSize: 8, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            formattedCode.isEmpty ? '— — —  — — —' : formattedCode,
+                            style: const TextStyle(
+                              color: Color(0xFF6EE7B7),
+                              fontFamily: 'monospace',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 2.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.copy_rounded, size: 20, color: Color(0xFF34D399)),
+                      tooltip: 'Copy 2FA Code',
+                      onPressed: () => _copyToClipboard('2FA Code', code),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+
+          // ── Breach Watch (HaveIBeenPwned k-Anonymity Scanner) ──
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: _isCheckingBreach
+                ? const Row(
+                    children: [
+                      SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70)),
+                      SizedBox(width: 10),
+                      Text('Scanning 14+ billion leaked records...', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                    ],
+                  )
+                : _breachResult == null
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.security_rounded, size: 16, color: Color(0xFF818CF8)),
+                              SizedBox(width: 8),
+                              Text('Breach Watch', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                          InkWell(
+                            onTap: _checkBreachStatus,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF6F00),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text('Check Leaks', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          Icon(
+                            _breachResult!.isPwned ? Icons.warning_amber_rounded : Icons.verified_user_rounded,
+                            size: 18,
+                            color: _breachResult!.isPwned ? Colors.redAccent : const Color(0xFF34D399),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _breachResult!.isPwned
+                                  ? 'Exposed in ${_breachResult!.breachCount} public breaches! Change recommended.'
+                                  : 'Safe! Not found in any known public data leaks.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: _breachResult!.isPwned ? const Color(0xFFFCA5A5) : const Color(0xFFA7F3D0),
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.white70),
+                            onPressed: _checkBreachStatus,
+                            tooltip: 'Re-check',
+                          ),
+                        ],
+                      ),
           ),
         ],
       ),

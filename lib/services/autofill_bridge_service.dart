@@ -37,6 +37,7 @@ class AutofillBridgeService {
                   'website': item.website.trim(),
                   'username': item.userId.trim(),
                   'password': item.loginPassword.trim(),
+                  'totpSecret': item.totpSecret.trim(),
                 })
             .toList();
       }

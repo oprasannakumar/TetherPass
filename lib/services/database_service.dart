@@ -13,7 +13,7 @@ import 'secure_backup_export_service.dart';
 class DatabaseService {
   static const _dbName = 'card_vault_v2.db';
   static const _tableName = 'vault_items';
-  static const _dbVersion = 7;
+  static const _dbVersion = 8;
 
   final CryptoService cryptoService;
   Database? _db;
@@ -64,7 +64,8 @@ class DatabaseService {
         account_number TEXT,
         ifsc_code TEXT,
         accounts TEXT,
-        website TEXT
+        website TEXT,
+        totp_secret TEXT
       )
     ''');
   }
@@ -113,6 +114,11 @@ class DatabaseService {
     if (oldVersion < 7) {
       try {
         await db.execute('ALTER TABLE $_tableName ADD COLUMN website TEXT DEFAULT ""');
+      } catch (_) {}
+    }
+    if (oldVersion < 8) {
+      try {
+        await db.execute('ALTER TABLE $_tableName ADD COLUMN totp_secret TEXT DEFAULT ""');
       } catch (_) {}
     }
   }
@@ -270,6 +276,7 @@ class DatabaseService {
       'login_password_expiry': item.loginPasswordExpiry?.toIso8601String(),
       'profile_password_expiry': item.profilePasswordExpiry?.toIso8601String(),
       'mpin_expiry': item.mpinExpiry?.toIso8601String(),
+      'totp_secret': _safeEncrypt(item.totpSecret),
     };
   }
 
@@ -335,6 +342,7 @@ class DatabaseService {
       mpinExpiry: map['mpin_expiry'] != null
           ? DateTime.tryParse(map['mpin_expiry'] as String)
           : null,
+      totpSecret: _safeDecrypt(map['totp_secret'] as String?),
     );
   }
 

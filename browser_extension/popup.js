@@ -898,6 +898,7 @@ function renderVaultList(query = '') {
       const tile = document.createElement('div');
       tile.className = 'card-tile';
       const webUrl = pwd.website ? (pwd.website.startsWith('http') ? pwd.website : 'https://' + pwd.website) : '';
+      const totpBtn = pwd.totpCode ? `<button class="copy-chip" style="background:#ECFDF5;color:#059669;border-color:#A7F3D0;font-weight:bold;" data-copy="${pwd.totpCode}">⚡ ${pwd.totpCode} (${pwd.totpSeconds}s)</button>` : '';
       tile.innerHTML = `
         <div class="tile-header">
           <span class="tile-title">🌐 ${escapeHtml(pwd.nickname)}</span>
@@ -908,6 +909,8 @@ function renderVaultList(query = '') {
         <div class="tile-actions">
           ${pwd.username ? `<button class="copy-chip" data-copy="${pwd.username}">Copy User</button>` : ''}
           ${pwd.password ? `<button class="copy-chip" data-copy="${pwd.password}">Copy Password</button>` : ''}
+          ${totpBtn}
+          ${pwd.password ? `<button class="copy-chip check-leak-btn" data-pwd="${pwd.password}">🛡️ Leak Check</button>` : ''}
           ${webUrl ? `<button class="copy-chip open-site" data-url="${webUrl}">Open Site</button>` : ''}
         </div>
       `;
@@ -960,6 +963,29 @@ function renderVaultList(query = '') {
       if (url) {
         chrome.tabs.create({ url });
       }
+    });
+  });
+
+  // Attach leak check listener
+  list.querySelectorAll('.check-leak-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const pwd = btn.getAttribute('data-pwd');
+      if (!pwd) return;
+      btn.textContent = 'Checking...';
+      chrome.runtime.sendMessage({ action: 'CHECK_BREACH', payload: { password: pwd } }, (res) => {
+        if (res && res.isPwned) {
+          btn.style.background = '#FEE2E2';
+          btn.style.color = '#DC2626';
+          btn.style.borderColor = '#FCA5A5';
+          btn.textContent = `⚠️ Leaked (${res.breachCount})`;
+        } else {
+          btn.style.background = '#DCFCE7';
+          btn.style.color = '#15803D';
+          btn.style.borderColor = '#86EFAC';
+          btn.textContent = '✅ Safe';
+        }
+      });
     });
   });
 }

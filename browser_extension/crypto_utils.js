@@ -158,12 +158,183 @@ async function decryptSealedMasterPassword(sealedKeyObj, secret) {
   return new TextDecoder().decode(decryptedBuffer);
 }
 
+// ─── TOTP (2FA Authenticator - RFC 6238) ───────────────────────────────────
+
+const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+function decodeBase32(str) {
+  const clean = (str || '').trim().toUpperCase().replace(/[\s\-=]/g, '');
+  let bits = 0;
+  let value = 0;
+  const output = [];
+
+  for (let i = 0; i < clean.length; i++) {
+    const idx = BASE32_ALPHABET.indexOf(clean[i]);
+    if (idx === -1) continue;
+    value = (value << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      output.push((value >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+  return new Uint8Array(output);
+}
+
+/**
+ * Generates current 6-digit TOTP code from a Base32 secret key.
+ */
+async function generateTotpCode(secretKey, customTimeMs = Date.now(), period = 30, digits = 6) {
+  if (!secretKey) return '';
+  let cleanKey = secretKey.trim();
+  if (cleanKey.toLowerCase().startsWith('otpauth://')) {
+    try {
+      const url = new URL(cleanKey);
+      cleanKey = url.searchParams.get('secret') || cleanKey;
+    } catch (_) {}
+  }
+
+  const keyBytes = decodeBase32(cleanKey);
+  if (keyBytes.length === 0) return '';
+
+  const epoch = Math.floor(customTimeMs / 1000);
+  let counter = Math.floor(epoch / period);
+
+  // 8-byte big endian counter buffer
+  const counterBuffer = new ArrayBuffer(8);
+  const counterView = new DataView(counterBuffer);
+  // Big-endian 64-bit int
+  counterView.setUint32(0, Math.floor(counter / 0x100000000), false);
+  counterView.setUint32(4, counter & 0xFFFFFFFF, false);
+
+  try {
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyBytes,
+      { name: 'HMAC', hash: { name: 'SHA-1' } },
+      false,
+      ['sign']
+    );
+
+    const signature = await crypto.subtle.sign('HMAC', cryptoKey, counterBuffer);
+    const hash = new Uint8Array(signature);
+
+    const offset = hash[hash.length - 1] & 0x0F;
+    const binary =
+      ((hash[offset] & 0x7F) << 24) |
+      ((hash[offset + 1] & 0xFF) << 16) |
+      ((hash[offset + 2] & 0xFF) << 8) |
+      (hash[offset + 3] & 0xFF);
+
+    const otp = binary % Math.pow(10, digits);
+    return otp.toString().padStart(digits, '0');
+  } catch (err) {
+    console.warn('[TetherPass] TOTP error:', err);
+    return '';
+  }
+}
+
+function getTotpRemainingSeconds(period = 30) {
+  const epoch = Math.floor(Date.now() / 1000);
+  const elapsed = epoch % period;
+  return period - elapsed;
+}
+
+// ─── Breach Watch (HaveIBeenPwned k-Anonymity) ─────────────────────────────
+
+async function checkPasswordBreached(password) {
+  if (!password) return { isPwned: false, breachCount: 0 };
+  try {
+    const enc = new TextEncoder();
+    const digest = await crypto.subtle.digest('SHA-1', enc.encode(password));
+    const hex = Array.from(new Uint8Array(digest))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase();
+
+    const prefix = hex.substring(0, 5);
+    const suffix = hex.substring(5);
+
+    const resp = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
+      headers: { 'Add-Padding': 'true' }
+    });
+
+    if (!resp.ok) return { isPwned: false, breachCount: 0, error: 'Network check failed' };
+
+    const text = await resp.text();
+    const lines = text.split('\n');
+    for (const line of lines) {
+      const [lineSuffix, countStr] = line.split(':');
+      if (lineSuffix && lineSuffix.trim() === suffix) {
+        const count = parseInt(countStr.trim(), 10) || 1;
+        return { isPwned: true, breachCount: count };
+      }
+    }
+    return { isPwned: false, breachCount: 0 };
+  } catch (e) {
+    return { isPwned: false, breachCount: 0, error: e.message };
+  }
+}
+
+// ─── Encrypt Backup for Sync ────────────────────────────────────────────────
+
+async function encryptTetherPassBackup(items, masterPassword) {
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(16));
+
+  const hmacKey = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(masterPassword),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  let current = salt;
+  for (let i = 0; i < 10000; i++) {
+    current = new Uint8Array(await crypto.subtle.sign('HMAC', hmacKey, current));
+  }
+
+  const aesKey = await crypto.subtle.importKey(
+    'raw',
+    current,
+    { name: 'AES-CBC' },
+    false,
+    ['encrypt']
+  );
+
+  const payloadJson = JSON.stringify({
+    version: 1,
+    exported_at: new Date().toISOString(),
+    kdf: 'pbkdf2_dart_hmac',
+    items: items.map(it => it)
+  });
+
+  const encryptedBuffer = await crypto.subtle.encrypt(
+    { name: 'AES-CBC', iv },
+    aesKey,
+    enc.encode(payloadJson)
+  );
+
+  return JSON.stringify({
+    header: 'TETHERPASS_SECURE_BACKUP_V1',
+    salt: uint8ArrayToBase64(salt),
+    iv: uint8ArrayToBase64(iv),
+    data: uint8ArrayToBase64(new Uint8Array(encryptedBuffer))
+  }, null, 2);
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     decryptCardVaultBackup,
     decryptSealedMasterPassword,
     deriveKeyCardVaultDart,
     deriveKeyStandardPBKDF2,
+    generateTotpCode,
+    getTotpRemainingSeconds,
+    checkPasswordBreached,
+    encryptTetherPassBackup,
     base64ToUint8Array,
     uint8ArrayToBase64
   };

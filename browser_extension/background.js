@@ -183,6 +183,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (action === 'SAVE_NEW_PASSWORD') {
+    handleSaveNewPassword(payload)
+      .then(result => sendResponse(result))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (action === 'CHECK_BREACH') {
+    checkPasswordBreached(payload.password)
+      .then(result => sendResponse(result))
+      .catch(err => sendResponse({ isPwned: false, error: err.message }));
+    return true;
+  }
+
   return false;
 });
 
@@ -412,12 +426,25 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
     const isCard = !isPassword && (type === 'card' || (!type.includes('bank') && rawCardNumber.length >= 12));
 
     if (isPassword) {
+      const totpKey = item.totp_secret || item.totpSecret || '';
+      let totpCode = '';
+      let totpSeconds = 0;
+      if (totpKey) {
+        try {
+          totpCode = await generateTotpCode(totpKey);
+          totpSeconds = getTotpRemainingSeconds();
+        } catch (_) {}
+      }
+
       const pwdItem = {
         id: item.id || String(Math.random()),
         nickname: item.nickname || item.bank_name || 'Website Password',
         website: item.website || '',
         username: item.user_id || item.userId || item.username || '',
         password: item.login_password || item.loginPassword || item.password || '',
+        totpSecret: totpKey,
+        totpCode: totpCode,
+        totpSeconds: totpSeconds,
         notes: item.notes || ''
       };
 
@@ -493,6 +520,58 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
     bankAccounts,
     passwords
   };
+}
+
+async function handleSaveNewPassword({ website, username, password, nickname, totpSecret }) {
+  if (!memoryVault.isUnlocked || !memoryVault.masterPassword) {
+    return { success: false, error: 'VAULT_LOCKED', message: 'TetherPass extension is locked.' };
+  }
+
+  const cleanDomain = extractDomain(website) || 'login';
+  const now = new Date().toISOString();
+
+  // Find if already present
+  let existingIndex = memoryVault.items.findIndex(it => {
+    const isPwd = (it.type || '').toLowerCase() === 'password';
+    if (!isPwd) return false;
+    const sameDomain = doesDomainMatch(it.website, cleanDomain);
+    const sameUser = (it.user_id || it.userId || it.username || '').toLowerCase() === (username || '').toLowerCase();
+    return sameDomain && sameUser;
+  });
+
+  const newItem = {
+    id: existingIndex >= 0 ? memoryVault.items[existingIndex].id : 'item_' + Date.now(),
+    type: 'password',
+    bank_name: nickname || cleanDomain,
+    nickname: nickname || cleanDomain,
+    website: (website || '').startsWith('http') ? website : `https://${website || cleanDomain}`,
+    user_id: username,
+    login_password: password,
+    totp_secret: totpSecret || (existingIndex >= 0 ? (memoryVault.items[existingIndex].totp_secret || '') : ''),
+    notes: existingIndex >= 0 ? (memoryVault.items[existingIndex].notes || '') : 'Saved via TetherPass Chrome Extension',
+    created_at: existingIndex >= 0 ? memoryVault.items[existingIndex].created_at : now,
+    updated_at: now
+  };
+
+  if (existingIndex >= 0) {
+    memoryVault.items[existingIndex] = newItem;
+  } else {
+    memoryVault.items.push(newItem);
+  }
+
+  // Encrypt and persist to Google Drive if connected
+  try {
+    const encryptedPayload = await encryptTetherPassBackup(memoryVault.items, memoryVault.masterPassword);
+    await driveClient.uploadOrUpdateFile(DRIVE_BACKUP_FILENAME, encryptedPayload);
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      await chrome.storage.local.set({ cachedBackupPayload: encryptedPayload });
+    }
+  } catch (err) {
+    console.warn('[TetherPass] Could not upload updated backup to Drive:', err);
+  }
+
+  notifyAllTabsStatusChange();
+  return { success: true, updated: existingIndex >= 0, title: newItem.nickname };
 }
 
 // Periodic check every 2.5 seconds so revocations from mobile take effect immediately
