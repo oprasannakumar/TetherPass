@@ -949,39 +949,46 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: activeList.isNotEmpty ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(8),
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: activeList.isNotEmpty ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.laptop_chromebook_rounded,
+                        color: activeList.isNotEmpty ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                        size: 18,
+                      ),
                     ),
-                    child: Icon(
-                      Icons.laptop_chromebook_rounded,
-                      color: activeList.isNotEmpty ? const Color(0xFF16A34A) : const Color(0xFF64748B),
-                      size: 20,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'DESKTOP SESSIONS (${activeList.length})',
+                        style: const TextStyle(
+                          color: Color(0xFF0F172A),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'ACTIVE DESKTOP SESSIONS (${activeList.length})',
-                    style: const TextStyle(
-                      color: Color(0xFF0F172A),
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (activeList.length > 1) ...[
+                  if (activeList.isNotEmpty) ...[
                     InkWell(
                       onTap: _terminateAllSessions,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFEE2E2),
                           borderRadius: BorderRadius.circular(6),
@@ -996,18 +1003,22 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                   ],
                   InkWell(
                     onTap: _loadingSessions ? null : _fetchSessions,
-                    child: Row(
-                      children: [
-                        _loadingSessions
-                            ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF64748B)),
-                        const SizedBox(width: 4),
-                        const Text('Refresh', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
-                      ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _loadingSessions
+                              ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF64748B)),
+                          const SizedBox(width: 3),
+                          const Text('Refresh', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -1183,25 +1194,33 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Row(
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      runSpacing: 2,
                       children: [
                         if (isActive) ...[
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF16A34A),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            'Active • $minsLeft min${minsLeft == 1 ? "" : "s"} left',
-                            style: const TextStyle(
-                              color: Color(0xFF15803D),
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF16A34A),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Active • $minsLeft min${minsLeft == 1 ? "" : "s"} left',
+                                style: const TextStyle(
+                                  color: Color(0xFF15803D),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                         ] else ...[
                           Text(
@@ -1215,7 +1234,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                         ],
                         if (createdAt > 0) ...[
                           Text(
-                            '  •  Started ${_formatSessionTime(createdAt)}',
+                            '• Started ${_formatSessionTime(createdAt)}',
                             style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
                           ),
                         ],
