@@ -317,8 +317,8 @@ class DriveClient {
    */
   async isAuthorizationRevoked(authMode, sessionStartTime, sessionId) {
     const now = Date.now();
-    // Cache revocation check results for 10 seconds to prevent spamming Google Drive
-    if (this._lastRevokeCheckTime && (now - this._lastRevokeCheckTime < 10000)) {
+    // Cache revocation check results for 2.5 seconds to prevent spamming Google Drive while remaining responsive
+    if (this._lastRevokeCheckTime && (now - this._lastRevokeCheckTime < 2500)) {
       return this._lastRevokeResult || false;
     }
     this._lastRevokeCheckTime = now;
@@ -331,55 +331,70 @@ class DriveClient {
           const content = await this.downloadFileContent(sessionsFile.id);
           const data = JSON.parse(content);
           const sessions = data.sessions || [];
+          let foundSession = false;
           for (const s of sessions) {
             if (!s) continue;
             // Check matching sessionId
             if (sessionId && s.sessionId === sessionId) {
-              if (s.status === 'TERMINATED' || s.status === 'REVOKED') {
+              foundSession = true;
+              const sStatus = (s.status || '').toUpperCase();
+              if (sStatus === 'TERMINATED' || sStatus === 'REVOKED' || sStatus === 'LOCKED') {
                 this._lastRevokeResult = true;
                 return true;
               }
             }
             // Check if terminated recently after session began
-            if (s.status === 'TERMINATED' && s.terminatedAt && sessionStartTime && s.terminatedAt > (sessionStartTime + 2000)) {
+            const sStatus = (s.status || '').toUpperCase();
+            if (sStatus === 'TERMINATED' && s.terminatedAt && sessionStartTime && s.terminatedAt > (sessionStartTime + 1000)) {
               if (!sessionId || s.sessionId === sessionId || s.authMode === authMode) {
                 this._lastRevokeResult = true;
                 return true;
               }
             }
           }
+          // If sessionId was actively registered, but the sessions file was updated after session began
+          // and sessionId is now completely missing from the list, mobile has removed/terminated it!
+          if (sessionId && !foundSession && data.updatedAt && sessionStartTime && data.updatedAt > (sessionStartTime + 1000)) {
+            console.log('[TetherPass] Session', sessionId, 'purged from active sessions on Drive; revoking.');
+            this._lastRevokeResult = true;
+            return true;
+          }
         } catch (_) {}
       }
 
-      // 1. If unlocked via PIN, inspect the PIN authorization record (card_vault_extension_auth.json)
+      // 1. Inspect access request record (card_vault_access_request.json)
+      const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
+      if (reqFile) {
+        try {
+          const reqContent = await this.downloadFileContent(reqFile.id);
+          const req = JSON.parse(reqContent);
+          const reqStatus = (req.status || '').toUpperCase();
+          if (reqStatus === 'REVOKED' || reqStatus === 'LOCKED' || reqStatus === 'TERMINATED') {
+            const reqTime = req.locked_at || req.revoked_at || req.terminated_at || 0;
+            if ((sessionId && req.requestId === sessionId) || (reqTime && sessionStartTime && reqTime > (sessionStartTime + 1000))) {
+              this._lastRevokeResult = true;
+              return true;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 2. Inspect PIN authorization record (card_vault_extension_auth.json)
       if (authMode === 'PIN' || !authMode) {
         const authFile = await this.findFile(DRIVE_AUTH_FILENAME);
         if (authFile) {
-          const authContent = await this.downloadFileContent(authFile.id);
-          const auth = JSON.parse(authContent);
-          // ONLY trigger on explicit REVOKED action from mobile settings strictly AFTER session was unlocked
-          if (auth.status === 'REVOKED') {
-            if (auth.revoked_at && sessionStartTime && auth.revoked_at > (sessionStartTime + 2000)) {
-              this._lastRevokeResult = true;
-              return true;
+          try {
+            const authContent = await this.downloadFileContent(authFile.id);
+            const auth = JSON.parse(authContent);
+            const authStatus = (auth.status || '').toUpperCase();
+            if (authStatus === 'REVOKED' || authStatus === 'LOCKED' || authStatus === 'TERMINATED') {
+              const authTime = auth.revoked_at || auth.locked_at || auth.terminated_at || 0;
+              if (authTime && sessionStartTime && authTime > (sessionStartTime + 1000)) {
+                this._lastRevokeResult = true;
+                return true;
+              }
             }
-          }
-        }
-      }
-
-      // 2. If unlocked via PUSH approval, inspect push request record
-      if (authMode === 'PUSH') {
-        const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
-        if (reqFile) {
-          const reqContent = await this.downloadFileContent(reqFile.id);
-          const req = JSON.parse(reqContent);
-          // ONLY trigger on explicit REVOKED action from mobile settings strictly AFTER session was unlocked
-          if (req.status === 'REVOKED') {
-            if (req.revoked_at && sessionStartTime && req.revoked_at > (sessionStartTime + 2000)) {
-              this._lastRevokeResult = true;
-              return true;
-            }
-          }
+          } catch (_) {}
         }
       }
 

@@ -324,6 +324,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     await restoreSessionIfNeeded();
 
     if (action === 'GET_STATUS') {
+      if (memoryVault.isAuthorized && memoryVault.isUnlocked) {
+        await verifyMobileAuth();
+      }
       const suggestions = (memoryVault.isAuthorized && memoryVault.isUnlocked)
         ? organizeVaultItems(memoryVault.items)
         : { cards: [], bankAccounts: [], passwords: [] };
@@ -408,6 +411,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (action === 'GET_AUTOFILL_SUGGESTIONS') {
       try {
+        if (memoryVault.isAuthorized && memoryVault.isUnlocked) {
+          await verifyMobileAuth();
+        }
         const res = await handleGetAutofillSuggestions(payload);
         sendResponse(res);
       } catch (_) {
@@ -810,5 +816,5 @@ async function handleSaveNewPassword({ website, username, password, nickname, to
   return { success: true, updated: existingIndex >= 0, title: newItem.nickname };
 }
 
-// Periodic check every 25 seconds so revocations from mobile take effect without spamming Drive
-setInterval(verifyMobileAuth, 25000);
+// Periodic check every 4 seconds so revocations from mobile take effect promptly
+setInterval(verifyMobileAuth, 4000);

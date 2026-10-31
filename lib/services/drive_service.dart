@@ -685,7 +685,12 @@ class DriveService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      sessionList.removeWhere((s) => s is Map && s['sessionId'] == sessionId);
+      for (final s in sessionList) {
+        if (s is Map && s['sessionId'] == sessionId) {
+          s['status'] = 'TERMINATED';
+          s['terminatedAt'] = now;
+        }
+      }
 
       await uploadTextFile(activeSessionsFileName, jsonEncode({
         'version': 1,
