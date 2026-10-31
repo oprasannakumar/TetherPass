@@ -11,6 +11,8 @@ let currentOAuthToken = null;
 let localBackupPayload = null;
 let activePollingInterval = null;
 let activeCountdownInterval = null;
+let currentAuthMethod = 'push'; // 'push' or 'pin'
+let cachedDevices = [];
 
 const driveClient = new DriveClient();
 
@@ -64,17 +66,33 @@ function initUI() {
     fileInput.addEventListener('change', handleFileSelected);
   }
 
+  // ── Auth Method Switching (Push vs PIN) ──
+  document.getElementById('authMethodPushTab')?.addEventListener('click', () => setAuthMethod('push'));
+  document.getElementById('authMethodPinTab')?.addEventListener('click', () => setAuthMethod('pin'));
+  document.getElementById('switchToPinLink')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    setAuthMethod('pin');
+  });
+  document.getElementById('switchToPushLink')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    setAuthMethod('push');
+  });
+
   // Push confirmation to mobile phone
   document.getElementById('requestPushApprovalBtn')?.addEventListener('click', handleRequestMobilePushApproval);
   document.getElementById('cancelApprovalRequestBtn')?.addEventListener('click', cancelApprovalPolling);
 
-  // Manual PIN toggle
-  document.getElementById('toggleManualPinLink')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    const pinBox = document.getElementById('manualPinBox');
-    if (pinBox) pinBox.style.display = pinBox.style.display === 'none' ? 'block' : 'none';
-  });
+  // Unlock with 6-digit PIN
   document.getElementById('unlockWithPinBtn')?.addEventListener('click', handleUnlockWithPin);
+
+  // ── Device Manager Modal ──
+  document.getElementById('openDeviceManagerBtn')?.addEventListener('click', openDeviceManagerModal);
+  document.getElementById('closeDeviceManagerBtn')?.addEventListener('click', closeDeviceManagerModal);
+  document.getElementById('doneDeviceManagerBtn')?.addEventListener('click', closeDeviceManagerModal);
+  document.getElementById('refreshDevicesModalBtn')?.addEventListener('click', refreshDeviceManagerModal);
+  document.getElementById('deviceManagerModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'deviceManagerModal') closeDeviceManagerModal();
+  });
 
   // Lock button
   document.getElementById('lockNowBtn')?.addEventListener('click', handleLock);
@@ -101,10 +119,42 @@ function initUI() {
   }
 }
 
+function setAuthMethod(method, save = true) {
+  currentAuthMethod = method;
+  const pushTab = document.getElementById('authMethodPushTab');
+  const pinTab = document.getElementById('authMethodPinTab');
+  const pushModeContainer = document.getElementById('pushModeContainer');
+  const pinBox = document.getElementById('manualPinBox');
+
+  if (method === 'pin') {
+    pushTab?.classList.remove('active');
+    pinTab?.classList.add('active');
+    // When in PIN mode, remove/hide push confirmation button and device selector completely
+    if (pushModeContainer) pushModeContainer.style.display = 'none';
+    if (pinBox) pinBox.style.display = 'block';
+    // Clear any active push polling if user switches to PIN
+    cancelApprovalPolling();
+  } else {
+    pinTab?.classList.remove('active');
+    pushTab?.classList.add('active');
+    if (pushModeContainer) pushModeContainer.style.display = 'block';
+    if (pinBox) pinBox.style.display = 'none';
+  }
+
+  if (save && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.set({ preferredAuthMethod: method });
+  }
+}
+
 async function loadSavedGoogleAccount() {
   try {
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      const data = await chrome.storage.local.get(['googleAccountEmail', 'googleOAuthToken', 'cachedBackupPayload']);
+      const data = await chrome.storage.local.get([
+        'googleAccountEmail',
+        'googleOAuthToken',
+        'cachedBackupPayload',
+        'preferredAuthMethod'
+      ]);
       if (data.googleOAuthToken) {
         currentOAuthToken = data.googleOAuthToken;
         driveClient.setToken(data.googleOAuthToken);
@@ -114,6 +164,9 @@ async function loadSavedGoogleAccount() {
       }
       if (data.cachedBackupPayload) {
         localBackupPayload = data.cachedBackupPayload;
+      }
+      if (data.preferredAuthMethod) {
+        setAuthMethod(data.preferredAuthMethod, false);
       }
     }
   } catch (err) {
@@ -152,29 +205,161 @@ async function loadRegisteredDevices() {
       payload: { token: currentOAuthToken }
     });
 
-    if (res && res.success && Array.isArray(res.devices) && res.devices.length > 0) {
-      const selectorGroup = document.getElementById('deviceSelectorGroup');
-      const select = document.getElementById('targetDeviceSelect');
-      const badge = document.getElementById('deviceCountBadge');
-
-      if (select) {
-        select.innerHTML = '<option value="ALL">📡 All Mobile Devices (Broadcast)</option>';
-        res.devices.forEach(d => {
-          const opt = document.createElement('option');
-          opt.value = d.deviceId;
-          opt.textContent = `📱 ${d.deviceName || 'Mobile Device'} (${d.platform || 'Android'})`;
-          select.appendChild(opt);
-        });
-      }
-
-      if (res.devices.length > 1) {
-        if (selectorGroup) selectorGroup.style.display = 'block';
-        if (badge) badge.textContent = `(${res.devices.length} Phones Found)`;
-      } else {
-        if (selectorGroup) selectorGroup.style.display = 'none';
-      }
+    if (res && res.success && Array.isArray(res.devices)) {
+      cachedDevices = res.devices;
+      updateDeviceSelector(res.devices);
     }
   } catch (_) {}
+}
+
+function updateDeviceSelector(devices) {
+  const selectorGroup = document.getElementById('deviceSelectorGroup');
+  const select = document.getElementById('targetDeviceSelect');
+  const badge = document.getElementById('deviceCountBadge');
+
+  if (!select) return;
+  const previousSelected = select.value;
+
+  select.innerHTML = '<option value="ALL">📡 All Mobile Devices (Broadcast)</option>';
+  if (Array.isArray(devices) && devices.length > 0) {
+    devices.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = `📱 ${d.deviceName || 'Mobile Device'} (${d.platform || 'Android'})`;
+      select.appendChild(opt);
+    });
+
+    if (selectorGroup) selectorGroup.style.display = 'block';
+    if (badge) badge.textContent = `(${devices.length} phone${devices.length > 1 ? 's' : ''})`;
+    if (previousSelected && Array.from(select.options).some(o => o.value === previousSelected)) {
+      select.value = previousSelected;
+    }
+  } else {
+    if (selectorGroup) selectorGroup.style.display = 'none';
+  }
+}
+
+// ── Device Manager Modal Handlers ──
+function openDeviceManagerModal() {
+  const modal = document.getElementById('deviceManagerModal');
+  if (modal) modal.style.display = 'flex';
+  renderDeviceManagerList();
+  refreshDeviceManagerModal();
+}
+
+function closeDeviceManagerModal() {
+  const modal = document.getElementById('deviceManagerModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function refreshDeviceManagerModal() {
+  const loading = document.getElementById('deviceManagerLoading');
+  if (loading) loading.style.display = 'block';
+  await loadRegisteredDevices();
+  if (loading) loading.style.display = 'none';
+  renderDeviceManagerList();
+}
+
+function renderDeviceManagerList() {
+  const container = document.getElementById('devicesListContainer');
+  const empty = document.getElementById('deviceManagerEmpty');
+  if (!container) return;
+
+  container.innerHTML = '';
+  if (!cachedDevices || cachedDevices.length === 0) {
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  cachedDevices.forEach(device => {
+    const card = document.createElement('div');
+    card.className = 'device-item-card';
+
+    let lastActiveText = 'Recently';
+    if (device.lastActive) {
+      try {
+        const d = new Date(device.lastActive);
+        lastActiveText = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      } catch (_) {}
+    }
+
+    card.innerHTML = `
+      <div class="device-item-left">
+        <div class="device-avatar-icon">📱</div>
+        <div class="device-item-info">
+          <div class="device-item-name">${escapeHtml(device.deviceName || 'Mobile Phone')}</div>
+          <div class="device-item-meta">${escapeHtml(device.platform || 'Android')} • Last active ${escapeHtml(lastActiveText)}</div>
+        </div>
+      </div>
+      <div class="device-item-actions">
+        <button type="button" class="btn-action-icon btn-rename-device" title="Rename this device">✏️</button>
+        <button type="button" class="btn-action-icon btn-delete btn-remove-device" title="Remove device">🗑️</button>
+      </div>
+    `;
+
+    card.querySelector('.btn-rename-device')?.addEventListener('click', () => {
+      handlePromptRenameDevice(device.deviceId, device.deviceName || 'Mobile Phone');
+    });
+
+    card.querySelector('.btn-remove-device')?.addEventListener('click', () => {
+      handlePromptRemoveDevice(device.deviceId, device.deviceName || 'Mobile Phone');
+    });
+
+    container.appendChild(card);
+  });
+}
+
+async function handlePromptRenameDevice(deviceId, currentName) {
+  const newName = prompt('Enter a new name for this device:', currentName);
+  if (!newName || !newName.trim() || newName.trim() === currentName) return;
+
+  const loading = document.getElementById('deviceManagerLoading');
+  if (loading) loading.style.display = 'block';
+
+  try {
+    const res = await sendExtensionMessage({
+      action: 'RENAME_REGISTERED_DEVICE',
+      payload: { token: currentOAuthToken, deviceId, newName: newName.trim() }
+    });
+    if (res && res.success) {
+      cachedDevices = res.devices || [];
+      updateDeviceSelector(cachedDevices);
+      renderDeviceManagerList();
+    } else {
+      alert('Failed to rename device: ' + (res?.error || 'Unknown error'));
+    }
+  } catch (err) {
+    alert('Error renaming device: ' + err.message);
+  } finally {
+    if (loading) loading.style.display = 'none';
+  }
+}
+
+async function handlePromptRemoveDevice(deviceId, deviceName) {
+  const confirmed = confirm('Are you sure you want to remove "' + deviceName + '"?\\n\\nThis phone will no longer receive confirmation pop-ups.');
+  if (!confirmed) return;
+
+  const loading = document.getElementById('deviceManagerLoading');
+  if (loading) loading.style.display = 'block';
+
+  try {
+    const res = await sendExtensionMessage({
+      action: 'REMOVE_REGISTERED_DEVICE',
+      payload: { token: currentOAuthToken, deviceId }
+    });
+    if (res && res.success) {
+      cachedDevices = res.devices || [];
+      updateDeviceSelector(cachedDevices);
+      renderDeviceManagerList();
+    } else {
+      alert('Failed to remove device: ' + (res?.error || 'Unknown error'));
+    }
+  } catch (err) {
+    alert('Error removing device: ' + err.message);
+  } finally {
+    if (loading) loading.style.display = 'none';
+  }
 }
 
 async function handleGoogleSignIn() {

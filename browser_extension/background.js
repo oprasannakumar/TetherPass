@@ -92,6 +92,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (action === 'REMOVE_REGISTERED_DEVICE') {
+    if (payload?.token) driveClient.setToken(payload.token);
+    driveClient.removeRegisteredDevice(payload.deviceId)
+      .then(devices => sendResponse({ success: true, devices }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (action === 'RENAME_REGISTERED_DEVICE') {
+    if (payload?.token) driveClient.setToken(payload.token);
+    driveClient.renameRegisteredDevice(payload.deviceId, payload.newName)
+      .then(devices => sendResponse({ success: true, devices }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
   if (action === 'START_MOBILE_APPROVAL_REQUEST') {
     handleStartMobileApprovalRequest(payload)
       .then(res => sendResponse(res))

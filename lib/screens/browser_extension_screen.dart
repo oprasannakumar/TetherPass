@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../services/auth_service.dart';
+import '../services/device_identity_service.dart';
 import '../services/drive_service.dart';
 import '../services/extension_auth_service.dart';
 import '../services/vault_security_service.dart';
@@ -18,11 +19,122 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
   static const String extensionFolderPath =
       r'C:\Users\bhask\.gemini\antigravity\scratch\card_vault_extension';
 
+  List<Map<String, dynamic>> _devices = [];
+  String _currentDeviceId = '';
+  String _currentDeviceName = '';
+  bool _loadingDevices = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDeviceIdentityAndDevices();
+  }
+
+  Future<void> _loadDeviceIdentityAndDevices() async {
+    final id = await DeviceIdentityService.getDeviceId();
+    final name = await DeviceIdentityService.getDeviceName();
+    if (mounted) {
+      setState(() {
+        _currentDeviceId = id;
+        _currentDeviceName = name;
+      });
+      await _fetchDevices();
+    }
+  }
+
+  Future<void> _fetchDevices() async {
+    final drive = context.read<DriveService>();
+    if (!drive.isSignedIn) return;
+    setState(() => _loadingDevices = true);
+    final list = await drive.getRegisteredDevices();
+    if (mounted) {
+      setState(() {
+        _devices = list;
+        _loadingDevices = false;
+      });
+    }
+  }
+
+  Future<void> _renameDevice(String deviceId, String currentName) async {
+    final ctrl = TextEditingController(text: currentName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Rename Device', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Device Name',
+            hintText: 'e.g. My Primary Phone',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty && newName != currentName) {
+      if (!mounted) return;
+      final drive = context.read<DriveService>();
+      final ok = await drive.renameRegisteredDevice(deviceId, newName);
+      if (ok && mounted) {
+        if (deviceId == _currentDeviceId) {
+          setState(() => _currentDeviceName = newName);
+        }
+        await _fetchDevices();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Device renamed to "$newName"')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _removeDevice(String deviceId, String deviceName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Remove Device?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Text('Remove "$deviceName" from your registered devices? It will no longer receive extension confirmation pop-ups.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final drive = context.read<DriveService>();
+      final ok = await drive.removeRegisteredDevice(deviceId);
+      if (ok && mounted) {
+        await _fetchDevices();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Removed "$deviceName"')),
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _handleAuthorize() async {
     final sec = context.read<VaultSecurityService>();
     final auth = context.read<AuthService>();
     final authService = context.read<ExtensionAuthService>();
-    final drive = context.read<DriveService>();
 
     // 1. Optional Google Drive sync
     // If signed in, the session token is synced to Drive as well.
@@ -373,6 +485,197 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                 onPressed: authService.isLoading ? null : () => authService.revokeExtension(),
               ),
             ],
+
+            const SizedBox(height: 20),
+
+            // ── Linked Mobile Phones Management ──
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: const [
+                          Icon(Icons.devices_rounded, color: Color(0xFFFF6F00), size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'LINKED MOBILE PHONES',
+                            style: TextStyle(color: Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      if (drive.isSignedIn)
+                        InkWell(
+                          onTap: _loadingDevices ? null : _fetchDevices,
+                          child: Row(
+                            children: [
+                              _loadingDevices
+                                  ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF64748B)),
+                              const SizedBox(width: 4),
+                              const Text('Refresh', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Phones registered to receive biometric autofill approval pop-ups from your Windows browser extension.',
+                    style: TextStyle(color: Color(0xFF64748B), fontSize: 11, height: 1.35),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Current Device Card
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF86EFAC)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.phone_android_rounded, color: Color(0xFF15803D), size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      _currentDeviceName.isNotEmpty ? _currentDeviceName : 'Current Mobile Device',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF16A34A),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text('THIS PHONE', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'ID: ${_currentDeviceId.isNotEmpty ? _currentDeviceId : "Initializing..."}',
+                                style: const TextStyle(color: Color(0xFF64748B), fontSize: 10, fontFamily: 'monospace'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.edit_rounded, size: 18, color: Color(0xFF15803D)),
+                          tooltip: 'Rename this phone',
+                          onPressed: () => _renameDevice(_currentDeviceId, _currentDeviceName),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Other Registered Devices
+                  if (_devices.where((d) => d['deviceId'] != _currentDeviceId).isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    ..._devices.where((d) => d['deviceId'] != _currentDeviceId).map((d) {
+                      final name = (d['deviceName'] as String?) ?? 'Mobile Phone';
+                      final id = (d['deviceId'] as String?) ?? '';
+                      final platform = (d['platform'] as String?) ?? 'Android';
+                      return Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE2E8F0),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.smartphone_rounded, color: Color(0xFF475569), size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    name,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '$platform • ID: $id',
+                                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.edit_rounded, size: 18, color: Color(0xFF64748B)),
+                              tooltip: 'Rename',
+                              onPressed: () => _renameDevice(id, name),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                              tooltip: 'Remove',
+                              onPressed: () => _removeDevice(id, name),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ] else if (!drive.isSignedIn) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFFDE68A)),
+                      ),
+                      child: Row(
+                        children: const [
+                          Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 18),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Sign in to Google Drive in Settings to sync and manage multiple phones.',
+                              style: TextStyle(color: Color(0xFF92400E), fontSize: 11),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
 
             const SizedBox(height: 24),
 

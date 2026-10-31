@@ -251,6 +251,51 @@ class DriveClient {
   }
 
   /**
+   * Removes a device from the registered devices list in Google Drive.
+   */
+  async removeRegisteredDevice(deviceId) {
+    try {
+      const file = await this.findFile(DRIVE_DEVICES_FILENAME);
+      if (!file) return [];
+      const content = await this.downloadFileContent(file.id);
+      const data = JSON.parse(content);
+      const currentList = Array.isArray(data.devices) ? data.devices : [];
+      const updatedList = currentList.filter(d => d.deviceId !== deviceId);
+      const payload = JSON.stringify({ devices: updatedList }, null, 2);
+      await this.uploadOrUpdateFile(DRIVE_DEVICES_FILENAME, payload);
+      return updatedList;
+    } catch (err) {
+      console.error('[DriveClient] Failed to remove device:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Renames a device in the registered devices list in Google Drive.
+   */
+  async renameRegisteredDevice(deviceId, newName) {
+    try {
+      const file = await this.findFile(DRIVE_DEVICES_FILENAME);
+      if (!file) return [];
+      const content = await this.downloadFileContent(file.id);
+      const data = JSON.parse(content);
+      const currentList = Array.isArray(data.devices) ? data.devices : [];
+      const updatedList = currentList.map(d => {
+        if (d.deviceId === deviceId) {
+          return { ...d, deviceName: newName.trim() };
+        }
+        return d;
+      });
+      const payload = JSON.stringify({ devices: updatedList }, null, 2);
+      await this.uploadOrUpdateFile(DRIVE_DEVICES_FILENAME, payload);
+      return updatedList;
+    } catch (err) {
+      console.error('[DriveClient] Failed to rename device:', err);
+      throw err;
+    }
+  }
+
+  /**
    * Checks authorization status record
    */
   async checkMobileAuthorization() {

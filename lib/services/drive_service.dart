@@ -276,6 +276,58 @@ class DriveService extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Fetches the list of all registered mobile devices from Google Drive.
+  Future<List<Map<String, dynamic>>> getRegisteredDevices() async {
+    if (!isSignedIn) return [];
+    try {
+      final text = await downloadTextFile(devicesFileName);
+      if (text == null || text.trim().isEmpty) return [];
+      final data = jsonDecode(text) as Map<String, dynamic>;
+      final list = (data['devices'] as List<dynamic>?) ?? [];
+      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Removes a registered device from Google Drive by its deviceId.
+  Future<bool> removeRegisteredDevice(String deviceId) async {
+    if (!isSignedIn) return false;
+    try {
+      final list = await getRegisteredDevices();
+      final updated = list.where((d) => d['deviceId'] != deviceId).toList();
+      final payload = jsonEncode({'devices': updated});
+      await uploadTextFile(devicesFileName, payload);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Renames a registered device in Google Drive.
+  Future<bool> renameRegisteredDevice(String deviceId, String newName) async {
+    if (!isSignedIn) return false;
+    try {
+      final list = await getRegisteredDevices();
+      for (final d in list) {
+        if (d['deviceId'] == deviceId) {
+          d['deviceName'] = newName.trim();
+        }
+      }
+      final payload = jsonEncode({'devices': list});
+      await uploadTextFile(devicesFileName, payload);
+
+      // If it's this device, also update local storage
+      final myId = await DeviceIdentityService.getDeviceId();
+      if (deviceId == myId) {
+        await DeviceIdentityService.setDeviceName(newName);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Checks Google Drive for pending desktop extension access requests.
   /// Ignores requests targeted specifically at other mobile devices.
   Future<Map<String, dynamic>?> checkForPendingAccessRequest() async {
