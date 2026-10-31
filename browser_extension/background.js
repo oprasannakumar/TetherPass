@@ -128,8 +128,8 @@ async function verifyMobileAuth() {
 
     if (memoryVault.authMode === 'PIN' && memoryVault.activePin) {
       const authStatus = await driveClient.checkMobileAuthorization();
-      // Only lock if explicitly revoked or locked from mobile, NOT on network/rate-limit errors
-      if (!authStatus.authorized && (authStatus.reason === 'REVOKED' || authStatus.reason === 'LOCKED')) {
+      // Only lock if explicitly REVOKED from mobile settings, NOT on network/rate-limit/local lock
+      if (!authStatus.authorized && authStatus.reason === 'REVOKED') {
         await lockVault('Authorization revoked from TetherPass mobile application.');
         return;
       }
@@ -350,12 +350,13 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
     const backupPayload = await driveClient.fetchEncryptedVaultBackup();
     const decryptedItems = await decryptCardVaultBackup(backupPayload, effectivePassword);
 
-    // Save in RAM and session storage
+    // Save in RAM and session storage with a full 30-minute desktop session
+    const desktopSessionDurationMs = 30 * 60 * 1000;
     memoryVault.isAuthorized = true;
     memoryVault.isUnlocked = true;
     memoryVault.items = decryptedItems;
     memoryVault.lastSyncedAt = Date.now();
-    memoryVault.authExpiresAt = check.expiresAt || (Date.now() + (30 * 60 * 1000));
+    memoryVault.authExpiresAt = Date.now() + desktopSessionDurationMs;
     memoryVault.masterPassword = effectivePassword;
     memoryVault.activeRequestId = requestId;
     memoryVault.authMode = 'PUSH';
@@ -458,12 +459,13 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
   // 5. Decrypt Vault with Master Password
   const decryptedItems = await decryptCardVaultBackup(backupPayload, effectivePassword);
 
-  // 5. Store in RAM and session storage
+  // 5. Store in RAM and session storage with a full 30-minute desktop session
+  const desktopSessionDurationMs = 30 * 60 * 1000;
   memoryVault.isAuthorized = true;
   memoryVault.isUnlocked = true;
   memoryVault.items = decryptedItems;
   memoryVault.lastSyncedAt = Date.now();
-  memoryVault.authExpiresAt = authResult.expiresAt || (Date.now() + (30 * 60 * 1000));
+  memoryVault.authExpiresAt = Date.now() + desktopSessionDurationMs;
   memoryVault.masterPassword = effectivePassword;
   memoryVault.activePin = cleanPin;
   memoryVault.authMode = 'PIN';

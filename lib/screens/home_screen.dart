@@ -9,7 +9,6 @@ import '../services/autofill_bridge_service.dart';
 import '../services/database_service.dart';
 import '../services/device_identity_service.dart';
 import '../services/drive_service.dart';
-import '../services/extension_auth_service.dart';
 import '../services/vault_security_service.dart';
 import '../widgets/app_tour_dialog.dart';
 import '../widgets/spotlight_tour.dart';
@@ -673,7 +672,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _lockVault() {
     AutofillBridgeService.syncVaultState(isUnlocked: false);
-    context.read<ExtensionAuthService>().onMobileVaultLocked();
+    // Desktop extension retains its independent 30-minute session duration.
+    // Explicit revocation is handled via Settings -> Browser Extension -> Revoke.
     Navigator.of(context).pushNamedAndRemoveUntil('/unlock', (route) => false);
   }
 

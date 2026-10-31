@@ -160,31 +160,9 @@ class ExtensionAuthService extends ChangeNotifier {
     }
   }
 
-  /// Called when the mobile vault locks to secure desktop sessions
+  /// Desktop sessions maintain their independent 30-minute validity.
+  /// Remote desktop session kill is performed intentionally via [revokeExtension].
   Future<void> onMobileVaultLocked() async {
-    if (!_isAuthorized) return;
-    try {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final payload = jsonEncode({
-        'status': 'LOCKED',
-        'authorized_at': null,
-        'expires_at': null,
-        'pairing_pin': null,
-        'device': 'Windows Browser Extension',
-        'revoked_at': now,
-      });
-      if (driveService.isSignedIn) {
-        await driveService.uploadTextFile(authFileName, payload);
-        final reqPayload = jsonEncode({
-          'status': 'LOCKED',
-          'message': 'Mobile TetherPass was locked.',
-          'revoked_at': now,
-        });
-        await driveService.uploadTextFile(DriveService.accessRequestFileName, reqPayload);
-      }
-    } catch (_) {}
-    _isAuthorized = false;
-    _expiresAt = null;
-    notifyListeners();
+    // No-op: Do not overwrite Drive authorization records on regular mobile screen locks.
   }
 }

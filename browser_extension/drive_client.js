@@ -324,7 +324,8 @@ class DriveClient {
         if (authFile) {
           const authContent = await this.downloadFileContent(authFile.id);
           const auth = JSON.parse(authContent);
-          if (auth.status === 'REVOKED' || auth.status === 'LOCKED') {
+          // ONLY trigger on explicit REVOKED action from mobile settings
+          if (auth.status === 'REVOKED') {
             if (auth.revoked_at && sessionStartTime && auth.revoked_at >= sessionStartTime) {
               this._lastRevokeResult = true;
               return true;
@@ -339,7 +340,8 @@ class DriveClient {
         if (reqFile) {
           const reqContent = await this.downloadFileContent(reqFile.id);
           const req = JSON.parse(reqContent);
-          if (req.status === 'REVOKED' || req.status === 'LOCKED') {
+          // ONLY trigger on explicit REVOKED action from mobile settings
+          if (req.status === 'REVOKED') {
             if (req.revoked_at && sessionStartTime && req.revoked_at >= sessionStartTime) {
               this._lastRevokeResult = true;
               return true;
@@ -369,10 +371,10 @@ class DriveClient {
       const content = await this.downloadFileContent(file.id);
       const auth = JSON.parse(content);
 
-      if (auth.status === 'REVOKED' || auth.status === 'LOCKED') {
+      if (auth.status === 'REVOKED') {
         return {
           authorized: false,
-          reason: auth.status,
+          reason: 'REVOKED',
           message: 'Authorization revoked from TetherPass mobile application.'
         };
       }
