@@ -531,6 +531,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (!mounted) return;
       await _showMasterPasswordPromptForDrive(req.payload);
     } catch (e) {
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('master password') ||
+          msg.contains('password') ||
+          msg.contains('key mismatch') ||
+          msg.contains('decryption failed')) {
+        if (!mounted) return;
+        final payload = await drive.downloadRawBackupPayload().catchError((_) => '');
+        if (!mounted) return;
+        await _showMasterPasswordPromptForDrive(payload);
+        return;
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Restore error: $e'), backgroundColor: Colors.red),
@@ -597,15 +608,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 }
 
                 try {
-                  final items = SecureBackupExportService.importVaultWithPassword(
-                    backupPayload: payload,
-                    userPassword: pwd,
-                  );
-
+                  int count = 0;
                   final db = context.read<DatabaseService>();
                   final sec = context.read<VaultSecurityService>();
-                  for (final item in items) {
-                    await db.insertItem(item);
+
+                  if (payload.contains('TETHERPASS_SECURE_BACKUP_V1') ||
+                      payload.contains('CARDVAULT_SECURE_BACKUP_V1')) {
+                    final items = SecureBackupExportService.importVaultWithPassword(
+                      backupPayload: payload,
+                      userPassword: pwd,
+                    );
+                    for (final item in items) {
+                      await db.insertItem(item);
+                    }
+                    count = items.length;
+                  } else {
+                    count = await db.importEncryptedBackup(payload, masterPassword: pwd);
                   }
 
                   // Automatically configure vault with this verified Master Password
@@ -615,7 +633,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     Navigator.pop(dlgCtx);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('✓ Successfully restored ${items.length} items from Google Drive!'),
+                        content: Text('✓ Successfully restored $count items from Google Drive!'),
                         backgroundColor: Colors.green,
                       ),
                     );

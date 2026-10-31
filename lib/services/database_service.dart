@@ -224,16 +224,14 @@ class DatabaseService {
     } on ArgumentError catch (e) {
       if (e.message.toString().toLowerCase().contains('pad block') ||
           e.toString().toLowerCase().contains('pad block')) {
-        throw const FormatException(
-          'Backup key mismatch. This file was encrypted with an older installation key. Please use "Import Backup from File" using your Master Password.',
-        );
+        throw MasterPasswordRequiredException(trimmed);
       }
       rethrow;
     } catch (e) {
-      if (e.toString().toLowerCase().contains('pad block')) {
-        throw const FormatException(
-          'Backup key mismatch. Please restore using your Master Password.',
-        );
+      if (e.toString().toLowerCase().contains('pad block') ||
+          e.toString().toLowerCase().contains('key mismatch') ||
+          e.toString().toLowerCase().contains('decryption failed')) {
+        throw MasterPasswordRequiredException(trimmed);
       }
       rethrow;
     }

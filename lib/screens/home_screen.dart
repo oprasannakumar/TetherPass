@@ -748,6 +748,19 @@ class _HomeScreenState extends State<HomeScreen> {
         await _promptDriveMasterPassword(req.payload);
       }
     } catch (e) {
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('master password') ||
+          msg.contains('password') ||
+          msg.contains('key mismatch') ||
+          msg.contains('decryption failed')) {
+        if (mounted) {
+          final payload = await drive.downloadRawBackupPayload().catchError((_) => '');
+          if (mounted) {
+            await _promptDriveMasterPassword(payload);
+          }
+        }
+        return;
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Restore failed: $e'), backgroundColor: Colors.red),
@@ -817,7 +830,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
 
                 try {
-                  final count = await drive.restore(masterPassword: pwd);
+                  final count = await drive.restore(masterPassword: pwd, rawPayload: payload.isNotEmpty ? payload : null);
                   try {
                     final sec = context.read<VaultSecurityService>();
                     await sec.saveMasterPassword(pwd);

@@ -156,8 +156,8 @@ class DriveService extends ChangeNotifier {
     return utf8.decode(chunks).trim();
   }
 
-  Future<int> restore({String? masterPassword}) async {
-    final encryptedPayload = await downloadRawBackupPayload();
+  Future<int> restore({String? masterPassword, String? rawPayload}) async {
+    final encryptedPayload = rawPayload ?? await downloadRawBackupPayload();
 
     // 1. If encrypted with Master Password via SecureBackupExportService
     final isMasterPasswordEncrypted = encryptedPayload.startsWith('{') &&
@@ -193,7 +193,9 @@ class DriveService extends ChangeNotifier {
       rethrow;
     } catch (e) {
       if (e.toString().toLowerCase().contains('pad block') ||
-          e.toString().toLowerCase().contains('master password')) {
+          e.toString().toLowerCase().contains('master password') ||
+          e.toString().toLowerCase().contains('device key mismatch') ||
+          e.toString().toLowerCase().contains('decryption failed')) {
         throw MasterPasswordRequiredException(encryptedPayload);
       }
       rethrow;
