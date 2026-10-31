@@ -8,7 +8,18 @@ class DeviceIdentityService {
   static const _storage = FlutterSecureStorage();
   static const _deviceIdKey = 'card_vault_persistent_device_id';
   static const _deviceNameKey = 'card_vault_persistent_device_name';
+  static const _regTimeKey = 'card_vault_session_reg_time';
   static final _deviceInfo = DeviceInfoPlugin();
+
+  static Future<int> getSessionRegistrationTime() async {
+    final str = await _storage.read(key: _regTimeKey);
+    return int.tryParse(str ?? '') ?? 0;
+  }
+
+  static Future<void> updateSessionRegistrationTime([int? timeMs]) async {
+    final val = timeMs ?? DateTime.now().millisecondsSinceEpoch;
+    await _storage.write(key: _regTimeKey, value: val.toString());
+  }
 
   /// Returns a hardware-deterministic, invariant device ID for this phone.
   /// Remains identical across app reinstalls and updates on the same physical phone.

@@ -7,6 +7,7 @@ import '../models/vault_item.dart';
 import '../services/auth_service.dart';
 import '../services/autofill_bridge_service.dart';
 import '../services/database_service.dart';
+import '../services/device_identity_service.dart';
 import '../services/drive_service.dart';
 import '../services/extension_auth_service.dart';
 import '../services/vault_security_service.dart';
@@ -101,6 +102,10 @@ class _HomeScreenState extends State<HomeScreen> {
     await db.clearAllData();
     await sec.wipeAllData();
     await AutofillBridgeService.syncVaultState(isUnlocked: false, items: []);
+    
+    // Acknowledge wipe on Drive so device is not blocked if user chooses to sign back in
+    await drive.acknowledgeAndClearDeviceWipe();
+    await DeviceIdentityService.updateSessionRegistrationTime(DateTime.now().millisecondsSinceEpoch);
     await drive.signOut();
 
     if (mounted) {

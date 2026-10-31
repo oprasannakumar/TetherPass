@@ -234,13 +234,15 @@ class DriveService extends ChangeNotifier {
   static const devicesFileName = 'card_vault_devices.json';
 
   /// Registers this mobile device in Google Drive so Windows Extension can detect multiple devices.
-  /// Automatically deduplicates stale instances and rejects re-registration if device was wiped/removed.
+  /// Automatically clears any stale removal mark for this device, establishes fresh session time, and deduplicates.
   Future<void> registerDeviceOnDrive() async {
     if (!isSignedIn) return;
     try {
       final myId = await DeviceIdentityService.getDeviceId();
       final myName = await DeviceIdentityService.getDeviceName();
       final now = DateTime.now().millisecondsSinceEpoch;
+
+      await DeviceIdentityService.updateSessionRegistrationTime(now);
 
       List<dynamic> deviceList = [];
       List<dynamic> removedList = [];
@@ -253,10 +255,8 @@ class DriveService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // If this device was explicitly removed, do not re-register
-      if (removedList.any((r) => r is Map && r['deviceId'] == myId)) {
-        return;
-      }
+      // User logged into this device: clear any old removal mark so device is not blocked
+      removedList.removeWhere((r) => r is Map && r['deviceId'] == myId);
 
       // Deduplicate: remove any stale device entry with matching deviceId or identical name
       deviceList.removeWhere((d) {
@@ -283,20 +283,49 @@ class DriveService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Checks if this mobile phone was remotely removed by the user in the extension or another device.
+  /// Checks if this mobile phone was remotely removed AFTER this phone's current active session began.
   Future<bool> isCurrentDeviceRemoved() async {
     if (!isSignedIn) return false;
     try {
       final myId = await DeviceIdentityService.getDeviceId();
+      final regTime = await DeviceIdentityService.getSessionRegistrationTime();
       final existingText = await downloadTextFile(devicesFileName);
       if (existingText == null || existingText.trim().isEmpty) return false;
 
       final data = jsonDecode(existingText) as Map<String, dynamic>;
       final removedList = (data['removedDevices'] as List<dynamic>?) ?? [];
-      return removedList.any((r) => r is Map && r['deviceId'] == myId);
+      
+      // Only trigger if removed timestamp is strictly newer than when this device logged in
+      return removedList.any((r) {
+        if (r is! Map || r['deviceId'] != myId) return false;
+        final removedAt = (r['removedAt'] as num?)?.toInt() ?? 0;
+        return removedAt > regTime;
+      });
     } catch (_) {
       return false;
     }
+  }
+
+  /// Consumes and clears the remote wipe command from Google Drive after wipe is executed
+  Future<void> acknowledgeAndClearDeviceWipe() async {
+    if (!isSignedIn) return;
+    try {
+      final myId = await DeviceIdentityService.getDeviceId();
+      final existingText = await downloadTextFile(devicesFileName);
+      if (existingText == null || existingText.trim().isEmpty) return;
+
+      final data = jsonDecode(existingText) as Map<String, dynamic>;
+      final deviceList = (data['devices'] as List<dynamic>?) ?? [];
+      final removedList = (data['removedDevices'] as List<dynamic>?) ?? [];
+
+      removedList.removeWhere((r) => r is Map && r['deviceId'] == myId);
+
+      final payload = jsonEncode({
+        'devices': deviceList,
+        'removedDevices': removedList,
+      });
+      await uploadTextFile(devicesFileName, payload);
+    } catch (_) {}
   }
 
   /// Fetches the list of all registered mobile devices from Google Drive.
