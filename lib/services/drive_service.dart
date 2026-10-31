@@ -578,6 +578,7 @@ class DriveService extends ChangeNotifier {
       }
 
       // 3. Compute active status and minutes remaining for each session (Push approvals only)
+      // Any session that is locked, terminated, revoked, or expired is completely removed!
       final List<Map<String, dynamic>> results = [];
       for (final s in sessionMap.values) {
         if (s['authMode'] == 'PIN') continue; // PIN authorization removed
@@ -587,18 +588,12 @@ class DriveService extends ChangeNotifier {
         final bool isTerminated = rawStatus == 'TERMINATED' || rawStatus == 'REVOKED' || rawStatus == 'LOCKED';
         final bool isActive = !isTerminated && !isExpired;
 
-        s['isCurrentlyActive'] = isActive;
-        if (isActive) {
-          s['status'] = 'ACTIVE';
-          s['minutesRemaining'] = ((expiresAt - now) / 60000).ceil().clamp(0, 30);
-        } else if (isTerminated) {
-          s['status'] = rawStatus == 'LOCKED' ? 'LOCKED' : 'TERMINATED';
-          s['minutesRemaining'] = 0;
-        } else {
-          s['status'] = 'EXPIRED';
-          s['minutesRemaining'] = 0;
-        }
+        // As soon as a session is locked or terminated, immediately remove it from mobile
+        if (!isActive) continue;
 
+        s['isCurrentlyActive'] = true;
+        s['status'] = 'ACTIVE';
+        s['minutesRemaining'] = ((expiresAt - now) / 60000).ceil().clamp(0, 30);
         results.add(s);
       }
 
@@ -668,7 +663,7 @@ class DriveService extends ChangeNotifier {
     try {
       final now = DateTime.now().millisecondsSinceEpoch;
 
-      // 1. Update card_vault_active_sessions.json
+      // 1. Remove from card_vault_active_sessions.json
       List<dynamic> sessionList = [];
       final text = await downloadTextFile(activeSessionsFileName);
       if (text != null && text.trim().isNotEmpty) {
@@ -678,24 +673,7 @@ class DriveService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      bool found = false;
-      String? authMode;
-      for (final s in sessionList) {
-        if (s is Map && s['sessionId'] == sessionId) {
-          s['status'] = 'TERMINATED';
-          s['terminatedAt'] = now;
-          authMode = s['authMode'] as String?;
-          found = true;
-        }
-      }
-
-      if (!found) {
-        sessionList.insert(0, {
-          'sessionId': sessionId,
-          'status': 'TERMINATED',
-          'terminatedAt': now,
-        });
-      }
+      sessionList.removeWhere((s) => s is Map && s['sessionId'] == sessionId);
 
       await uploadTextFile(activeSessionsFileName, jsonEncode({
         'version': 1,
@@ -703,31 +681,14 @@ class DriveService extends ChangeNotifier {
         'sessions': sessionList,
       }));
 
-      // 2. Clear / Revoke corresponding access request or auth file
-      if (authMode == 'PUSH' || sessionId.startsWith('req_')) {
-        final reqClear = jsonEncode({
-          'requestId': sessionId,
-          'status': 'REVOKED',
-          'message': 'Session terminated from TetherPass mobile application.',
-          'revoked_at': now,
-        });
-        await uploadTextFile(accessRequestFileName, reqClear);
-      } else if (authMode == 'PIN' || sessionId.startsWith('pin_')) {
-        final authClear = jsonEncode({
-          'status': 'REVOKED',
-          'revoked_at': now,
-          'device': 'Windows Browser Extension',
-        });
-        await uploadTextFile('card_vault_extension_auth.json', authClear);
-      } else {
-        final revokePayload = jsonEncode({
-          'status': 'REVOKED',
-          'revoked_at': now,
-          'revokedSessionId': sessionId,
-        });
-        await uploadTextFile(accessRequestFileName, revokePayload);
-        await uploadTextFile('card_vault_extension_auth.json', revokePayload);
-      }
+      // 2. Clear / Revoke corresponding access request file
+      final reqClear = jsonEncode({
+        'requestId': sessionId,
+        'status': 'LOCKED',
+        'message': 'Session terminated from TetherPass mobile application.',
+        'locked_at': now,
+      });
+      await uploadTextFile(accessRequestFileName, reqClear);
 
       notifyListeners();
       return true;

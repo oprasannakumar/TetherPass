@@ -624,7 +624,6 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
 
   Widget _buildActiveSessionsSection(DriveService drive) {
     final activeList = _desktopSessions.where((s) => s['isCurrentlyActive'] == true).toList();
-    final inactiveList = _desktopSessions.where((s) => s['isCurrentlyActive'] != true).toList();
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -690,7 +689,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                 ],
               ),
             ),
-          ] else if (activeList.isEmpty && inactiveList.isEmpty) ...[
+          ] else if (activeList.isEmpty) ...[
             Container(
               padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
               alignment: Alignment.center,
@@ -717,45 +716,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
               ),
             ),
           ] else ...[
-            // Active Sessions
-            if (activeList.isNotEmpty) ...[
-              ...activeList.map((s) => _buildSessionTile(s, isActive: true)),
-            ] else ...[
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.check_circle_outline_rounded, size: 16, color: Color(0xFF64748B)),
-                    SizedBox(width: 8),
-                    Text(
-                      'No desktop extensions are currently active.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            // Inactive / Terminated Sessions (if any)
-            if (inactiveList.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Theme(
-                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                child: ExpansionTile(
-                  tilePadding: EdgeInsets.zero,
-                  title: Text(
-                    'Recent / Past Sessions (${inactiveList.length})',
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold),
-                  ),
-                  children: inactiveList.map((s) => _buildSessionTile(s, isActive: false)).toList(),
-                ),
-              ),
-            ],
+            ...activeList.map((s) => _buildSessionTile(s, isActive: true)),
           ],
         ],
       ),
