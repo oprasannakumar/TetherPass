@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CardVault Windows Extension</title>
+  <title>TetherPass Windows Extension</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -11,8 +11,8 @@
     <!-- Header -->
     <header class="app-header">
       <div class="brand">
-        <img src="icons/icon48.png" alt="CardVault" class="brand-logo-img" />
-        <span class="brand-title">CardVault</span>
+        <img src="icons/icon48.png" alt="TetherPass" class="brand-logo-img" />
+        <span class="brand-title">TetherPass</span>
       </div>
       <div id="statusBadge" class="status-badge locked">
         <span id="statusDot" class="status-dot"></span>
@@ -21,7 +21,7 @@
     </header>
 
     <div id="tabContextNotice" class="tab-notice" style="display: none;">
-      <span>💡 Tip: Click the <strong>CardVault</strong> icon in your browser toolbar to use autofill while browsing.</span>
+      <span>💡 Tip: Click the <strong>TetherPass</strong> icon in your browser toolbar to use autofill while browsing.</span>
     </div>
 
     <!-- ── Screen 1: Locked & Authorization Required ── -->
@@ -34,7 +34,7 @@
           <span class="section-title">Google Drive Account</span>
         </div>
         <p id="step1Subtitle" class="section-subtitle" style="margin-bottom: 6px;">
-          Connect the Google Account used in CardVault on your phone.
+          Connect the Google Account used in TetherPass on your phone.
         </p>
 
         <!-- Unlinked state -->
@@ -143,7 +143,7 @@
               <label for="pinInput">6-Digit Mobile PIN</label>
               <input type="text" id="pinInput" placeholder="e.g. 837507" maxlength="6" autocomplete="off" />
               <div style="font-size: 10px; color: #64748B; margin-top: 4px; line-height: 1.3;">
-                View 6-digit code on phone: <strong>CardVault → Settings → Browser Extension</strong>.
+                View 6-digit code on phone: <strong>TetherPass → Settings → Browser Extension</strong>.
               </div>
             </div>
             <button id="unlockWithPinBtn" class="btn btn-primary" style="margin-top: 4px;">
@@ -156,7 +156,7 @@
             <div class="pulse-ring"></div>
             <div class="waiting-title">🔔 Check Your Mobile Phone!</div>
             <p class="waiting-desc">
-              A confirmation pop-up has been sent to CardVault on your phone. Tap <strong>"Approve with Biometrics"</strong>.
+              A confirmation pop-up has been sent to TetherPass on your phone. Tap <strong>"Approve with Biometrics"</strong>.
             </p>
             <div id="waitingTimer" class="waiting-timer">Waiting for approval (60s)...</div>
             <button id="cancelApprovalRequestBtn" class="btn btn-sm btn-outline-danger" style="margin-top: 10px;">Cancel Request</button>
@@ -228,7 +228,7 @@
             Loading devices from Google Drive...
           </div>
           <div id="deviceManagerEmpty" style="display: none; text-align: center; padding: 20px 10px; color: #64748B; font-size: 12px;">
-            No linked phones found. Open CardVault on your phone to register it.
+            No linked phones found. Open TetherPass on your phone to register it.
           </div>
           <div id="devicesListContainer" class="device-list-container">
             <!-- Rendered by JS -->

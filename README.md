@@ -1,17 +1,17 @@
-# 🛡️ CardVault
+# 🛡️ TetherPass
 
-> **Zero-Knowledge Payment Card & Bank Account Manager with Biometric Security and Real-Time Desktop Autofill Companion**
+> **Zero-Knowledge Password, Payment Card & Bank Account Manager with Biometric Security and Mobile-Tethered Desktop Autofill**
 
-CardVault is a privacy-first, zero-knowledge vault for managing credit cards, debit cards, bank accounts (with multiple IFSC codes), and credentials. All data is encrypted locally on your device with AES-256-CBC and derived via PBKDF2 (10,000 rounds). 
+TetherPass is a privacy-first, zero-knowledge vault for managing logins & passwords, credit cards, debit cards, bank accounts (with multiple IFSC codes), and credentials. All data is encrypted locally on your device with AES-256-CBC and derived via PBKDF2 (10,000 rounds). 
 
-CardVault includes a companion **Manifest V3 Browser Extension** for Windows, allowing seamless webpage autofill gated by real-time biometric authorization from your phone.
+TetherPass includes a companion **Manifest V3 Browser Extension** for Windows, allowing seamless webpage and app autofill gated by real-time biometric authorization from your phone.
 
 ---
 
 ## 📦 Pre-built Android APK Download
 
-You can directly install CardVault on your Android phone without needing to compile:
-- **Universal Release Binary**: [`apk/CardVault_v2.apk`](apk/CardVault_v2.apk)
+You can directly install TetherPass on your Android phone without needing to compile:
+- **Universal Release Binary**: [`apk/TetherPass_v2.apk`](apk/TetherPass_v2.apk)
 
 ---
 
@@ -20,17 +20,18 @@ You can directly install CardVault on your Android phone without needing to comp
 ### 📱 Android Mobile Application (Flutter)
 - **Zero-Knowledge Encryption**: AES-256-CBC local encryption with user-controlled Master Password and Recovery Key.
 - **Biometric Authentication**: Fingerprint / Face Unlock gating all access and operations.
+- **Password & Credential Manager**: Store website URLs, usernames, passwords, and secure notes with automatic domain matching.
 - **Multi-Account NetBanking**: Add multiple bank account numbers and corresponding IFSC codes in a single form with swipe-to-delete.
 - **Card Scanner & NFC**: Card number extraction via Google ML Kit OCR and contactless NFC reading.
 - **Encrypted Google Drive Sync**: Automatic cloud sync using Google Drive's hidden `drive.appdata` folder.
-- **Offline Backups**: Password-protected encrypted JSON exports (`card_vault_backup_v2.json`).
-- **Native Android Autofill Service**: Autofills payment details directly across Android apps.
+- **Offline Backups**: Password-protected encrypted JSON exports (`TetherPass_Backup_YYYYMMDD_HHMMSS.json`).
+- **Native Android Autofill Service**: Autofills credentials and payments directly across Android apps (e.g., Amazon) and browsers.
 - **Interactive Spotlight Tour**: Step-by-step user walkthrough explaining all security controls.
 
 ### 💻 Windows Browser Extension (Chrome & Edge MV3)
-- **Webpage Autofill**: Floating inline suggestion chips for Card Number, Expiry Date (MM/YY), CVV, Cardholder Name, Bank Account Numbers, IFSC codes, User IDs, and Passwords.
+- **Webpage & Domain Autofill**: Suggests matching credentials and payment cards tailored specifically to the active site.
 - **Real-Time Mobile Push Confirmation**: Clicking sync sends an instant confirmation pop-up directly to your phone.
-- **Multi-Device Smart Routing**: If you use CardVault on multiple phones, choose which device receives the prompt, or broadcast to all with automatic conflict-free dismiss.
+- **Multi-Device Smart Routing**: If you use TetherPass on multiple phones, choose which device receives the prompt, or broadcast to all.
 - **Volatile RAM Cache**: Plaintext passwords and cards are stored strictly in memory and wiped immediately when your mobile vault locks or expires.
 
 ---
@@ -39,7 +40,7 @@ You can directly install CardVault on your Android phone without needing to comp
 
 ```
 ┌─────────────────────────────────┐               ┌─────────────────────────────────┐
-│     Windows Browser Extension   │               │       CardVault Mobile App      │
+│     Windows Browser Extension   │               │       TetherPass Mobile App     │
 │  - Volatile RAM Cache only      │               │  - Master Password + Biometrics │
 │  - Manifest V3 Service Worker   │               │  - AES-256-CBC Zero-Knowledge   │
 └────────────────┬────────────────┘               └────────────────┬────────────────┘

@@ -64,15 +64,15 @@ void main() async {
         ChangeNotifierProvider<DriveService>.value(value: driveService),
         ChangeNotifierProvider<ExtensionAuthService>.value(value: extensionAuthService),
       ],
-      child: CardVaultApp(initialRoute: isOnboarded ? '/unlock' : '/onboarding'),
+      child: TetherPassApp(initialRoute: isOnboarded ? '/unlock' : '/onboarding'),
     ),
   );
 }
 
-class CardVaultApp extends StatelessWidget {
+class TetherPassApp extends StatelessWidget {
   final String initialRoute;
 
-  const CardVaultApp({super.key, required this.initialRoute});
+  const TetherPassApp({super.key, required this.initialRoute});
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +83,7 @@ class CardVaultApp extends StatelessWidget {
     const textSecondary = Color(0xFF64748B); // Muted slate
 
     return MaterialApp(
-      title: 'CardVault',
+      title: 'TetherPass',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.light,
       theme: ThemeData(

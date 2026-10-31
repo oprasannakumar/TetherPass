@@ -184,7 +184,7 @@ class DatabaseService {
     final trimmed = encryptedPayload.trim();
 
     // 1. Check if payload is encrypted with Master Password via SecureBackupExportService
-    if (trimmed.startsWith('{') && trimmed.contains('CARDVAULT_SECURE_BACKUP_V1')) {
+    if (trimmed.startsWith('{') && (trimmed.contains('TETHERPASS_SECURE_BACKUP_V1') || trimmed.contains('CARDVAULT_SECURE_BACKUP_V1'))) {
       if (masterPassword == null || masterPassword.isEmpty) {
         throw const FormatException('This backup requires your Master Password to decrypt. Please provide your password.');
       }

@@ -144,7 +144,7 @@ class ExtensionAuthService extends ChangeNotifier {
         // 2. ALSO mark access request record as REVOKED so push approvals lock immediately
         final reqPayload = jsonEncode({
           'status': 'REVOKED',
-          'message': 'Authorization revoked from CardVault mobile application.',
+          'message': 'Authorization revoked from TetherPass mobile application.',
           'revoked_at': now,
         });
         await driveService.uploadTextFile(DriveService.accessRequestFileName, reqPayload);
@@ -177,7 +177,7 @@ class ExtensionAuthService extends ChangeNotifier {
         await driveService.uploadTextFile(authFileName, payload);
         final reqPayload = jsonEncode({
           'status': 'LOCKED',
-          'message': 'Mobile CardVault was locked.',
+          'message': 'Mobile TetherPass was locked.',
           'revoked_at': now,
         });
         await driveService.uploadTextFile(DriveService.accessRequestFileName, reqPayload);

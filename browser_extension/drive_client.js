@@ -191,7 +191,7 @@ class DriveClient {
    * If targetDeviceId is provided, only that specific phone will prompt.
    * Status starts as 'PENDING'.
    */
-  async sendAccessRequestToMobile(deviceName = 'Windows PC (CardVault Extension)', targetDeviceId = 'ALL') {
+  async sendAccessRequestToMobile(deviceName = 'Windows PC (TetherPass Extension)', targetDeviceId = 'ALL') {
     const requestId = 'req_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
     const expiresAt = Date.now() + 60000; // 60s timeout
 
@@ -246,7 +246,7 @@ class DriveClient {
   async fetchEncryptedVaultBackup() {
     const file = await this.findFile(DRIVE_BACKUP_FILENAME);
     if (!file) {
-      throw new Error(`Vault backup '${DRIVE_BACKUP_FILENAME}' not found in Google Drive. Please tap 'Backup to Google Drive' in CardVault mobile app.`);
+      throw new Error(`Vault backup '${DRIVE_BACKUP_FILENAME}' not found in Google Drive. Please tap 'Backup to Google Drive' in TetherPass mobile app.`);
     }
     return await this.downloadFileContent(file.id);
   }
@@ -373,7 +373,7 @@ class DriveClient {
         return {
           authorized: false,
           reason: auth.status,
-          message: 'Authorization revoked from CardVault mobile application.'
+          message: 'Authorization revoked from TetherPass mobile application.'
         };
       }
 

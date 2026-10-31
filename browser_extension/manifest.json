@@ -1,16 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "CardVault Autofill - Secure Password & Card Manager",
+  "name": "TetherPass Autofill - Secure Password & Card Manager",
   "version": "1.0.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzR9ReZET7StZMbBdeAQBrH2TaEf5Y57wnne0yTelkShR6zcVlTKI9xh5QWZCz9Toysrzowqiw2mHI7bQUlTKE4ikf8Faebuiagom9GJSVo29M3qhvtc8flmwrIbrCdvjcCsdzhu47jsLM9h6ncxTTTJ1ayGq49G7V/YTZi6N4KVU9yG5GYX06DWa65UsnYk3BiDsdW5FvLkMjAHMMDTOVfuMggRgFVAzsGr0in3lDmZWgN00PjiubdUK3Lo4uJmuVoSOFkPUK3a4yYljydP7tyNb2XIVVrMmj1PTHVCn6bMrPic2eJpnhhANtxUgRtCHxhwI9XjhSkM9WueDsnSqPQIDAQAB",
-  "description": "Autofill credit cards, bank accounts, IFSC codes, and credentials with zero-knowledge encryption and CardVault mobile authorization.",
+  "description": "Autofill passwords, payment cards, and bank credentials with zero-knowledge encryption and TetherPass mobile biometric authorization.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "CardVault Autofill",
+    "default_title": "TetherPass Autofill",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

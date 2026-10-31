@@ -50,7 +50,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
     final auth = context.read<AuthService>();
 
     final success = await auth.authenticate(
-      reason: 'Scan your fingerprint or face to unlock CardVault',
+      reason: 'Scan your fingerprint or face to unlock TetherPass',
     );
 
     if (mounted) {
@@ -248,7 +248,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'CardVault',
+                  'TetherPass',
                   style: TextStyle(
                     color: Color(0xFF0F172A),
                     fontSize: 28,

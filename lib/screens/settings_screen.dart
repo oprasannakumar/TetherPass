@@ -75,7 +75,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         targetKey: _autofillKey,
         icon: Icons.keyboard_rounded,
         title: 'Keyboard Payment Autofill',
-        description: 'Enables card chips above your keyboard in Chrome and shopping apps. Only active when CardVault is unlocked!',
+        description: 'Enables card chips above your keyboard in Chrome and shopping apps. Only active when TetherPass is unlocked!',
         isCircle: false,
         borderRadius: 16,
       ),
@@ -397,7 +397,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   );
 
                   final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-                  final fileName = 'CardVault_Backup_$timestamp.json';
+                  final fileName = 'TetherPass_Backup_$timestamp.json';
 
                   // Save exclusively to local device storage (Downloads directory preferred)
                   File? savedFile;
@@ -470,7 +470,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
-        dialogTitle: 'Select CardVault Encrypted Backup (.json)',
+        dialogTitle: 'Select TetherPass Encrypted Backup (.json)',
       );
 
       if (result == null || result.files.isEmpty || result.files.single.path == null) {
@@ -604,7 +604,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   try {
                     int restoredCount = 0;
-                    if (fileContent.contains('CARDVAULT_SECURE_BACKUP_V1')) {
+                    if (fileContent.contains('TETHERPASS_SECURE_BACKUP_V1') || fileContent.contains('CARDVAULT_SECURE_BACKUP_V1')) {
                       final items = SecureBackupExportService.importVaultWithPassword(
                         backupPayload: fileContent,
                         userPassword: pwd,
@@ -855,7 +855,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (!opened && mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Please select CardVault in Android Settings → Passwords & Autofill.'),
+                      content: Text('Please select TetherPass in Android Settings → Passwords & Autofill.'),
                     ),
                   );
                 }

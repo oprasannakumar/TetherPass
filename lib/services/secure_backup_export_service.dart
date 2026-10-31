@@ -9,7 +9,8 @@ import '../models/vault_item.dart';
 class SecureBackupExportService {
   SecureBackupExportService._();
 
-  static const String _magicHeader = 'CARDVAULT_SECURE_BACKUP_V1';
+  static const String _magicHeader = 'TETHERPASS_SECURE_BACKUP_V1';
+  static const String _legacyMagicHeader = 'CARDVAULT_SECURE_BACKUP_V1';
 
   /// Generates a password-protected, encrypted backup file payload from [items].
   static String exportVaultWithPassword({
@@ -55,7 +56,7 @@ class SecureBackupExportService {
     try {
       final trimmed = backupPayload.trim();
       final Map<String, dynamic> payloadMap = jsonDecode(trimmed);
-      if (payloadMap['header'] != _magicHeader) {
+      if (payloadMap['header'] != _magicHeader && payloadMap['header'] != _legacyMagicHeader) {
         throw const FormatException('Invalid backup format or incompatible file.');
       }
 

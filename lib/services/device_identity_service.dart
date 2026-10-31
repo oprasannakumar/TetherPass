@@ -71,7 +71,7 @@ class DeviceIdentityService {
         final iosInfo = await _deviceInfo.iosInfo;
         name = iosInfo.name.isNotEmpty ? iosInfo.name : 'iPhone';
       } else {
-        name = 'CardVault (${Platform.operatingSystem})';
+        name = 'TetherPass (${Platform.operatingSystem})';
       }
     } catch (_) {
       name = 'Mobile Device';

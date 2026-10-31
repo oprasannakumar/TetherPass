@@ -122,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           content: const Text(
-            'This mobile phone was removed from your CardVault account. All credentials and local vault data on this device have been wiped clean.',
+            'This mobile phone was removed from your TetherPass account. All credentials and local vault data on this device have been wiped clean.',
             style: TextStyle(fontSize: 13, height: 1.4),
           ),
           actions: [
@@ -196,7 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'A desktop computer is requesting access to decrypt your CardVault credentials.',
+                'A desktop computer is requesting access to decrypt your TetherPass credentials.',
                 style: TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.4),
               ),
               const SizedBox(height: 14),
@@ -332,7 +332,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (isBio && canAuth) {
         authenticated = await auth.authenticate(
-          reason: 'Authorize CardVault Browser Extension on Windows PC',
+          reason: 'Authorize TetherPass Browser Extension on Windows PC',
         );
       }
 
@@ -557,7 +557,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'CardVault Interactive Tour',
+                      'TetherPass Interactive Tour',
                       style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     Text(

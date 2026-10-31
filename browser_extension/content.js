@@ -144,7 +144,7 @@
     header.innerHTML = `
       <div class="cv-header-left">
         <span class="cv-logo-badge">CV</span>
-        <span class="cv-title">CardVault</span>
+        <span class="cv-title">TetherPass</span>
       </div>
       <span class="cv-status-tag ${data.authorized ? 'cv-authorized' : 'cv-locked'}">
         ${data.authorized ? '● Unlocked' : '🔒 Locked'}
@@ -161,7 +161,7 @@
         <div class="cv-lock-icon">🔒</div>
         <div class="cv-lock-text">
           <strong>Mobile Authorization Required</strong>
-          <p>Open <em>CardVault</em> on your phone → <strong>Settings → Browser Extension</strong> to unlock autofill.</p>
+          <p>Open <em>TetherPass</em> on your phone → <strong>Settings → Browser Extension</strong> to unlock autofill.</p>
         </div>
       `;
       dropdown.appendChild(lockBox);

@@ -481,8 +481,8 @@ class DriveService extends ChangeNotifier {
         'status': approved ? 'APPROVED' : 'DENIED',
         'approvedAt': now.millisecondsSinceEpoch,
         'expiresAt': now.add(const Duration(minutes: 30)).millisecondsSinceEpoch,
-        'device': deviceName ?? 'Windows PC (CardVault Extension)',
-        'approvedByDevice': 'CardVault Mobile Client',
+        'device': deviceName ?? 'Windows PC (TetherPass Extension)',
+        'approvedByDevice': 'TetherPass Mobile Client',
       };
       if (requestSealedKey != null) {
         payloadMap['request_sealed_key'] = requestSealedKey;

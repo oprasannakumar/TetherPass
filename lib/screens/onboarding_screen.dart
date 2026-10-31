@@ -170,7 +170,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 32),
           const Text(
-            'CardVault',
+            'TetherPass',
             style: TextStyle(
               color: Color(0xFF0F172A),
               fontSize: 32,
@@ -180,7 +180,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Zero-Knowledge Bank & Card Manager\nProtected by Hardware AES-256 and Biometrics',
+            'Zero-Knowledge Password, Bank & Card Manager\nProtected by Hardware AES-256 and Biometrics',
             textAlign: TextAlign.center,
             style: TextStyle(color: Color(0xFF64748B), fontSize: 14, height: 1.5),
           ),
@@ -497,7 +497,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: const Icon(Icons.file_open_rounded, color: Colors.blueAccent),
               ),
               title: const Text('Import Backup File (.json)', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
-              subtitle: const Text('Select CardVault JSON backup and decrypt with Master Password', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+              subtitle: const Text('Select TetherPass JSON backup and decrypt with Master Password', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
                 side: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -637,7 +637,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
-        dialogTitle: 'Select CardVault Encrypted Backup (.json)',
+        dialogTitle: 'Select TetherPass Encrypted Backup (.json)',
       );
 
       if (result == null || result.files.isEmpty || result.files.single.path == null) {

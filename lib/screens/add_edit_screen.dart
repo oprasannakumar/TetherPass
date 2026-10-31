@@ -2405,7 +2405,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Save website & app logins. CardVault will suggest them automatically when you visit the website.',
+                        'Save website & app logins. TetherPass will suggest them automatically when you visit the website.',
                         style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
                       ),
                     ],

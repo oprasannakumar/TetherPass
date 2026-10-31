@@ -149,7 +149,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
 
     if (isBiometricEnabled && canAuth) {
       authenticated = await auth.authenticate(
-        reason: 'Authorize CardVault Browser Extension on Windows PC',
+        reason: 'Authorize TetherPass Browser Extension on Windows PC',
       );
       if (authenticated) {
         masterPwd = await sec.getMasterPassword();
@@ -475,7 +475,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'Enter this 6-digit code in the CardVault extension popup on your Windows browser along with your Master Password.',
+                    'Enter this 6-digit code in the TetherPass extension popup on your Windows browser along with your Master Password.',
                     style: TextStyle(color: Color(0xFF64748B), fontSize: 11, height: 1.4),
                   ),
                 ],
@@ -788,7 +788,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                       ],
                     ),
                   ),
-                  _buildStepRow('5', 'CardVault icon appears in your toolbar! Enter your 6-digit PIN and Master Password to unlock autofill across all websites.'),
+                  _buildStepRow('5', 'TetherPass icon appears in your toolbar! Enter your 6-digit PIN and Master Password to unlock autofill across all websites.'),
                 ],
               ),
             ),

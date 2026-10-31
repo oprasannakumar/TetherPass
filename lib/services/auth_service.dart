@@ -22,10 +22,10 @@ class AuthService {
   Future<bool> authenticate({String? reason}) async {
     try {
       return await _auth.authenticate(
-        localizedReason: reason ?? 'Scan fingerprint to unlock CardVault',
+        localizedReason: reason ?? 'Scan fingerprint to unlock TetherPass',
         authMessages: const [
           AndroidAuthMessages(
-            signInTitle: 'CardVault Biometric Unlock',
+            signInTitle: 'TetherPass Biometric Unlock',
             cancelButton: 'Cancel',
           ),
         ],

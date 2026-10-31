@@ -416,7 +416,7 @@ async function handlePromptRenameDevice(deviceId, currentName) {
 }
 
 async function handlePromptRemoveDevice(deviceId, deviceName) {
-  const confirmed = confirm(`Are you sure you want to remove "${deviceName}"?\n\n⚠️ WARNING: This phone will immediately be revoked and all CardVault app data on that phone will be wiped clean!`);
+  const confirmed = confirm(`Are you sure you want to remove "${deviceName}"?\n\n⚠️ WARNING: This phone will immediately be revoked and all TetherPass app data on that phone will be wiped clean!`);
   if (!confirmed) return;
 
   const loading = document.getElementById('deviceManagerLoading');
@@ -627,7 +627,7 @@ async function handleRequestMobilePushApproval() {
       if (waitingTimer) waitingTimer.textContent = `Waiting for mobile approval (${secondsLeft}s)...`;
       if (secondsLeft <= 0) {
         cancelApprovalPolling();
-        showError('Request timed out. Please tap Authorize in CardVault on your phone.');
+        showError('Request timed out. Please tap Authorize in TetherPass on your phone.');
       }
     }, 1000);
 
@@ -688,7 +688,7 @@ async function handleUnlockWithPin() {
   hideMessages();
 
   if (!pin || pin.length !== 6) {
-    showError('Please enter the 6-digit PIN from CardVault on your phone.');
+    showError('Please enter the 6-digit PIN from TetherPass on your phone.');
     return;
   }
 

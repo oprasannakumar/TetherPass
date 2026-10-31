@@ -35,14 +35,14 @@ async function verifyMobileAuth() {
       memoryVault.sessionStartTime
     );
     if (isRevoked) {
-      lockVault('Authorization revoked from CardVault mobile application.');
+      lockVault('Authorization revoked from TetherPass mobile application.');
       return;
     }
 
     if (memoryVault.authMode === 'PIN' && memoryVault.activePin) {
       const authStatus = await driveClient.checkMobileAuthorization();
       if (!authStatus.authorized) {
-        lockVault('Authorization revoked from CardVault mobile application.');
+        lockVault('Authorization revoked from TetherPass mobile application.');
         return;
       }
     }
@@ -100,7 +100,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             memoryVault.sessionStartTime
           );
           if (isRevoked) {
-            lockVault('Authorization revoked from CardVault mobile application.');
+            lockVault('Authorization revoked from TetherPass mobile application.');
           }
         } catch (_) {}
       }
@@ -189,7 +189,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleStartMobileApprovalRequest({ token, deviceName, targetDeviceId }) {
   if (token) driveClient.setToken(token);
   const req = await driveClient.sendAccessRequestToMobile(
-    deviceName || 'Windows PC (CardVault Extension)',
+    deviceName || 'Windows PC (TetherPass Extension)',
     targetDeviceId || 'ALL'
   );
   return {
@@ -258,7 +258,7 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
     return {
       success: false,
       error: 'INVALID_PIN_LENGTH',
-      message: 'Please enter the 6-digit PIN displayed on your CardVault mobile app (Settings → Browser Extension).'
+      message: 'Please enter the 6-digit PIN displayed on your TetherPass mobile app (Settings → Browser Extension).'
     };
   }
 
@@ -272,7 +272,7 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
     authResult = await driveClient.checkMobileAuthorization();
     authCheckAttempted = true;
   } catch (e) {
-    console.warn('[CardVault] Drive auth check notice:', e.message);
+    console.warn('[TetherPass] Drive auth check notice:', e.message);
   }
 
   // If Drive auth was checked:
@@ -281,7 +281,7 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
       return {
         success: false,
         error: 'MOBILE_AUTH_REQUIRED',
-        message: authResult.message || 'Desktop extension is NOT authorized on your mobile app. Open CardVault on your phone → Settings → Browser Extension and tap Authorize.'
+        message: authResult.message || 'Desktop extension is NOT authorized on your mobile app. Open TetherPass on your phone → Settings → Browser Extension and tap Authorize.'
       };
     }
 
@@ -325,7 +325,7 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
     return {
       success: false,
       error: 'PASSWORD_REQUIRED',
-      message: 'PIN authorization key not found on Google Drive. Please tap "Authorize Desktop Extension" in CardVault on your phone to generate a fresh pairing session.'
+      message: 'PIN authorization key not found on Google Drive. Please tap "Authorize Desktop Extension" in TetherPass on your phone to generate a fresh pairing session.'
     };
   }
 
@@ -381,7 +381,7 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
   if (!memoryVault.isAuthorized || !memoryVault.isUnlocked) {
     return {
       authorized: false,
-      message: 'Authorize on CardVault mobile app to enable autofill',
+      message: 'Authorize on TetherPass mobile app to enable autofill',
       cards: [],
       bankAccounts: [],
       passwords: []
