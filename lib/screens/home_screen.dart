@@ -185,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(width: 12),
               const Expanded(
                 child: Text(
-                  'Desktop Sign-In',
+                  'Desktop Authorization',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                 ),
               ),
@@ -196,38 +196,73 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'A Windows computer is requesting access to your CardVault cards, bank accounts, and passwords.',
+                'A desktop computer is requesting access to decrypt your CardVault credentials.',
                 style: TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.4),
               ),
               const SizedBox(height: 14),
               Container(
-                padding: const EdgeInsets.all(12),
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFFD8A8), width: 1.5),
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    const Row(
                       children: [
-                        const Icon(Icons.devices_rounded, size: 16, color: Color(0xFF64748B)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(deviceName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                        Icon(Icons.computer_rounded, size: 16, color: Color(0xFFFF6F00)),
+                        SizedBox(width: 6),
+                        Text(
+                          'REQUESTING DEVICE:',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                            color: Color(0xFFFF6F00),
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(Icons.access_time_rounded, size: 16, color: Color(0xFF64748B)),
-                        const SizedBox(width: 8),
-                        const Text('Just now', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                      ],
+                    Text(
+                      deviceName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.shield_outlined, size: 13, color: Color(0xFFD97706)),
+                          SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Verify this matches your browser screen',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF92400E)),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'If you did not initiate this request, tap Deny to protect your account.',
+                style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
               ),
             ],
           ),

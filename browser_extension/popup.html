@@ -107,6 +107,18 @@
         <div class="auth-box">
           <!-- ── MODE A: PUSH CONFIRMATION (Default) ── -->
           <div id="pushModeContainer">
+            <!-- This Computer Device Name -->
+            <div class="form-group" style="margin-bottom: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label style="margin-bottom: 0;">This Computer (Device Name):</label>
+                <button type="button" id="editDesktopNameBtn" style="background: none; border: none; color: #FF6F00; font-size: 11px; font-weight: 700; cursor: pointer; padding: 0;">✏️ Rename</button>
+              </div>
+              <div id="desktopDeviceNameDisplay" style="font-size: 12px; font-weight: 700; color: #0F172A; background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; padding: 7px 10px; display: flex; align-items: center; gap: 6px;">
+                <span>💻</span>
+                <span id="desktopDeviceNameText">Windows PC (Chrome)</span>
+              </div>
+            </div>
+
             <!-- Master Password -->
             <div class="form-group">
               <label for="passwordInput">Vault Master Password</label>

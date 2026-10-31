@@ -41,6 +41,7 @@ function sendExtensionMessage(message) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   initUI();
+  await initDesktopDeviceName();
   await loadSavedGoogleAccount();
   await refreshStatus();
 });
@@ -49,6 +50,7 @@ function initUI() {
   // Google OAuth connect
   document.getElementById('googleOAuthBtn')?.addEventListener('click', handleGoogleSignIn);
   document.getElementById('disconnectOAuthBtn')?.addEventListener('click', handleDisconnectOAuth);
+  document.getElementById('editDesktopNameBtn')?.addEventListener('click', handleEditDesktopName);
 
   // Manual token & file fallback toggles
   document.getElementById('toggleManualTokenLink')?.addEventListener('click', (e) => {
@@ -512,6 +514,52 @@ function handleFileSelected(e) {
   reader.readAsText(file);
 }
 
+let cachedDesktopDeviceName = '';
+
+async function initDesktopDeviceName() {
+  let desktopTag = '';
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    const stored = await chrome.storage.local.get(['customDesktopName', 'desktopDeviceTag']);
+    desktopTag = stored.desktopDeviceTag;
+    if (!desktopTag) {
+      desktopTag = 'PC-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+      await chrome.storage.local.set({ desktopDeviceTag: desktopTag });
+    }
+    if (stored.customDesktopName) {
+      cachedDesktopDeviceName = stored.customDesktopName;
+    }
+  }
+
+  if (!cachedDesktopDeviceName) {
+    let osName = 'Windows PC';
+    if (navigator.userAgent.includes('Macintosh')) osName = 'Mac';
+    else if (navigator.userAgent.includes('Linux')) osName = 'Linux PC';
+
+    let browserName = 'Chrome';
+    if (navigator.userAgent.includes('Edg/')) browserName = 'Edge';
+    else if (navigator.userAgent.includes('Brave')) browserName = 'Brave';
+
+    const tagSuffix = desktopTag ? ` • ${desktopTag}` : '';
+    cachedDesktopDeviceName = `${osName} (${browserName}${tagSuffix})`;
+  }
+
+  const displayEl = document.getElementById('desktopDeviceNameText');
+  if (displayEl) displayEl.textContent = cachedDesktopDeviceName;
+}
+
+async function handleEditDesktopName() {
+  const current = cachedDesktopDeviceName || 'Windows PC (Chrome)';
+  const newName = prompt('Enter a recognizable name for this computer (e.g., Work Laptop, Prasanna Desktop):', current);
+  if (newName && newName.trim().length > 0 && newName.trim() !== current) {
+    cachedDesktopDeviceName = newName.trim();
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      await chrome.storage.local.set({ customDesktopName: cachedDesktopDeviceName });
+    }
+    const displayEl = document.getElementById('desktopDeviceNameText');
+    if (displayEl) displayEl.textContent = cachedDesktopDeviceName;
+  }
+}
+
 /**
  * 📲 Primary Action: Sends a live access request to Google Drive
  * and triggers the confirmation pop-up on the phone!
@@ -539,9 +587,11 @@ async function handleRequestMobilePushApproval() {
   const targetDeviceId = select?.value || 'ALL';
   const targetDeviceName = select?.options[select?.selectedIndex]?.text || 'your phone';
 
+  const myDevice = cachedDesktopDeviceName || 'Windows PC';
+
   const waitingDesc = document.querySelector('.waiting-desc');
   if (waitingDesc) {
-    waitingDesc.innerHTML = `A confirmation pop-up has been sent to <strong>${escapeHtml(targetDeviceName)}</strong>. Tap <strong>"Approve with Biometrics"</strong>.`;
+    waitingDesc.innerHTML = `Confirmation sent to <strong>${escapeHtml(targetDeviceName)}</strong> from <strong>${escapeHtml(myDevice)}</strong>.<br/>Check your phone and tap <strong>"Approve with Biometrics"</strong>.`;
   }
 
   if (normalActionBox) normalActionBox.style.display = 'none';
@@ -553,7 +603,7 @@ async function handleRequestMobilePushApproval() {
       action: 'START_MOBILE_APPROVAL_REQUEST',
       payload: {
         token: currentOAuthToken,
-        deviceName: 'Windows PC (CardVault Extension)',
+        deviceName: myDevice,
         targetDeviceId
       }
     });
