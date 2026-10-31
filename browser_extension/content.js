@@ -8,19 +8,67 @@
   let activeDropdown = null;
   let activeInput = null;
 
+  function getElementTextContext(input) {
+    if (!input) return '';
+    const pieces = [];
+
+    if (input.name) pieces.push(input.name);
+    if (input.id) pieces.push(input.id);
+    if (input.placeholder) pieces.push(input.placeholder);
+    if (input.title) pieces.push(input.title);
+    if (input.getAttribute('autocomplete')) pieces.push(input.getAttribute('autocomplete'));
+    if (input.getAttribute('aria-label')) pieces.push(input.getAttribute('aria-label'));
+    if (input.getAttribute('aria-placeholder')) pieces.push(input.getAttribute('aria-placeholder'));
+    if (input.getAttribute('data-testid')) pieces.push(input.getAttribute('data-testid'));
+    if (input.getAttribute('data-field')) pieces.push(input.getAttribute('data-field'));
+
+    // Check associated HTML <label> elements
+    if (input.labels && input.labels.length > 0) {
+      for (const lbl of input.labels) {
+        if (lbl.textContent) pieces.push(lbl.textContent.trim());
+      }
+    }
+
+    // Check closest label or container
+    const parentLabel = input.closest('label');
+    if (parentLabel && parentLabel.textContent) pieces.push(parentLabel.textContent.trim());
+
+    // Check previous sibling or parent container label (e.g. Blinkit/Material floating labels)
+    const prevSib = input.previousElementSibling;
+    if (prevSib && (prevSib.tagName === 'LABEL' || prevSib.tagName === 'SPAN' || prevSib.tagName === 'DIV')) {
+      const txt = prevSib.textContent ? prevSib.textContent.trim() : '';
+      if (txt && txt.length < 60) pieces.push(txt);
+    }
+    const nextSib = input.nextElementSibling;
+    if (nextSib && (nextSib.tagName === 'LABEL' || nextSib.tagName === 'SPAN' || nextSib.tagName === 'DIV')) {
+      const txt = nextSib.textContent ? nextSib.textContent.trim() : '';
+      if (txt && txt.length < 60) pieces.push(txt);
+    }
+
+    // Check parent's label/span
+    const parent = input.parentElement;
+    if (parent) {
+      const lbls = parent.querySelectorAll('label, span[class*="label"], p[class*="label"], div[class*="label"], span[class*="placeholder"], div[class*="placeholder"]');
+      lbls.forEach(lbl => {
+        if (lbl !== input && lbl.textContent) {
+          const txt = lbl.textContent.trim();
+          if (txt && txt.length < 60) pieces.push(txt);
+        }
+      });
+    }
+
+    return pieces.join(' ').toLowerCase();
+  }
+
   // Field type classifiers
   function classifyInput(input) {
     if (!input || input.type === 'hidden' || input.type === 'submit' || input.type === 'button') return null;
 
-    const name = (input.name || '').toLowerCase();
-    const id = (input.id || '').toLowerCase();
-    const placeholder = (input.placeholder || '').toLowerCase();
-    const autocomplete = (input.getAttribute('autocomplete') || '').toLowerCase();
-    const ariaLabel = (input.getAttribute('aria-label') || '').toLowerCase();
-    const type = (input.type || '').toLowerCase();
-
-    const raw = `${name} ${id} ${placeholder} ${autocomplete} ${ariaLabel}`;
+    const raw = getElementTextContext(input);
     const norm = raw.replace(/[-_./]/g, ' ');
+    const type = (input.type || '').toLowerCase();
+    const autocomplete = (input.getAttribute('autocomplete') || '').toLowerCase();
+    const ph = (input.placeholder || '').toLowerCase();
 
     // 0. 2FA / TOTP / One-Time Passcode
     if (
@@ -36,7 +84,8 @@
     if (
       autocomplete.includes('cc-csc') || autocomplete.includes('security-code') ||
       raw.includes('cvv') || raw.includes('cvc') || raw.includes('cid') || raw.includes('csc') ||
-      norm.includes('security code') || norm.includes('verification code')
+      norm.includes('security code') || norm.includes('verification code') ||
+      (type === 'password' && input.maxLength >= 3 && input.maxLength <= 4 && (norm.includes('code') || norm.includes('security') || norm.includes('cvv')))
     ) {
       return 'CVV';
     }
@@ -45,7 +94,7 @@
     if (
       autocomplete.includes('cc-exp') || raw.includes('expiry') || raw.includes('expire') ||
       raw.includes('expiration') || norm.includes('exp date') || norm.includes('valid thru') ||
-      norm.includes('valid till') || raw.includes('mm/yy') || raw.includes('mm / yy') ||
+      norm.includes('valid till') || norm.includes('valid upto') || raw.includes('mm/yy') || raw.includes('mm / yy') ||
       raw.includes('ccexp') || raw.includes('card_exp')
     ) {
       return 'EXPIRY';
@@ -56,7 +105,9 @@
       autocomplete.includes('cc-number') || raw.includes('cardnumber') || raw.includes('card_number') ||
       raw.includes('card_no') || raw.includes('cardno') || norm.includes('card number') ||
       norm.includes('card no') || raw.includes('cc_num') || raw.includes('cc-num') ||
-      (type === 'tel' && norm.includes('credit'))
+      ph.includes('xxxx') || ph.includes('••••') ||
+      (raw.includes('card') && !raw.includes('holder') && !raw.includes('name') && !raw.includes('exp') && !raw.includes('cvv')) ||
+      (type === 'tel' && (norm.includes('credit') || norm.includes('debit') || norm.includes('card')))
     ) {
       return 'CARD_NUMBER';
     }
@@ -64,7 +115,8 @@
     // 4. Cardholder Name
     if (
       autocomplete.includes('cc-name') || raw.includes('cardholder') || raw.includes('card_holder') ||
-      norm.includes('name on card') || norm.includes('card holder')
+      norm.includes('name on card') || norm.includes('card holder') || norm.includes('cardholder') ||
+      raw.includes('card_name') || raw.includes('cardname')
     ) {
       return 'CARD_HOLDER';
     }
@@ -506,41 +558,107 @@
 
   function setInputValue(input, value) {
     if (!input || value === undefined || value === null) return;
-    input.value = value;
+
+    const valStr = String(value);
+
+    // 1. Native Property Descriptor Setter (Required for React 16+ SPAs like Flipkart & Blinkit)
+    try {
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      if (nativeSetter) {
+        nativeSetter.call(input, valStr);
+      } else {
+        input.value = valStr;
+      }
+    } catch (_) {
+      input.value = valStr;
+    }
+
+    // 2. React Internal Tracker Update
+    if (input._valueTracker) {
+      input._valueTracker.setValue(valStr);
+    }
+
     if (input.dataset) input.dataset.tpFilled = 'true';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+
+    // 3. Dispatch Full Event Suite for modern frameworks
+    input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    try {
+      input.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, data: valStr, inputType: 'insertText' }));
+    } catch (_) {}
+    input.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: valStr.slice(-1) }));
+  }
+
+  function getCardNumberFormattedForInput(input, rawCardNumber) {
+    const digits = (rawCardNumber || '').replace(/\D/g, '');
+    if (!digits) return '';
+
+    if (input.maxLength === 16) return digits;
+
+    const ph = (input.placeholder || '').toLowerCase();
+    // Format as 4-4-4-4 for standard card inputs or placeholders like XXXX XXXX XXXX XXXX
+    if (ph.includes(' ') || input.maxLength === 19 || input.maxLength === -1 || !input.maxLength) {
+      return digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+    }
+    return digits;
+  }
+
+  function getExpiryFormattedForInput(input, rawExpiry) {
+    if (!rawExpiry) return '';
+    const clean = rawExpiry.trim();
+    const ph = (input.placeholder || '').toLowerCase();
+    const hasSpacedSlash = ph.includes(' / ') || ph.includes(' /');
+    if (hasSpacedSlash) {
+      return clean.replace(/\s*\/\s*/, ' / ');
+    }
+    return clean.replace(/\s*\/\s*/, '/');
+  }
+
+  function getAllPageInputs(focusedInput) {
+    const parentContainer = focusedInput.closest('form, div[class*="payment"], div[class*="checkout"], div[class*="card"], fieldset') || document;
+    const inputs = Array.from(parentContainer.querySelectorAll('input'));
+    if (inputs.length < 2 && parentContainer !== document) {
+      return Array.from(document.querySelectorAll('input'));
+    }
+    return inputs;
   }
 
   function fillCardDetails(focusedInput, card, currentFieldType) {
-    const form = focusedInput.form || document;
+    const cardNumFormatted = getCardNumberFormattedForInput(focusedInput, card.cardNumber);
+    const expiryFormatted = getExpiryFormattedForInput(focusedInput, card.expiry);
 
     // Fill current focused field first
-    if (currentFieldType === 'CARD_NUMBER') setInputValue(focusedInput, card.cardNumber);
-    if (currentFieldType === 'EXPIRY') setInputValue(focusedInput, card.expiry);
+    if (currentFieldType === 'CARD_NUMBER') setInputValue(focusedInput, cardNumFormatted);
+    if (currentFieldType === 'EXPIRY') setInputValue(focusedInput, expiryFormatted);
     if (currentFieldType === 'CVV') setInputValue(focusedInput, card.cvv);
     if (currentFieldType === 'CARD_HOLDER') setInputValue(focusedInput, card.cardHolder);
 
-    // Also scan form to auto-fill sister fields simultaneously!
-    const inputs = form.querySelectorAll('input');
+    // Also scan form or page to auto-fill sister fields simultaneously!
+    const inputs = getAllPageInputs(focusedInput);
     inputs.forEach(inp => {
       if (inp === focusedInput) return;
       const t = classifyInput(inp);
-      if (t === 'CARD_NUMBER' && card.cardNumber) setInputValue(inp, card.cardNumber);
-      if (t === 'EXPIRY' && card.expiry) setInputValue(inp, card.expiry);
-      if (t === 'CVV' && card.cvv) setInputValue(inp, card.cvv);
-      if (t === 'CARD_HOLDER' && card.cardHolder) setInputValue(inp, card.cardHolder);
+      if (t === 'CARD_NUMBER' && card.cardNumber) {
+        setInputValue(inp, getCardNumberFormattedForInput(inp, card.cardNumber));
+      }
+      if (t === 'EXPIRY' && card.expiry) {
+        setInputValue(inp, getExpiryFormattedForInput(inp, card.expiry));
+      }
+      if (t === 'CVV' && card.cvv) {
+        setInputValue(inp, card.cvv);
+      }
+      if (t === 'CARD_HOLDER' && card.cardHolder) {
+        setInputValue(inp, card.cardHolder);
+      }
     });
   }
 
   function fillBankAccountDetails(focusedInput, account, bank, currentFieldType) {
-    const form = focusedInput.form || document;
-
     if (currentFieldType === 'ACCOUNT_NUMBER') setInputValue(focusedInput, account.accountNumber);
     if (currentFieldType === 'IFSC') setInputValue(focusedInput, account.ifscCode);
 
     // Scan sister fields
-    const inputs = form.querySelectorAll('input');
+    const inputs = getAllPageInputs(focusedInput);
     inputs.forEach(inp => {
       if (inp === focusedInput) return;
       const t = classifyInput(inp);
@@ -550,12 +668,10 @@
   }
 
   function fillCredentials(focusedInput, bank, currentFieldType) {
-    const form = focusedInput.form || document;
-
     if (currentFieldType === 'USER_ID') setInputValue(focusedInput, bank.userId);
     if (currentFieldType === 'PASSWORD') setInputValue(focusedInput, bank.loginPassword || bank.profilePassword || bank.mpin);
 
-    const inputs = form.querySelectorAll('input');
+    const inputs = getAllPageInputs(focusedInput);
     inputs.forEach(inp => {
       if (inp === focusedInput) return;
       const t = classifyInput(inp);
@@ -567,13 +683,11 @@
   }
 
   function fillPasswordCredentials(focusedInput, pwd, currentFieldType) {
-    const form = focusedInput.form || document;
-
     if (currentFieldType === 'USER_ID') setInputValue(focusedInput, pwd.username);
     if (currentFieldType === 'PASSWORD') setInputValue(focusedInput, pwd.password);
 
     // Auto-fill sister input in form or page
-    const inputs = form.querySelectorAll('input');
+    const inputs = getAllPageInputs(focusedInput);
     inputs.forEach(inp => {
       if (inp === focusedInput) return;
       const t = classifyInput(inp);
