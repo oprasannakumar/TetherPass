@@ -428,6 +428,43 @@ class DriveClient {
   }
 
   /**
+   * Checks if session expiration was extended remotely from mobile app
+   */
+  async getRemoteSessionExpiresAt(sessionId, authMode) {
+    if (!this.token) return null;
+    try {
+      const file = await this.findFile(DRIVE_SESSIONS_FILENAME);
+      if (file) {
+        const content = await this.downloadFileContent(file.id);
+        const data = JSON.parse(content);
+        const sessions = data.sessions || [];
+        for (const s of sessions) {
+          if (s && s.sessionId === sessionId && s.status === 'ACTIVE' && s.expiresAt) {
+            return s.expiresAt;
+          }
+        }
+      }
+
+      if (authMode === 'PUSH') {
+        const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
+        if (reqFile) {
+          const reqContent = await this.downloadFileContent(reqFile.id);
+          const req = JSON.parse(reqContent);
+          if (req.status === 'APPROVED' && req.expiresAt) return req.expiresAt;
+        }
+      } else if (authMode === 'PIN') {
+        const authFile = await this.findFile(DRIVE_AUTH_FILENAME);
+        if (authFile) {
+          const authContent = await this.downloadFileContent(authFile.id);
+          const auth = JSON.parse(authContent);
+          if (auth.status === 'AUTHORIZED' && auth.expires_at) return auth.expires_at;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /**
    * Checks authorization status record
    */
   async checkMobileAuthorization() {

@@ -811,6 +811,80 @@ class DriveService extends ChangeNotifier {
     }
   }
 
+  /// Extends a specific desktop session by [additionalMinutes] (default 15 minutes)
+  Future<bool> extendDesktopSession(String sessionId, {int additionalMinutes = 15}) async {
+    if (!isSignedIn) return false;
+    try {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final addMs = additionalMinutes * 60 * 1000;
+
+      // 1. Update card_vault_active_sessions.json
+      List<dynamic> sessionList = [];
+      final text = await downloadTextFile(activeSessionsFileName);
+      if (text != null && text.trim().isNotEmpty) {
+        try {
+          final data = jsonDecode(text) as Map<String, dynamic>;
+          sessionList = (data['sessions'] as List<dynamic>?) ?? [];
+        } catch (_) {}
+      }
+
+      int newExpiresAt = now + addMs;
+      String? authMode;
+      for (final s in sessionList) {
+        if (s is Map && s['sessionId'] == sessionId) {
+          final currentExp = (s['expiresAt'] as num?)?.toInt() ?? now;
+          final base = currentExp > now ? currentExp : now;
+          newExpiresAt = base + addMs;
+          s['expiresAt'] = newExpiresAt;
+          s['status'] = 'ACTIVE';
+          s['extendedAt'] = now;
+          authMode = s['authMode'] as String?;
+        }
+      }
+
+      await uploadTextFile(activeSessionsFileName, jsonEncode({
+        'version': 1,
+        'updatedAt': now,
+        'sessions': sessionList,
+      }));
+
+      // 2. Also update corresponding access request file if PUSH
+      if (authMode == 'PUSH' || sessionId.startsWith('req_')) {
+        final reqText = await downloadTextFile(accessRequestFileName);
+        if (reqText != null && reqText.trim().isNotEmpty) {
+          try {
+            final req = jsonDecode(reqText) as Map<String, dynamic>;
+            if (req['requestId'] == sessionId || req['status'] == 'APPROVED') {
+              req['expiresAt'] = newExpiresAt;
+              req['status'] = 'APPROVED';
+              req['extendedAt'] = now;
+              await uploadTextFile(accessRequestFileName, jsonEncode(req));
+            }
+          } catch (_) {}
+        }
+      }
+
+      // 3. Also update card_vault_extension_auth.json if PIN
+      if (authMode == 'PIN' || sessionId.startsWith('pin_')) {
+        final authText = await downloadTextFile('card_vault_extension_auth.json');
+        if (authText != null && authText.trim().isNotEmpty) {
+          try {
+            final auth = jsonDecode(authText) as Map<String, dynamic>;
+            auth['expires_at'] = newExpiresAt;
+            auth['status'] = 'AUTHORIZED';
+            auth['extended_at'] = now;
+            await uploadTextFile('card_vault_extension_auth.json', jsonEncode(auth));
+          } catch (_) {}
+        }
+      }
+
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Uint8List _deriveKeyFromSecret(String secret, Uint8List salt) {
     var hash = Hmac(sha256, utf8.encode(secret)).convert(salt).bytes;
     for (int i = 0; i < 9999; i++) {

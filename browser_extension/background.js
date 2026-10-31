@@ -216,12 +216,6 @@ async function verifyMobileAuth() {
   await restoreSessionIfNeeded();
   if (!memoryVault.isAuthorized || !memoryVault.isUnlocked) return;
 
-  // Enforce desktop session expiration timestamp (full 30 minutes)
-  if (memoryVault.authExpiresAt && Date.now() > memoryVault.authExpiresAt) {
-    await lockVault('Mobile authorization session expired.');
-    return;
-  }
-
   // Poll Google Drive for intentional remote revocation or termination from mobile
   try {
     const isRevoked = await driveClient.isAuthorizationRevoked(
@@ -233,8 +227,25 @@ async function verifyMobileAuth() {
       await lockVault('Session terminated from TetherPass mobile application.');
       return;
     }
+
+    // Check if session was extended remotely from mobile
+    const remoteExpiresAt = await driveClient.getRemoteSessionExpiresAt(
+      memoryVault.sessionId,
+      memoryVault.authMode
+    );
+    if (remoteExpiresAt && remoteExpiresAt > (memoryVault.authExpiresAt || 0)) {
+      memoryVault.authExpiresAt = remoteExpiresAt;
+      await persistSession();
+      notifyAllTabsStatusChange();
+    }
   } catch (_) {
     // Soft error, rely on local timeout
+  }
+
+  // Enforce desktop session expiration timestamp (full duration or extended)
+  if (memoryVault.authExpiresAt && Date.now() > memoryVault.authExpiresAt) {
+    await lockVault('Mobile authorization session expired.');
+    return;
   }
 }
 
@@ -415,8 +426,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // Asynchronous sendResponse channel
 });
 
+let lastRequestedDeviceName = null;
+
+async function getDesktopDeviceName(fallback = 'Windows PC (Chrome)') {
+  if (lastRequestedDeviceName) return lastRequestedDeviceName;
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const stored = await chrome.storage.local.get(['customDesktopName', 'desktopDeviceTag']);
+      if (stored.customDesktopName) return stored.customDesktopName;
+      if (stored.desktopDeviceTag) return `Windows PC (Chrome • ${stored.desktopDeviceTag})`;
+    }
+  } catch (_) {}
+  return fallback;
+}
+
 async function handleStartMobileApprovalRequest({ token, deviceName, targetDeviceId }) {
   if (token) driveClient.setToken(token);
+  if (deviceName) lastRequestedDeviceName = deviceName;
   const req = await driveClient.sendAccessRequestToMobile(
     deviceName || 'Windows PC (TetherPass Extension)',
     targetDeviceId || 'ALL'
@@ -473,9 +499,10 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
 
     // Register active session in Google Drive
     try {
+      const devName = await getDesktopDeviceName('Windows PC (Chrome)');
       await driveClient.recordActiveSession({
         sessionId,
-        deviceName: 'Windows PC (TetherPass Extension)',
+        deviceName: devName,
         authMode: 'PUSH',
         createdAt: memoryVault.sessionStartTime,
         expiresAt: memoryVault.authExpiresAt
@@ -495,7 +522,7 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
   return check;
 }
 
-async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairingPin }) {
+async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairingPin, deviceName }) {
   if (token) driveClient.setToken(token);
 
   // 1. Validate entered PIN format
@@ -595,9 +622,10 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
 
   // Register active session in Google Drive
   try {
+    const devName = deviceName || await getDesktopDeviceName('Windows Browser Extension (PIN)');
     await driveClient.recordActiveSession({
       sessionId,
-      deviceName: 'Windows Browser Extension (PIN)',
+      deviceName: devName,
       authMode: 'PIN',
       createdAt: memoryVault.sessionStartTime,
       expiresAt: memoryVault.authExpiresAt

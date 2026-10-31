@@ -722,6 +722,7 @@ async function handleUnlockWithPin() {
         token: currentOAuthToken,
         masterPassword: password,
         pairingPin: pin,
+        deviceName: cachedDesktopDeviceName || 'Windows PC (Chrome)',
         rawBackupText: localBackupPayload
       }
     });
