@@ -113,14 +113,11 @@
               <input type="password" id="passwordInput" placeholder="Enter your Master Password" autocomplete="off" />
             </div>
 
-            <!-- Multi-Mobile Device Selector & Management -->
+            <!-- Multi-Mobile Device Selector -->
             <div id="deviceSelectorGroup" class="form-group" style="margin-bottom: 12px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                 <label for="targetDeviceSelect" style="margin-bottom: 0;">Target Mobile Phone:</label>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                  <span id="deviceCountBadge" style="color: #FF6F00; font-size: 10px; font-weight: 800;"></span>
-                  <button type="button" id="openDeviceManagerBtn" class="btn-manage-link" title="Manage registered phones">⚙️ Manage</button>
-                </div>
+                <span id="deviceCountBadge" style="color: #64748B; font-size: 10px; font-weight: 600;"></span>
               </div>
               <select id="targetDeviceSelect" class="device-select">
                 <option value="ALL">📡 All Mobile Devices (Broadcast)</option>
