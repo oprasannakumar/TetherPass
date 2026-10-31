@@ -112,6 +112,23 @@ function initUI() {
     const notice = document.getElementById('tabContextNotice');
     if (notice) notice.style.display = 'block';
   }
+
+  // Listen for instant lock / status notifications from background service worker
+  if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message && message.action === 'VAULT_STATUS_CHANGED') {
+        refreshStatus();
+      }
+    });
+  }
+
+  // Periodic poller while popup is open so revocations take effect immediately
+  setInterval(async () => {
+    const unlockedView = document.getElementById('unlockedView');
+    if (unlockedView && unlockedView.classList.contains('active')) {
+      await refreshStatus();
+    }
+  }, 2500);
 }
 
 function setAuthMethod(method, save = true) {
@@ -681,6 +698,9 @@ async function refreshStatus() {
     if (statusText) statusText.textContent = 'Locked';
     lockedView?.classList.add('active');
     unlockedView?.classList.remove('active');
+    currentVaultItems = { cards: [], bankAccounts: [] };
+    const vaultList = document.getElementById('vaultList');
+    if (vaultList) vaultList.innerHTML = '';
   }
 }
 

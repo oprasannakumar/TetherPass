@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter/foundation.dart';
@@ -122,16 +121,27 @@ class ExtensionAuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final now = DateTime.now().millisecondsSinceEpoch;
       final payload = jsonEncode({
         'status': 'REVOKED',
         'authorized_at': null,
         'expires_at': null,
         'pairing_pin': null,
         'device': 'Windows Browser Extension',
+        'revoked_at': now,
       });
 
       if (driveService.isSignedIn) {
+        // 1. Mark the auth record as REVOKED
         await driveService.uploadTextFile(authFileName, payload);
+
+        // 2. ALSO mark access request record as REVOKED so push approvals lock immediately
+        final reqPayload = jsonEncode({
+          'status': 'REVOKED',
+          'message': 'Authorization revoked from CardVault mobile application.',
+          'revoked_at': now,
+        });
+        await driveService.uploadTextFile(DriveService.accessRequestFileName, reqPayload);
       }
     } catch (e) {
       debugPrint('Error revoking extension: $e');
@@ -148,15 +158,23 @@ class ExtensionAuthService extends ChangeNotifier {
   Future<void> onMobileVaultLocked() async {
     if (!_isAuthorized) return;
     try {
+      final now = DateTime.now().millisecondsSinceEpoch;
       final payload = jsonEncode({
         'status': 'LOCKED',
         'authorized_at': null,
         'expires_at': null,
         'pairing_pin': null,
         'device': 'Windows Browser Extension',
+        'revoked_at': now,
       });
       if (driveService.isSignedIn) {
         await driveService.uploadTextFile(authFileName, payload);
+        final reqPayload = jsonEncode({
+          'status': 'LOCKED',
+          'message': 'Mobile CardVault was locked.',
+          'revoked_at': now,
+        });
+        await driveService.uploadTextFile(DriveService.accessRequestFileName, reqPayload);
       }
     } catch (_) {}
     _isAuthorized = false;

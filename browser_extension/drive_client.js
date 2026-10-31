@@ -305,6 +305,37 @@ class DriveClient {
   }
 
   /**
+   * Checks if desktop authorization was explicitly revoked or locked from the mobile app.
+   */
+  async isAuthorizationRevoked() {
+    try {
+      // 1. Check card_vault_extension_auth.json
+      const authFile = await this.findFile(DRIVE_AUTH_FILENAME);
+      if (authFile) {
+        const authContent = await this.downloadFileContent(authFile.id);
+        const auth = JSON.parse(authContent);
+        if (auth.status === 'REVOKED' || auth.status === 'LOCKED') {
+          return true;
+        }
+      }
+
+      // 2. Check card_vault_access_request.json
+      const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
+      if (reqFile) {
+        const reqContent = await this.downloadFileContent(reqFile.id);
+        const req = JSON.parse(reqContent);
+        if (req.status === 'REVOKED' || req.status === 'LOCKED') {
+          return true;
+        }
+      }
+
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /**
    * Checks authorization status record
    */
   async checkMobileAuthorization() {
@@ -316,6 +347,14 @@ class DriveClient {
 
       const content = await this.downloadFileContent(file.id);
       const auth = JSON.parse(content);
+
+      if (auth.status === 'REVOKED' || auth.status === 'LOCKED') {
+        return {
+          authorized: false,
+          reason: auth.status,
+          message: 'Authorization revoked from CardVault mobile application.'
+        };
+      }
 
       const now = Date.now();
       const isExpired = auth.expires_at && now > auth.expires_at;

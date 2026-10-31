@@ -28,11 +28,20 @@ async function verifyMobileAuth() {
     return;
   }
 
-  // Poll Google Drive auth record if token is available
+  // Poll Google Drive revocation or status
   try {
-    const authStatus = await driveClient.checkMobileAuthorization();
-    if (!authStatus.authorized) {
+    const isRevoked = await driveClient.isAuthorizationRevoked();
+    if (isRevoked) {
       lockVault('Authorization revoked from CardVault mobile application.');
+      return;
+    }
+
+    if (memoryVault.activePin) {
+      const authStatus = await driveClient.checkMobileAuthorization();
+      if (!authStatus.authorized) {
+        lockVault('Authorization revoked from CardVault mobile application.');
+        return;
+      }
     }
   } catch (_) {
     // Soft error, rely on local timeout
@@ -45,8 +54,17 @@ function lockVault(reason = 'Vault locked') {
   memoryVault.items = [];
   memoryVault.masterPassword = null;
   memoryVault.authExpiresAt = null;
+  memoryVault.activePin = null;
   console.log('[CardVault]', reason);
   notifyAllTabsStatusChange();
+
+  // Internal runtime message to instantly notify popup if open
+  chrome.runtime.sendMessage({
+    action: 'VAULT_STATUS_CHANGED',
+    isAuthorized: false,
+    isUnlocked: false,
+    reason
+  }).catch(() => {});
 }
 
 function notifyAllTabsStatusChange() {
@@ -67,14 +85,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const { action, payload } = message;
 
   if (action === 'GET_STATUS') {
-    sendResponse({
-      isAuthorized: memoryVault.isAuthorized,
-      isUnlocked: memoryVault.isUnlocked,
-      itemCount: memoryVault.items.length,
-      lastSyncedAt: memoryVault.lastSyncedAt,
-      authExpiresAt: memoryVault.authExpiresAt,
-      activePin: memoryVault.activePin,
-    });
+    (async () => {
+      // Immediate check on revocation if active
+      if (memoryVault.isAuthorized && memoryVault.isUnlocked) {
+        try {
+          const isRevoked = await driveClient.isAuthorizationRevoked();
+          if (isRevoked) {
+            lockVault('Authorization revoked from CardVault mobile application.');
+          }
+        } catch (_) {}
+      }
+
+      sendResponse({
+        isAuthorized: memoryVault.isAuthorized,
+        isUnlocked: memoryVault.isUnlocked,
+        itemCount: memoryVault.items.length,
+        lastSyncedAt: memoryVault.lastSyncedAt,
+        authExpiresAt: memoryVault.authExpiresAt,
+        activePin: memoryVault.activePin,
+      });
+    })();
     return true;
   }
 
@@ -282,7 +312,7 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
     return {
       success: false,
       error: 'PASSWORD_REQUIRED',
-      message: 'Master Password required to decrypt vault. Please re-authorize Desktop Extension from CardVault on your phone.'
+      message: 'PIN authorization key not found on Google Drive. Please tap "Authorize Desktop Extension" in CardVault on your phone to generate a fresh pairing session.'
     };
   }
 
@@ -406,5 +436,5 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
   };
 }
 
-// Periodic check every 1 minute
-setInterval(verifyMobileAuth, 60000);
+// Periodic check every 2.5 seconds so revocations from mobile take effect immediately
+setInterval(verifyMobileAuth, 2500);

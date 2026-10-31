@@ -145,26 +145,30 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
     final canAuth = await auth.canAuthenticate();
 
     bool authenticated = false;
+    String? masterPwd;
+
     if (isBiometricEnabled && canAuth) {
       authenticated = await auth.authenticate(
         reason: 'Authorize CardVault Browser Extension on Windows PC',
       );
-    }
-
-    if (!authenticated && mounted) {
-      // Prompt for Master Password if biometric fails or isn't enabled
-      authenticated = await _promptMasterPasswordDialog();
-    }
-
-    if (authenticated && mounted) {
-      var masterPwd = await sec.getMasterPassword();
-      if ((masterPwd == null || masterPwd.isEmpty) && mounted) {
-        final verified = await _promptMasterPasswordDialog();
-        if (verified) {
-          masterPwd = await sec.getMasterPassword();
-        }
+      if (authenticated) {
+        masterPwd = await sec.getMasterPassword();
       }
+    }
 
+    if (!authenticated || masterPwd == null || masterPwd.isEmpty) {
+      if (!mounted) return;
+      // Prompt for Master Password if biometric fails, isn't enabled, or password not yet cached
+      masterPwd = await _promptMasterPasswordDialog();
+      authenticated = masterPwd != null && masterPwd.isNotEmpty;
+    }
+
+    if (!authenticated || masterPwd == null || masterPwd.isEmpty) {
+      // User cancelled password prompt
+      return;
+    }
+
+    if (mounted) {
       final success = await authService.authorizeExtension(
         durationMinutes: 30,
         masterPassword: masterPwd,
@@ -205,12 +209,12 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
     }
   }
 
-  Future<bool> _promptMasterPasswordDialog() async {
+  Future<String?> _promptMasterPasswordDialog() async {
     final sec = context.read<VaultSecurityService>();
     final ctrl = TextEditingController();
     String? errorText;
 
-    final result = await showDialog<bool>(
+    final result = await showDialog<String>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDlgState) => AlertDialog(
@@ -234,13 +238,17 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
               onPressed: () async {
-                final ok = await sec.verifyMasterPassword(ctrl.text.trim());
+                final text = ctrl.text.trim();
+                final ok = await sec.verifyMasterPassword(text);
                 if (ok) {
-                  Navigator.pop(ctx, true);
+                  await sec.saveMasterPassword(text);
+                  if (ctx.mounted) {
+                    Navigator.pop(ctx, text);
+                  }
                 } else {
                   setDlgState(() => errorText = 'Incorrect Master Password');
                 }
@@ -251,7 +259,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
         ),
       ),
     );
-    return result ?? false;
+    return result;
   }
 
   @override
@@ -502,7 +510,33 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                 ),
                 icon: const Icon(Icons.lock_reset_rounded),
                 label: const Text('Revoke Desktop Authorization Now', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                onPressed: authService.isLoading ? null : () => authService.revokeExtension(),
+                onPressed: authService.isLoading ? null : () async {
+                  await authService.revokeExtension();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                            SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                'Desktop authorization revoked and extension locked',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                        backgroundColor: Colors.red.shade700,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    );
+                  }
+                },
               ),
             ],
 
