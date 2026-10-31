@@ -749,7 +749,7 @@ function updateCountdownDisplay() {
   if (remainingMs <= 0) {
     if (timer) timer.textContent = 'Session Expired';
     cachedAuthExpiresAt = null;
-    handleLock();
+    refreshStatus();
     return;
   }
   const mins = Math.floor(remainingMs / 60000);
@@ -759,7 +759,90 @@ function updateCountdownDisplay() {
   }
 }
 
+function normalizeRawVaultItems(rawItems) {
+  const cards = [];
+  const bankAccounts = [];
+  const passwords = [];
+
+  if (!Array.isArray(rawItems)) return { cards, bankAccounts, passwords };
+
+  for (const item of rawItems) {
+    const type = (item.type || '').toLowerCase();
+    const isPassword = type === 'password';
+    const rawCardNumber = String(item.card_number || item.cardNumber || item.number || item.cardNo || item.card_no || '').replace(/\s+/g, '');
+    const isCard = !isPassword && (type === 'card' || (!type.includes('bank') && (rawCardNumber.length >= 12 || (item.card_network || item.cardNetwork))));
+
+    if (isPassword) {
+      passwords.push({
+        id: item.id || String(Math.random()),
+        nickname: item.nickname || item.bank_name || 'Website Password',
+        website: item.website || '',
+        username: item.user_id || item.userId || item.username || '',
+        password: item.login_password || item.loginPassword || item.password || '',
+        totpSecret: item.totp_secret || item.totpSecret || '',
+        notes: item.notes || ''
+      });
+    } else if (isCard) {
+      cards.push({
+        id: item.id || String(Math.random()),
+        nickname: item.nickname || item.name || item.card_holder || item.cardHolder || 'Card',
+        bankName: item.bank_name || item.bankName || 'Card',
+        cardNumber: rawCardNumber,
+        cardHolder: item.card_holder || item.cardHolder || '',
+        expiry: item.expiry || item.card_expiry || item.cardExpiry || '',
+        cvv: item.cvv || item.card_cvv || item.cardCvv || '',
+        cardNetwork: item.card_network || item.cardNetwork || 'Visa',
+        isCredit: (item.card_type || item.cardType || '').toLowerCase().includes('credit') || !!item.isCredit,
+        isDebit: (item.card_type || item.cardType || '').toLowerCase().includes('debit') || !!item.isDebit
+      });
+    } else {
+      let rawAccounts = [];
+      if (item.accounts) {
+        try {
+          rawAccounts = typeof item.accounts === 'string' ? JSON.parse(item.accounts) : item.accounts;
+        } catch (_) {}
+      }
+
+      const normalizedAccounts = [];
+      if (Array.isArray(rawAccounts) && rawAccounts.length > 0) {
+        for (const a of rawAccounts) {
+          normalizedAccounts.push({
+            accountNumber: a.account_number || a.accountNumber || '',
+            ifscCode: (a.ifsc_code || a.ifscCode || '').toUpperCase(),
+            label: a.label || ''
+          });
+        }
+      }
+
+      const primaryAcc = item.account_number || item.accountNumber || '';
+      const primaryIfsc = (item.ifsc_code || item.ifscCode || '').toUpperCase();
+      if (primaryAcc && !normalizedAccounts.some(a => a.accountNumber === primaryAcc)) {
+        normalizedAccounts.unshift({
+          accountNumber: primaryAcc,
+          ifscCode: primaryIfsc,
+          label: 'Primary'
+        });
+      }
+
+      bankAccounts.push({
+        id: item.id || String(Math.random()),
+        bankName: item.bank_name || item.bankName || 'Bank',
+        nickname: item.nickname || '',
+        accounts: normalizedAccounts,
+        userId: item.user_id || item.userId || '',
+        cifNumber: item.cif_number || item.cifNumber || '',
+        loginPassword: item.login_password || item.loginPassword || '',
+        profilePassword: item.profile_password || item.profilePassword || '',
+        mpin: item.mpin || ''
+      });
+    }
+  }
+
+  return { cards, bankAccounts, passwords };
+}
+
 function applyUnlockedUI(data) {
+  if (!data) return;
   const statusBadge = document.getElementById('statusBadge');
   const statusText = document.getElementById('statusText');
   const lockedView = document.getElementById('lockedView');
@@ -776,7 +859,11 @@ function applyUnlockedUI(data) {
     updateCountdownDisplay();
   }
 
-  const items = data.items || data.suggestions;
+  let items = data.suggestions || data.items;
+  if (Array.isArray(items)) {
+    items = normalizeRawVaultItems(items);
+  }
+
   if (items && (items.cards || items.bankAccounts || items.passwords)) {
     currentVaultItems = items;
     updateCounts();
@@ -826,6 +913,15 @@ async function refreshStatus() {
   const status = await sendExtensionMessage({ action: 'GET_STATUS' });
   if (status && status.isAuthorized && status.isUnlocked) {
     applyUnlockedUI(status);
+
+    // Fetch fresh dynamic TOTPs and suggestions if needed
+    const res = await sendExtensionMessage({
+      action: 'GET_AUTOFILL_SUGGESTIONS',
+      payload: { fieldType: 'ALL' }
+    });
+    if (res && res.authorized) {
+      applyUnlockedUI(res);
+    }
   } else if (status && !status.isUnlocked) {
     applyLockedUI();
   }
@@ -897,7 +993,8 @@ function renderVaultList(query = '') {
     cards.forEach(card => {
       const tile = document.createElement('div');
       tile.className = 'card-tile';
-      const formattedNum = (card.cardNumber || '').replace(/(\d{4})/g, '$1 ').trim();
+      const rawNum = String(card.cardNumber || '').replace(/\s+/g, '');
+      const formattedNum = rawNum.replace(/(\d{4})/g, '$1 ').trim();
 
       tile.innerHTML = `
         <div class="tile-header">
@@ -907,10 +1004,10 @@ function renderVaultList(query = '') {
         <div class="tile-number">${formattedNum || '•••• •••• •••• ••••'}</div>
         <div class="tile-actions">
           <button class="copy-chip fill-page-chip" title="Autofill this card into current active web page">⚡ Fill Page</button>
-          <button class="copy-chip" data-copy="${card.cardNumber}">Copy Number</button>
+          <button class="copy-chip" data-copy="${rawNum}">Copy Number</button>
           ${card.expiry ? `<button class="copy-chip" data-copy="${card.expiry}">Exp: ${card.expiry}</button>` : ''}
           ${card.cvv ? `<button class="copy-chip" data-copy="${card.cvv}">CVV</button>` : ''}
-          <button class="copy-chip" data-copy="${card.cardNumber} ${card.expiry || ''} ${card.cvv || ''}">📋 All</button>
+          <button class="copy-chip" data-copy="${rawNum} ${card.expiry || ''} ${card.cvv || ''}">📋 All</button>
         </div>
       `;
 

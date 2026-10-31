@@ -28,13 +28,93 @@ let memoryVault = {
   activeRequestId: null,
 };
 
+// Universal normalizer for raw decrypted vault items into structured suggestions
+function organizeVaultItems(rawItems) {
+  const cards = [];
+  const bankAccounts = [];
+  const passwords = [];
+
+  if (!Array.isArray(rawItems)) return { cards, bankAccounts, passwords };
+
+  for (const item of rawItems) {
+    const type = (item.type || '').toLowerCase();
+    const isPassword = type === 'password';
+    const rawCardNumber = String(item.card_number || item.cardNumber || item.number || item.cardNo || item.card_no || '').replace(/\s+/g, '');
+    const isCard = !isPassword && (type === 'card' || (!type.includes('bank') && (rawCardNumber.length >= 12 || (item.card_network || item.cardNetwork))));
+
+    if (isPassword) {
+      const totpKey = item.totp_secret || item.totpSecret || '';
+      passwords.push({
+        id: item.id || String(Math.random()),
+        nickname: item.nickname || item.bank_name || 'Website Password',
+        website: item.website || '',
+        username: item.user_id || item.userId || item.username || '',
+        password: item.login_password || item.loginPassword || item.password || '',
+        totpSecret: totpKey,
+        notes: item.notes || ''
+      });
+    } else if (isCard) {
+      cards.push({
+        id: item.id || String(Math.random()),
+        nickname: item.nickname || item.name || item.card_holder || item.cardHolder || 'Card',
+        bankName: item.bank_name || item.bankName || 'Card',
+        cardNumber: rawCardNumber,
+        cardHolder: item.card_holder || item.cardHolder || '',
+        expiry: item.expiry || item.card_expiry || item.cardExpiry || '',
+        cvv: item.cvv || item.card_cvv || item.cardCvv || '',
+        cardNetwork: item.card_network || item.cardNetwork || 'Visa',
+        isCredit: (item.card_type || item.cardType || '').toLowerCase().includes('credit') || !!item.isCredit,
+        isDebit: (item.card_type || item.cardType || '').toLowerCase().includes('debit') || !!item.isDebit
+      });
+    } else {
+      let rawAccounts = [];
+      if (item.accounts) {
+        try {
+          rawAccounts = typeof item.accounts === 'string' ? JSON.parse(item.accounts) : item.accounts;
+        } catch (_) {}
+      }
+
+      const normalizedAccounts = [];
+      if (Array.isArray(rawAccounts) && rawAccounts.length > 0) {
+        for (const a of rawAccounts) {
+          normalizedAccounts.push({
+            accountNumber: a.account_number || a.accountNumber || '',
+            ifscCode: (a.ifsc_code || a.ifscCode || '').toUpperCase(),
+            label: a.label || ''
+          });
+        }
+      }
+
+      const primaryAcc = item.account_number || item.accountNumber || '';
+      const primaryIfsc = (item.ifsc_code || item.ifscCode || '').toUpperCase();
+      if (primaryAcc && !normalizedAccounts.some(a => a.accountNumber === primaryAcc)) {
+        normalizedAccounts.unshift({
+          accountNumber: primaryAcc,
+          ifscCode: primaryIfsc,
+          label: 'Primary'
+        });
+      }
+
+      bankAccounts.push({
+        id: item.id || String(Math.random()),
+        bankName: item.bank_name || item.bankName || 'Bank',
+        nickname: item.nickname || '',
+        accounts: normalizedAccounts,
+        userId: item.user_id || item.userId || '',
+        cifNumber: item.cif_number || item.cifNumber || '',
+        loginPassword: item.login_password || item.loginPassword || '',
+        profilePassword: item.profile_password || item.profilePassword || '',
+        mpin: item.mpin || ''
+      });
+    }
+  }
+
+  return { cards, bankAccounts, passwords };
+}
+
 // ── Persistent Storage (Survives Service Worker Restarts & Inactivity for full 30 mins) ──
 async function persistSession() {
-  let suggestions = null;
-  try {
-    suggestions = await handleGetAutofillSuggestions({ fieldType: 'ALL' });
-  } catch (_) {}
-
+  const suggestions = organizeVaultItems(memoryVault.items);
   const sessionData = {
     isAuthorized: memoryVault.isAuthorized,
     isUnlocked: memoryVault.isUnlocked,
@@ -200,12 +280,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     await restoreSessionIfNeeded();
 
     if (action === 'GET_STATUS') {
-      let suggestions = { cards: [], bankAccounts: [], passwords: [] };
-      if (memoryVault.isAuthorized && memoryVault.isUnlocked) {
-        try {
-          suggestions = await handleGetAutofillSuggestions({ fieldType: 'ALL' });
-        } catch (_) {}
-      }
+      const suggestions = (memoryVault.isAuthorized && memoryVault.isUnlocked)
+        ? organizeVaultItems(memoryVault.items)
+        : { cards: [], bankAccounts: [], passwords: [] };
+
       sendResponse({
         isAuthorized: memoryVault.isAuthorized,
         isUnlocked: memoryVault.isUnlocked,
@@ -214,7 +292,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         authExpiresAt: memoryVault.authExpiresAt,
         activePin: memoryVault.activePin,
         authMode: memoryVault.authMode,
-        items: suggestions
+        suggestions: suggestions,
       });
       return;
     }
@@ -560,8 +638,8 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
   for (const item of memoryVault.items) {
     const type = (item.type || '').toLowerCase();
     const isPassword = type === 'password';
-    const rawCardNumber = (item.card_number || item.cardNumber || '').replace(/\s+/g, '');
-    const isCard = !isPassword && (type === 'card' || (!type.includes('bank') && rawCardNumber.length >= 12));
+    const rawCardNumber = String(item.card_number || item.cardNumber || item.number || item.cardNo || item.card_no || '').replace(/\s+/g, '');
+    const isCard = !isPassword && (type === 'card' || (!type.includes('bank') && (rawCardNumber.length >= 12 || (item.card_network || item.cardNetwork))));
 
     if (isPassword) {
       const totpKey = item.totp_secret || item.totpSecret || '';
@@ -598,12 +676,12 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
     } else if (isCard) {
       cards.push({
         id: item.id || String(Math.random()),
-        nickname: item.nickname || item.card_holder || item.cardHolder || 'Card',
+        nickname: item.nickname || item.name || item.card_holder || item.cardHolder || 'Card',
         bankName: item.bank_name || item.bankName || 'Card',
         cardNumber: rawCardNumber,
         cardHolder: item.card_holder || item.cardHolder || '',
-        expiry: item.expiry || '',
-        cvv: item.cvv || '',
+        expiry: item.expiry || item.card_expiry || item.cardExpiry || '',
+        cvv: item.cvv || item.card_cvv || item.cardCvv || '',
         cardNetwork: item.card_network || item.cardNetwork || 'Visa',
         isCredit: (item.card_type || item.cardType || '').toLowerCase().includes('credit') || !!item.isCredit,
         isDebit: (item.card_type || item.cardType || '').toLowerCase().includes('debit') || !!item.isDebit
