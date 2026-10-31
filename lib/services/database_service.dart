@@ -145,6 +145,11 @@ class DatabaseService {
     );
   }
 
+  /// Wipes all vault records from SQLite database
+  Future<void> clearAllData() async {
+    await _database.delete(_tableName);
+  }
+
   Future<List<VaultItem>> getAllItems() async {
     final rows = await _database.query(
       _tableName,

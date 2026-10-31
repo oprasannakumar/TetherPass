@@ -160,6 +160,11 @@ class VaultSecurityService {
     await _storage.write(key: _keyHasSeenTour, value: seen ? 'true' : 'false');
   }
 
+  /// Wipes all sensitive security metadata from secure keystore
+  Future<void> wipeAllData() async {
+    await _storage.deleteAll();
+  }
+
   // ─── Internal helpers ──────────────────────────────────────────────────────
 
   String _hashWithSalt(String input, String salt) {

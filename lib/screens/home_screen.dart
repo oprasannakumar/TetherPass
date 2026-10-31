@@ -45,13 +45,20 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadItems();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final drive = context.read<DriveService>();
       if (!drive.isSignedIn) {
-        drive.trySilentSignIn();
+        await drive.trySilentSignIn();
       }
       _checkFirstTimeTour();
       _startApprovalPolling();
+
+      final isRemoved = await drive.isCurrentDeviceRemoved();
+      if (isRemoved && mounted) {
+        await _executeRemoteWipe();
+        return;
+      }
+
       drive.registerDeviceOnDrive();
     });
   }
@@ -69,11 +76,66 @@ class _HomeScreenState extends State<HomeScreen> {
       final drive = context.read<DriveService>();
       if (!drive.isSignedIn) return;
 
+      // Check if device was remotely removed from another device or extension
+      final isRemoved = await drive.isCurrentDeviceRemoved();
+      if (isRemoved && mounted) {
+        await _executeRemoteWipe();
+        return;
+      }
+
       final req = await drive.checkForPendingAccessRequest();
       if (req != null && mounted && !_isShowingApprovalDialog) {
         _showDesktopApprovalDialog(req);
       }
     });
+  }
+
+  Future<void> _executeRemoteWipe() async {
+    _accessRequestPollTimer?.cancel();
+    if (!mounted) return;
+
+    final db = context.read<DatabaseService>();
+    final sec = context.read<VaultSecurityService>();
+    final drive = context.read<DriveService>();
+
+    await db.clearAllData();
+    await sec.wipeAllData();
+    await AutofillBridgeService.syncVaultState(isUnlocked: false, items: []);
+    await drive.signOut();
+
+    if (mounted) {
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+              SizedBox(width: 8),
+              Text('Device Removed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            ],
+          ),
+          content: const Text(
+            'This mobile phone was removed from your CardVault account. All credentials and local vault data on this device have been wiped clean.',
+            style: TextStyle(fontSize: 13, height: 1.4),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () {
+                Navigator.of(ctx).pushNamedAndRemoveUntil('/onboarding', (route) => false);
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Future<void> _showDesktopApprovalDialog(Map<String, dynamic> req) async {

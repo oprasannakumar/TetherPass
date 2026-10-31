@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as enc;
@@ -233,6 +234,7 @@ class DriveService extends ChangeNotifier {
   static const devicesFileName = 'card_vault_devices.json';
 
   /// Registers this mobile device in Google Drive so Windows Extension can detect multiple devices.
+  /// Automatically deduplicates stale instances and rejects re-registration if device was wiped/removed.
   Future<void> registerDeviceOnDrive() async {
     if (!isSignedIn) return;
     try {
@@ -241,42 +243,60 @@ class DriveService extends ChangeNotifier {
       final now = DateTime.now().millisecondsSinceEpoch;
 
       List<dynamic> deviceList = [];
+      List<dynamic> removedList = [];
       final existingText = await downloadTextFile(devicesFileName);
       if (existingText != null && existingText.trim().isNotEmpty) {
         try {
           final data = jsonDecode(existingText) as Map<String, dynamic>;
           deviceList = (data['devices'] as List<dynamic>?) ?? [];
+          removedList = (data['removedDevices'] as List<dynamic>?) ?? [];
         } catch (_) {}
       }
 
-      // Update or add this device
-      bool found = false;
-      for (int i = 0; i < deviceList.length; i++) {
-        final d = deviceList[i] as Map<String, dynamic>;
-        if (d['deviceId'] == myId) {
-          deviceList[i] = {
-            'deviceId': myId,
-            'deviceName': myName,
-            'platform': 'Android',
-            'lastActive': now,
-          };
-          found = true;
-          break;
+      // If this device was explicitly removed, do not re-register
+      if (removedList.any((r) => r is Map && r['deviceId'] == myId)) {
+        return;
+      }
+
+      // Deduplicate: remove any stale device entry with matching deviceId or identical name
+      deviceList.removeWhere((d) {
+        if (d is! Map) return true;
+        if (d['deviceId'] == myId) return true;
+        if (d['deviceName'] == myName && d['deviceId'] != myId) {
+          return true; // Stale duplicate entry from previous install
         }
-      }
+        return false;
+      });
 
-      if (!found) {
-        deviceList.add({
-          'deviceId': myId,
-          'deviceName': myName,
-          'platform': 'Android',
-          'lastActive': now,
-        });
-      }
+      deviceList.add({
+        'deviceId': myId,
+        'deviceName': myName,
+        'platform': Platform.isAndroid ? 'Android' : (Platform.isIOS ? 'iOS' : 'Mobile'),
+        'lastActive': now,
+      });
 
-      final payload = jsonEncode({'devices': deviceList});
+      final payload = jsonEncode({
+        'devices': deviceList,
+        'removedDevices': removedList,
+      });
       await uploadTextFile(devicesFileName, payload);
     } catch (_) {}
+  }
+
+  /// Checks if this mobile phone was remotely removed by the user in the extension or another device.
+  Future<bool> isCurrentDeviceRemoved() async {
+    if (!isSignedIn) return false;
+    try {
+      final myId = await DeviceIdentityService.getDeviceId();
+      final existingText = await downloadTextFile(devicesFileName);
+      if (existingText == null || existingText.trim().isEmpty) return false;
+
+      final data = jsonDecode(existingText) as Map<String, dynamic>;
+      final removedList = (data['removedDevices'] as List<dynamic>?) ?? [];
+      return removedList.any((r) => r is Map && r['deviceId'] == myId);
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Fetches the list of all registered mobile devices from Google Drive.
@@ -293,13 +313,32 @@ class DriveService extends ChangeNotifier {
     }
   }
 
-  /// Removes a registered device from Google Drive by its deviceId.
+  /// Removes a registered device from Google Drive by its deviceId and logs it in removedDevices for remote wipe.
   Future<bool> removeRegisteredDevice(String deviceId) async {
     if (!isSignedIn) return false;
     try {
-      final list = await getRegisteredDevices();
-      final updated = list.where((d) => d['deviceId'] != deviceId).toList();
-      final payload = jsonEncode({'devices': updated});
+      final text = await downloadTextFile(devicesFileName);
+      List<dynamic> deviceList = [];
+      List<dynamic> removedList = [];
+      if (text != null && text.trim().isNotEmpty) {
+        try {
+          final data = jsonDecode(text) as Map<String, dynamic>;
+          deviceList = (data['devices'] as List<dynamic>?) ?? [];
+          removedList = (data['removedDevices'] as List<dynamic>?) ?? [];
+        } catch (_) {}
+      }
+
+      final updatedDevices = deviceList.where((d) => (d is Map && d['deviceId'] != deviceId)).toList();
+      removedList.removeWhere((r) => r is Map && r['deviceId'] == deviceId);
+      removedList.add({
+        'deviceId': deviceId,
+        'removedAt': DateTime.now().millisecondsSinceEpoch,
+      });
+
+      final payload = jsonEncode({
+        'devices': updatedDevices,
+        'removedDevices': removedList,
+      });
       await uploadTextFile(devicesFileName, payload);
       return true;
     } catch (_) {

@@ -262,7 +262,15 @@ class DriveClient {
       const data = JSON.parse(content);
       const currentList = Array.isArray(data.devices) ? data.devices : [];
       const updatedList = currentList.filter(d => d.deviceId !== deviceId);
-      const payload = JSON.stringify({ devices: updatedList }, null, 2);
+
+      // Track in removedDevices list so the removed mobile app clears/wipes its local data
+      const currentRemoved = Array.isArray(data.removedDevices) ? data.removedDevices : [];
+      const updatedRemoved = [
+        ...currentRemoved.filter(r => r.deviceId !== deviceId),
+        { deviceId, removedAt: Date.now() }
+      ];
+
+      const payload = JSON.stringify({ devices: updatedList, removedDevices: updatedRemoved }, null, 2);
       await this.uploadOrUpdateFile(DRIVE_DEVICES_FILENAME, payload);
       return updatedList;
     } catch (err) {

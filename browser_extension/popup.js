@@ -80,6 +80,8 @@ function initUI() {
 
   // ── Device Manager Modal ──
   document.getElementById('openDeviceManagerBtn')?.addEventListener('click', openDeviceManagerModal);
+  document.getElementById('openDeviceManagerFromHeaderBtn')?.addEventListener('click', openDeviceManagerModal);
+  document.getElementById('openDeviceManagerFromUnlockedBtn')?.addEventListener('click', openDeviceManagerModal);
   document.getElementById('closeDeviceManagerBtn')?.addEventListener('click', closeDeviceManagerModal);
   document.getElementById('doneDeviceManagerBtn')?.addEventListener('click', closeDeviceManagerModal);
   document.getElementById('refreshDevicesModalBtn')?.addEventListener('click', refreshDeviceManagerModal);
@@ -139,11 +141,14 @@ function setAuthMethod(method, save = true) {
   }
 }
 
+let currentGooglePicture = null;
+
 async function loadSavedGoogleAccount() {
   try {
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
       const data = await chrome.storage.local.get([
         'googleAccountEmail',
+        'googleAccountPicture',
         'googleOAuthToken',
         'cachedBackupPayload',
         'preferredAuthMethod'
@@ -152,8 +157,11 @@ async function loadSavedGoogleAccount() {
         currentOAuthToken = data.googleOAuthToken;
         driveClient.setToken(data.googleOAuthToken);
       }
+      if (data.googleAccountPicture) {
+        currentGooglePicture = data.googleAccountPicture;
+      }
       if (data.googleAccountEmail) {
-        setConnectedGoogleAccount(data.googleAccountEmail, false);
+        setConnectedGoogleAccount(data.googleAccountEmail, data.googleAccountPicture || null, false);
       }
       if (data.cachedBackupPayload) {
         localBackupPayload = data.cachedBackupPayload;
@@ -167,27 +175,81 @@ async function loadSavedGoogleAccount() {
   }
 }
 
-function setConnectedGoogleAccount(email, save = true) {
+function setConnectedGoogleAccount(email, picture = null, save = true) {
   currentGoogleAccount = email;
+  if (picture) currentGooglePicture = picture;
+
   const unlinkedBox = document.getElementById('oauthUnlinkedBox');
   const linkedBox = document.getElementById('oauthLinkedBox');
   const emailDisplay = document.getElementById('connectedEmailDisplay');
   const avatarLetter = document.getElementById('accountAvatarLetter');
+  const profileImg = document.getElementById('accountProfileImg');
 
   if (unlinkedBox) unlinkedBox.style.display = 'none';
   if (linkedBox) linkedBox.style.display = 'block';
   if (emailDisplay) emailDisplay.textContent = email;
-  if (avatarLetter) avatarLetter.textContent = (email[0] || 'U').toUpperCase();
+
+  if (currentGooglePicture && profileImg) {
+    profileImg.src = currentGooglePicture;
+    profileImg.style.display = 'block';
+    if (avatarLetter) avatarLetter.style.display = 'none';
+    profileImg.onerror = () => {
+      profileImg.style.display = 'none';
+      if (avatarLetter) {
+        avatarLetter.style.display = 'block';
+        avatarLetter.textContent = (email[0] || 'U').toUpperCase();
+      }
+    };
+  } else {
+    if (profileImg) profileImg.style.display = 'none';
+    if (avatarLetter) {
+      avatarLetter.style.display = 'block';
+      avatarLetter.textContent = (email[0] || 'U').toUpperCase();
+    }
+  }
 
   if (save && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     chrome.storage.local.set({
       googleAccountEmail: email,
+      googleAccountPicture: currentGooglePicture,
       googleOAuthToken: currentOAuthToken
     });
   }
 
+  // If token is present but no picture yet, query Google userinfo
+  if (currentOAuthToken && !currentGooglePicture) {
+    fetchGoogleUserProfile(currentOAuthToken);
+  }
+
   // Check for registered mobile devices
   loadRegisteredDevices();
+}
+
+async function fetchGoogleUserProfile(token) {
+  try {
+    const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const info = await res.json();
+      if (info.picture) {
+        currentGooglePicture = info.picture;
+        const profileImg = document.getElementById('accountProfileImg');
+        const avatarLetter = document.getElementById('accountAvatarLetter');
+        if (profileImg) {
+          profileImg.src = info.picture;
+          profileImg.style.display = 'block';
+        }
+        if (avatarLetter) avatarLetter.style.display = 'none';
+
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.set({ googleAccountPicture: info.picture });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[CardVault] Could not fetch Google user profile picture:', err);
+  }
 }
 
 async function loadRegisteredDevices() {
@@ -206,29 +268,32 @@ async function loadRegisteredDevices() {
 }
 
 function updateDeviceSelector(devices) {
-  const selectorGroup = document.getElementById('deviceSelectorGroup');
   const select = document.getElementById('targetDeviceSelect');
   const badge = document.getElementById('deviceCountBadge');
+  const headerCount = document.getElementById('headerDeviceCount');
 
   if (!select) return;
   const previousSelected = select.value;
 
   select.innerHTML = '<option value="ALL">📡 All Mobile Devices (Broadcast)</option>';
-  if (Array.isArray(devices) && devices.length > 0) {
+  const count = Array.isArray(devices) ? devices.length : 0;
+
+  if (count > 0) {
     devices.forEach(d => {
       const opt = document.createElement('option');
       opt.value = d.deviceId;
-      opt.textContent = `📱 ${d.deviceName || 'Mobile Device'} (${d.platform || 'Android'})`;
+      opt.textContent = `📱 ${d.deviceName || 'Mobile Phone'} (${d.platform || 'Android'})`;
       select.appendChild(opt);
     });
 
-    if (selectorGroup) selectorGroup.style.display = 'block';
-    if (badge) badge.textContent = `(${devices.length} phone${devices.length > 1 ? 's' : ''})`;
+    if (badge) badge.textContent = `(${count} phone${count > 1 ? 's' : ''})`;
+    if (headerCount) headerCount.textContent = `${count} Phone${count > 1 ? 's' : ''} Linked`;
     if (previousSelected && Array.from(select.options).some(o => o.value === previousSelected)) {
       select.value = previousSelected;
     }
   } else {
-    if (selectorGroup) selectorGroup.style.display = 'none';
+    if (badge) badge.textContent = '(0 registered)';
+    if (headerCount) headerCount.textContent = '0 Phones Linked';
   }
 }
 
@@ -330,7 +395,7 @@ async function handlePromptRenameDevice(deviceId, currentName) {
 }
 
 async function handlePromptRemoveDevice(deviceId, deviceName) {
-  const confirmed = confirm('Are you sure you want to remove "' + deviceName + '"?\\n\\nThis phone will no longer receive confirmation pop-ups.');
+  const confirmed = confirm(`Are you sure you want to remove "${deviceName}"?\n\n⚠️ WARNING: This phone will immediately be revoked and all CardVault app data on that phone will be wiped clean!`);
   if (!confirmed) return;
 
   const loading = document.getElementById('deviceManagerLoading');
@@ -367,10 +432,10 @@ async function handleGoogleSignIn() {
     currentOAuthToken = token;
     driveClient.setToken(token);
 
-    // Fetch user profile email
+    // Fetch user profile email and profile picture
     try {
       const userInfo = await driveClient.getUserInfo();
-      setConnectedGoogleAccount(userInfo.email || 'Google Account Connected');
+      setConnectedGoogleAccount(userInfo.email || 'Google Account Connected', userInfo.picture || null);
     } catch (_) {
       setConnectedGoogleAccount('Google Drive Connected');
     }
@@ -387,10 +452,14 @@ async function handleGoogleSignIn() {
 async function handleDisconnectOAuth() {
   currentOAuthToken = null;
   currentGoogleAccount = null;
+  currentGooglePicture = null;
   driveClient.setToken(null);
 
+  const profileImg = document.getElementById('accountProfileImg');
+  if (profileImg) profileImg.style.display = 'none';
+
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    await chrome.storage.local.remove(['googleAccountEmail', 'googleOAuthToken']);
+    await chrome.storage.local.remove(['googleAccountEmail', 'googleAccountPicture', 'googleOAuthToken']);
   }
 
   const unlinkedBox = document.getElementById('oauthUnlinkedBox');

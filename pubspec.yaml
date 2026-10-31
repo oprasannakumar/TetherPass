@@ -29,6 +29,7 @@ dependencies:
   nfc_manager: ^4.2.1
   file_picker: ^11.0.3
   path_provider: ^2.1.6
+  device_info_plus: ^12.4.0
 
 dev_dependencies:
   flutter_test:

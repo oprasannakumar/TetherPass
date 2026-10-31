@@ -1,27 +1,71 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:uuid/uuid.dart';
 
 class DeviceIdentityService {
   static const _storage = FlutterSecureStorage();
   static const _deviceIdKey = 'card_vault_persistent_device_id';
   static const _deviceNameKey = 'card_vault_persistent_device_name';
+  static final _deviceInfo = DeviceInfoPlugin();
 
+  /// Returns a hardware-deterministic, invariant device ID for this phone.
+  /// Remains identical across app reinstalls and updates on the same physical phone.
   static Future<String> getDeviceId() async {
     var id = await _storage.read(key: _deviceIdKey);
-    if (id == null || id.isEmpty) {
-      id = 'dev_${const Uuid().v4().substring(0, 8)}';
-      await _storage.write(key: _deviceIdKey, value: id);
+    if (id != null && id.isNotEmpty) {
+      return id;
     }
+
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await _deviceInfo.androidInfo;
+        final raw = '${androidInfo.brand}_${androidInfo.model}_${androidInfo.device}_${androidInfo.hardware}_${androidInfo.id}';
+        final hash = sha256.convert(utf8.encode(raw)).toString().substring(0, 12);
+        final brand = androidInfo.brand.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
+        id = 'dev_${brand.isEmpty ? "android" : brand}_$hash';
+      } else if (Platform.isIOS) {
+        final iosInfo = await _deviceInfo.iosInfo;
+        final raw = '${iosInfo.name}_${iosInfo.model}_${iosInfo.identifierForVendor}';
+        final hash = sha256.convert(utf8.encode(raw)).toString().substring(0, 12);
+        id = 'dev_ios_$hash';
+      } else {
+        id = 'dev_${Platform.operatingSystem}_${DateTime.now().millisecondsSinceEpoch}';
+      }
+    } catch (_) {
+      id = 'dev_mobile_${DateTime.now().millisecondsSinceEpoch}';
+    }
+
+    await _storage.write(key: _deviceIdKey, value: id);
     return id;
   }
 
+  /// Returns the user-friendly hardware device name (e.g. "Vivo V2050")
   static Future<String> getDeviceName() async {
     var name = await _storage.read(key: _deviceNameKey);
-    if (name == null || name.isEmpty) {
-      final os = Platform.isAndroid ? 'Android' : (Platform.isIOS ? 'iPhone' : Platform.operatingSystem);
-      name = 'Mobile Device ($os)';
+    if (name != null && name.trim().isNotEmpty) {
+      return name;
     }
+
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await _deviceInfo.androidInfo;
+        String brand = androidInfo.brand.trim();
+        if (brand.isNotEmpty) {
+          brand = brand[0].toUpperCase() + brand.substring(1);
+        }
+        name = '$brand ${androidInfo.model}'.trim();
+      } else if (Platform.isIOS) {
+        final iosInfo = await _deviceInfo.iosInfo;
+        name = iosInfo.name.isNotEmpty ? iosInfo.name : 'iPhone';
+      } else {
+        name = 'CardVault (${Platform.operatingSystem})';
+      }
+    } catch (_) {
+      name = 'Mobile Device';
+    }
+
     return name;
   }
 
