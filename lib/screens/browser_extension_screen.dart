@@ -20,10 +20,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
   List<Map<String, dynamic>> _devices = [];
   String _currentDeviceId = '';
   String _currentDeviceName = '';
-  bool _loadingDevices = false;
-
   List<Map<String, dynamic>> _desktopSessions = [];
-  bool _loadingSessions = false;
   Timer? _sessionsRefreshTimer;
 
   @override
@@ -31,8 +28,11 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
     super.initState();
     _loadDeviceIdentityAndDevices();
     _fetchSessions();
-    _sessionsRefreshTimer = Timer.periodic(const Duration(seconds: 6), (_) {
-      if (mounted) _fetchSessions();
+    _sessionsRefreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted) {
+        _fetchSessions();
+        _fetchDevices();
+      }
     });
   }
 
@@ -127,12 +127,10 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
   Future<void> _fetchDevices() async {
     final drive = context.read<DriveService>();
     if (!drive.isSignedIn) return;
-    setState(() => _loadingDevices = true);
     final list = await drive.getRegisteredDevices();
     if (mounted) {
       setState(() {
         _devices = list;
-        _loadingDevices = false;
       });
     }
   }
@@ -373,31 +371,13 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: const [
-                          Icon(Icons.devices_rounded, color: Color(0xFFFF6F00), size: 20),
-                          SizedBox(width: 8),
-                          Text(
-                            'LINKED MOBILE PHONES',
-                            style: TextStyle(color: Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.bold),
-                          ),
-                        ],
+                    children: const [
+                      Icon(Icons.devices_rounded, color: Color(0xFFFF6F00), size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'LINKED MOBILE PHONES',
+                        style: TextStyle(color: Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.bold),
                       ),
-                      if (drive.isSignedIn)
-                        InkWell(
-                          onTap: _loadingDevices ? null : _fetchDevices,
-                          child: Row(
-                            children: [
-                              _loadingDevices
-                                  ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
-                                  : const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF64748B)),
-                              const SizedBox(width: 4),
-                              const Text('Refresh', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -657,60 +637,28 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: activeList.isNotEmpty ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.laptop_chromebook_rounded,
-                        color: activeList.isNotEmpty ? const Color(0xFF16A34A) : const Color(0xFF64748B),
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        'DESKTOP SESSIONS (${activeList.length})',
-                        style: const TextStyle(
-                          color: Color(0xFF0F172A),
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: activeList.isNotEmpty ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.laptop_chromebook_rounded,
+                  color: activeList.isNotEmpty ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                  size: 18,
                 ),
               ),
               const SizedBox(width: 8),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  InkWell(
-                    onTap: _loadingSessions ? null : _fetchSessions,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _loadingSessions
-                              ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
-                              : const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF64748B)),
-                          const SizedBox(width: 3),
-                          const Text('Refresh', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+              Text(
+                'DESKTOP SESSIONS (${activeList.length})',
+                style: const TextStyle(
+                  color: Color(0xFF0F172A),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
               ),
             ],
           ),

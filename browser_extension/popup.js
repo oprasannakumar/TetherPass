@@ -12,6 +12,90 @@ let localBackupPayload = null;
 let activePollingInterval = null;
 let activeCountdownInterval = null;
 let cachedDevices = [];
+let currentActiveTabDomain = '';
+
+async function detectActiveTabDomain() {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs && tabs[0] && tabs[0].url) {
+        const urlStr = tabs[0].url;
+        if (urlStr.startsWith('http')) {
+          const u = new URL(urlStr);
+          currentActiveTabDomain = u.hostname.replace(/^www\./, '').toLowerCase();
+        }
+      }
+    }
+  } catch (_) {}
+}
+
+function extractDomain(urlOrHost) {
+  if (!urlOrHost) return '';
+  let str = urlOrHost.trim().toLowerCase();
+  str = str.replace(/^[a-zA-Z]+:\/\//, '');
+  str = str.split('/')[0].split('?')[0].split('#')[0];
+  str = str.split(':')[0];
+  return str.replace(/^www\./, '');
+}
+
+function extractBaseBrand(domain) {
+  if (!domain) return '';
+  const clean = extractDomain(domain);
+  const parts = clean.split('.');
+  if (parts.length <= 1) return parts[0];
+  const multiTlds = ['co', 'com', 'org', 'net', 'edu', 'gov', 'ac'];
+  if (parts.length >= 3 && multiTlds.includes(parts[parts.length - 2])) {
+    return parts[parts.length - 3];
+  }
+  return parts[parts.length - 2];
+}
+
+function doesDomainMatch(itemWebsite, pageHost, itemNickname = '') {
+  if (!pageHost) return false;
+  const pageDom = extractDomain(pageHost);
+  const pageBrand = extractBaseBrand(pageDom);
+
+  // 1. Direct website URL / domain match
+  if (itemWebsite && itemWebsite.trim()) {
+    const itemDom = extractDomain(itemWebsite);
+    const itemBrand = extractBaseBrand(itemDom);
+
+    if (itemDom && pageDom) {
+      if (itemDom === pageDom) return true;
+      if (pageDom.endsWith('.' + itemDom) || itemDom.endsWith('.' + pageDom)) return true;
+      if (itemBrand && pageBrand && itemBrand === pageBrand && itemBrand.length >= 3) {
+        return true;
+      }
+    }
+
+    const rawClean = itemWebsite.trim().toLowerCase().replace(/^[a-zA-Z]+:\/\//, '').replace(/^www\./, '');
+    if (rawClean.length >= 3) {
+      if (pageDom.includes(rawClean) || rawClean.includes(pageDom)) return true;
+      if (pageBrand && (pageBrand === rawClean || pageBrand.includes(rawClean) || rawClean.includes(pageBrand))) {
+        return true;
+      }
+    }
+  }
+
+  // 2. Nickname match against page brand (e.g. nickname "Amazon", "Amazon India", "Flipkart" on amazon.in)
+  if (itemNickname && itemNickname.trim() && pageBrand && pageBrand.length >= 3) {
+    const nick = itemNickname.trim().toLowerCase();
+    const nickClean = nick.replace(/[^a-z0-9]/g, '');
+    if (nickClean === pageBrand || (nickClean.length >= 4 && (pageBrand.includes(nickClean) || nickClean.includes(pageBrand)))) {
+      return true;
+    }
+    const stopWords = ['bank', 'banking', 'netbanking', 'login', 'portal', 'app', 'account', 'card', 'pass', 'password', 'online', 'store'];
+    const tokens = nick.split(/[\s\-_.]+/).filter(t => t.length >= 3 && !stopWords.includes(t));
+    if (tokens.includes(pageBrand)) return true;
+    for (const t of tokens) {
+      if (pageBrand === t || (t.length >= 4 && (pageBrand.includes(t) || t.includes(pageBrand)))) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
 
 const driveClient = new DriveClient();
 
@@ -55,9 +139,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   } catch (_) {}
 
+  await detectActiveTabDomain();
   await initDesktopDeviceName();
   await loadSavedGoogleAccount();
   await refreshStatus();
+
+  // Auto-refresh desktop status periodically
+  setInterval(() => {
+    refreshStatus();
+  }, 5000);
 });
 
 function initUI() {
@@ -92,7 +182,6 @@ function initUI() {
   document.getElementById('openDeviceManagerFromUnlockedBtn')?.addEventListener('click', openDeviceManagerModal);
   document.getElementById('closeDeviceManagerBtn')?.addEventListener('click', closeDeviceManagerModal);
   document.getElementById('doneDeviceManagerBtn')?.addEventListener('click', closeDeviceManagerModal);
-  document.getElementById('refreshDevicesModalBtn')?.addEventListener('click', refreshDeviceManagerModal);
   document.getElementById('deviceManagerModal')?.addEventListener('click', (e) => {
     if (e.target.id === 'deviceManagerModal') closeDeviceManagerModal();
   });
@@ -303,17 +392,31 @@ function updateDeviceSelector(devices) {
   }
 }
 
+let deviceManagerInterval = null;
+
 // ── Device Manager Modal Handlers ──
 function openDeviceManagerModal() {
   const modal = document.getElementById('deviceManagerModal');
   if (modal) modal.style.display = 'flex';
   renderDeviceManagerList();
   refreshDeviceManagerModal();
+
+  if (deviceManagerInterval) clearInterval(deviceManagerInterval);
+  deviceManagerInterval = setInterval(async () => {
+    if (modal && modal.style.display === 'flex') {
+      await loadRegisteredDevices();
+      renderDeviceManagerList();
+    }
+  }, 4000);
 }
 
 function closeDeviceManagerModal() {
   const modal = document.getElementById('deviceManagerModal');
   if (modal) modal.style.display = 'none';
+  if (deviceManagerInterval) {
+    clearInterval(deviceManagerInterval);
+    deviceManagerInterval = null;
+  }
 }
 
 async function refreshDeviceManagerModal() {
@@ -996,16 +1099,30 @@ function renderVaultList(query = '') {
       return;
     }
 
-    // 1. Website Passwords
-    pwds.forEach(pwd => {
+    // Partition passwords by active tab domain
+    const matchingPwds = [];
+    const otherPwds = [];
+    pwds.forEach(p => {
+      if (currentActiveTabDomain && doesDomainMatch(p.website, currentActiveTabDomain, p.nickname)) {
+        matchingPwds.push(p);
+      } else {
+        otherPwds.push(p);
+      }
+    });
+
+    const renderPwdTile = (pwd, isMatch = false) => {
       const tile = document.createElement('div');
       tile.className = 'card-tile';
+      if (isMatch) {
+        tile.style.border = '1px solid #93C5FD';
+        tile.style.backgroundColor = '#F0F9FF';
+      }
       const webUrl = pwd.website ? (pwd.website.startsWith('http') ? pwd.website : 'https://' + pwd.website) : '';
       const totpBtn = pwd.totpCode ? `<button class="copy-chip" style="background:#ECFDF5;color:#059669;border-color:#A7F3D0;font-weight:bold;" data-copy="${pwd.totpCode}">⚡ ${pwd.totpCode} (${pwd.totpSeconds}s)</button>` : '';
       tile.innerHTML = `
         <div class="tile-header">
           <span class="tile-title">🌐 ${escapeHtml(pwd.nickname)}</span>
-          <span class="tile-badge" style="background:#EEF2FF;color:#4338CA;border-color:#C7D2FE;">WEB</span>
+          ${isMatch ? '<span class="tile-badge" style="background:#DBEAFE;color:#1D4ED8;border-color:#93C5FD;">⭐ MATCHES TAB</span>' : '<span class="tile-badge" style="background:#EEF2FF;color:#4338CA;border-color:#C7D2FE;">WEB</span>'}
         </div>
         ${pwd.website ? `<div style="font-size:11px;color:#3B82F6;margin-bottom:4px;word-break:break-all;">🔗 ${escapeHtml(pwd.website)}</div>` : ''}
         <div style="font-size:11px;color:#475569;margin-bottom:6px;">👤 User: <strong>${escapeHtml(pwd.username || 'N/A')}</strong></div>
@@ -1017,27 +1134,57 @@ function renderVaultList(query = '') {
           ${webUrl ? `<button class="copy-chip open-site" data-url="${webUrl}">Open Site</button>` : ''}
         </div>
       `;
-      list.appendChild(tile);
-    });
+      return tile;
+    };
 
-    // 2. Bank Credentials
-    banks.forEach(bank => {
-      const tile = document.createElement('div');
-      tile.className = 'card-tile';
-      tile.innerHTML = `
-        <div class="tile-header">
-          <span class="tile-title">🏦 ${escapeHtml(bank.bankName)} Credentials</span>
-          <span class="tile-badge">BANK</span>
-        </div>
-        <div style="font-size:11px;color:#475569;margin-bottom:4px;">User: ${escapeHtml(bank.userId || 'N/A')}</div>
-        <div class="tile-actions">
-          ${bank.userId ? `<button class="copy-chip" data-copy="${bank.userId}">Copy User ID</button>` : ''}
-          ${bank.loginPassword ? `<button class="copy-chip" data-copy="${bank.loginPassword}">Copy Password</button>` : ''}
-          ${bank.mpin ? `<button class="copy-chip" data-copy="${bank.mpin}">Copy MPIN</button>` : ''}
-        </div>
-      `;
-      list.appendChild(tile);
-    });
+    // If tab matches exist, prioritize them at the top
+    if (matchingPwds.length > 0) {
+      const matchHeader = document.createElement('div');
+      matchHeader.style.cssText = 'padding:6px 10px;margin-bottom:6px;background:#EFF6FF;border-radius:6px;font-size:11px;font-weight:bold;color:#1E40AF;display:flex;align-items:center;gap:6px;';
+      matchHeader.innerHTML = `<span>⭐ Suggested for <strong>${escapeHtml(currentActiveTabDomain)}</strong> (${matchingPwds.length})</span>`;
+      list.appendChild(matchHeader);
+
+      matchingPwds.forEach(p => list.appendChild(renderPwdTile(p, true)));
+
+      if (otherPwds.length > 0) {
+        const otherHeader = document.createElement('div');
+        otherHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+        otherHeader.textContent = `All Other Logins (${otherPwds.length})`;
+        list.appendChild(otherHeader);
+      }
+    }
+
+    // Render other passwords
+    otherPwds.forEach(p => list.appendChild(renderPwdTile(p, false)));
+
+    // 2. Bank Credentials (shown if searching, or if bank matches domain, or if no tab match exists)
+    const shouldShowBanks = query || !currentActiveTabDomain || (matchingPwds.length === 0 && otherPwds.length === 0);
+    if (shouldShowBanks && banks.length > 0) {
+      if (matchingPwds.length > 0 || otherPwds.length > 0) {
+        const bankHeader = document.createElement('div');
+        bankHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+        bankHeader.textContent = `Bank Logins (${banks.length})`;
+        list.appendChild(bankHeader);
+      }
+
+      banks.forEach(bank => {
+        const tile = document.createElement('div');
+        tile.className = 'card-tile';
+        tile.innerHTML = `
+          <div class="tile-header">
+            <span class="tile-title">🏦 ${escapeHtml(bank.bankName)} Credentials</span>
+            <span class="tile-badge">BANK</span>
+          </div>
+          <div style="font-size:11px;color:#475569;margin-bottom:4px;">User: ${escapeHtml(bank.userId || 'N/A')}</div>
+          <div class="tile-actions">
+            ${bank.userId ? `<button class="copy-chip" data-copy="${bank.userId}">Copy User ID</button>` : ''}
+            ${bank.loginPassword ? `<button class="copy-chip" data-copy="${bank.loginPassword}">Copy Password</button>` : ''}
+            ${bank.mpin ? `<button class="copy-chip" data-copy="${bank.mpin}">Copy MPIN</button>` : ''}
+          </div>
+        `;
+        list.appendChild(tile);
+      });
+    }
   }
 
   // Attach clipboard listener

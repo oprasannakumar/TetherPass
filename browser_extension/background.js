@@ -517,14 +517,62 @@ function extractDomain(urlOrHost) {
   return str.replace(/^www\./, '');
 }
 
-function doesDomainMatch(itemWebsite, pageHost) {
-  if (!itemWebsite || !pageHost) return false;
-  const itemDom = extractDomain(itemWebsite);
+function extractBaseBrand(domain) {
+  if (!domain) return '';
+  const clean = extractDomain(domain);
+  const parts = clean.split('.');
+  if (parts.length <= 1) return parts[0];
+  const multiTlds = ['co', 'com', 'org', 'net', 'edu', 'gov', 'ac'];
+  if (parts.length >= 3 && multiTlds.includes(parts[parts.length - 2])) {
+    return parts[parts.length - 3];
+  }
+  return parts[parts.length - 2];
+}
+
+function doesDomainMatch(itemWebsite, pageHost, itemNickname = '') {
+  if (!pageHost) return false;
   const pageDom = extractDomain(pageHost);
-  if (!itemDom || !pageDom) return false;
-  if (itemDom === pageDom) return true;
-  if (pageDom.endsWith('.' + itemDom)) return true;
-  if (itemDom.endsWith('.' + pageDom)) return true;
+  const pageBrand = extractBaseBrand(pageDom);
+
+  // 1. Direct website URL / domain match
+  if (itemWebsite && itemWebsite.trim()) {
+    const itemDom = extractDomain(itemWebsite);
+    const itemBrand = extractBaseBrand(itemDom);
+
+    if (itemDom && pageDom) {
+      if (itemDom === pageDom) return true;
+      if (pageDom.endsWith('.' + itemDom) || itemDom.endsWith('.' + pageDom)) return true;
+      if (itemBrand && pageBrand && itemBrand === pageBrand && itemBrand.length >= 3) {
+        return true;
+      }
+    }
+
+    const rawClean = itemWebsite.trim().toLowerCase().replace(/^[a-zA-Z]+:\/\//, '').replace(/^www\./, '');
+    if (rawClean.length >= 3) {
+      if (pageDom.includes(rawClean) || rawClean.includes(pageDom)) return true;
+      if (pageBrand && (pageBrand === rawClean || pageBrand.includes(rawClean) || rawClean.includes(pageBrand))) {
+        return true;
+      }
+    }
+  }
+
+  // 2. Nickname match against page brand (e.g. nickname "Amazon", "Amazon India", "Flipkart" on amazon.in)
+  if (itemNickname && itemNickname.trim() && pageBrand && pageBrand.length >= 3) {
+    const nick = itemNickname.trim().toLowerCase();
+    const nickClean = nick.replace(/[^a-z0-9]/g, '');
+    if (nickClean === pageBrand || (nickClean.length >= 4 && (pageBrand.includes(nickClean) || nickClean.includes(pageBrand)))) {
+      return true;
+    }
+    const stopWords = ['bank', 'banking', 'netbanking', 'login', 'portal', 'app', 'account', 'card', 'pass', 'password', 'online', 'store'];
+    const tokens = nick.split(/[\s\-_.]+/).filter(t => t.length >= 3 && !stopWords.includes(t));
+    if (tokens.includes(pageBrand)) return true;
+    for (const t of tokens) {
+      if (pageBrand === t || (t.length >= 4 && (pageBrand.includes(t) || t.includes(pageBrand)))) {
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 
@@ -552,6 +600,10 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
     };
   }
 
+  const isCredentialField = ['USER_ID', 'PASSWORD', 'TOTP'].includes(fieldType);
+  const isCardField = ['CARD_NUMBER', 'EXPIRY', 'CVV', 'CARD_HOLDER'].includes(fieldType);
+  const isBankField = ['ACCOUNT_NUMBER', 'IFSC'].includes(fieldType);
+
   // Group items using universal normalizer for Flutter VaultItem maps
   const cards = [];
   const bankAccounts = [];
@@ -564,6 +616,8 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
     const isCard = !isPassword && (type === 'card' || (!type.includes('bank') && (rawCardNumber.length >= 12 || (item.card_network || item.cardNetwork))));
 
     if (isPassword) {
+      if (isCardField || isBankField) continue; // Don't include passwords when filling card or bank number
+
       const totpKey = item.totp_secret || item.totpSecret || '';
       let totpCode = '';
       let totpSeconds = 0;
@@ -587,15 +641,16 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
       };
 
       // Strict domain matching for website logins:
-      // If requested by webpage autofill on a specific domain, only suggest matching credentials!
+      // Only suggest passwords matching the current website!
       if (domain && fieldType !== 'ALL') {
-        if (doesDomainMatch(pwdItem.website, domain)) {
+        if (doesDomainMatch(pwdItem.website, domain, pwdItem.nickname)) {
           passwords.push(pwdItem);
         }
       } else {
         passwords.push(pwdItem);
       }
     } else if (isCard) {
+      if (isCredentialField || isBankField) continue; // Don't include cards for login or bank fields
       cards.push({
         id: item.id || String(Math.random()),
         nickname: item.nickname || item.name || item.card_holder || item.cardHolder || 'Card',
@@ -610,6 +665,17 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
       });
     } else {
       // NetBanking & Bank Accounts
+      if (isCardField) continue; // Don't include bank accounts for card payment fields
+
+      // If user is on a login/password field on an external site (e.g. Amazon),
+      // ONLY include bank credentials if this website is actually that bank's website!
+      if (isCredentialField && domain && fieldType !== 'ALL') {
+        const matchesBank = doesDomainMatch('', domain, item.bank_name || item.nickname || '');
+        if (!matchesBank) {
+          continue; // Do NOT suggest bank accounts on Amazon, Netflix, etc.!
+        }
+      }
+
       let rawAccounts = [];
       if (item.accounts) {
         try {

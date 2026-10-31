@@ -442,8 +442,8 @@
         });
       }
 
-      // 2. BANK ACCOUNTS & IFSC (If account/IFSC field)
-      if (['ACCOUNT_NUMBER', 'IFSC', 'USER_ID', 'PASSWORD'].includes(fieldType) && data.bankAccounts && data.bankAccounts.length > 0) {
+      // 2. BANK ACCOUNTS & IFSC (Only for bank account / IFSC transfer fields)
+      if (['ACCOUNT_NUMBER', 'IFSC'].includes(fieldType) && data.bankAccounts && data.bankAccounts.length > 0) {
         data.bankAccounts.forEach(bank => {
           if (bank.accounts && bank.accounts.length > 0) {
             bank.accounts.forEach((acc, i) => {
@@ -471,9 +471,13 @@
               itemsList.appendChild(itemRow);
             });
           }
+        });
+      }
 
-          // User ID & Passwords
-          if (['USER_ID', 'PASSWORD'].includes(fieldType) && (bank.userId || bank.loginPassword)) {
+      // Bank Netbanking Login (ONLY if current website is specifically that bank's website)
+      if (['USER_ID', 'PASSWORD'].includes(fieldType) && data.bankAccounts && data.bankAccounts.length > 0) {
+        data.bankAccounts.forEach(bank => {
+          if (bank.userId || bank.loginPassword) {
             const itemRow = document.createElement('div');
             itemRow.className = 'cv-item-row';
             itemRow.innerHTML = `
@@ -536,10 +540,8 @@
       }
 
       if (itemsList.children.length === 0) {
-        const emptyNotice = document.createElement('div');
-        emptyNotice.className = 'cv-empty-notice';
-        emptyNotice.textContent = 'No matching items saved in your vault.';
-        itemsList.appendChild(emptyNotice);
+        removeDropdown();
+        return;
       }
 
       dropdown.appendChild(itemsList);
