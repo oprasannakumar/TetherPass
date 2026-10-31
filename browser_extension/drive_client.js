@@ -306,26 +306,47 @@ class DriveClient {
 
   /**
    * Checks if desktop authorization was explicitly revoked or locked from the mobile app.
+   * @param {string} authMode 'PIN' or 'PUSH'
+   * @param {number} sessionStartTime timestamp when current session was unlocked
    */
-  async isAuthorizationRevoked() {
+  async isAuthorizationRevoked(authMode, sessionStartTime) {
     try {
-      // 1. Check card_vault_extension_auth.json
-      const authFile = await this.findFile(DRIVE_AUTH_FILENAME);
-      if (authFile) {
-        const authContent = await this.downloadFileContent(authFile.id);
-        const auth = JSON.parse(authContent);
-        if (auth.status === 'REVOKED' || auth.status === 'LOCKED') {
-          return true;
+      // 1. If unlocked via PIN, only inspect the PIN authorization record (card_vault_extension_auth.json)
+      if (authMode === 'PIN' || !authMode) {
+        const authFile = await this.findFile(DRIVE_AUTH_FILENAME);
+        if (authFile) {
+          const authContent = await this.downloadFileContent(authFile.id);
+          const auth = JSON.parse(authContent);
+          if (auth.status === 'REVOKED' || auth.status === 'LOCKED') {
+            if (!sessionStartTime || !auth.revoked_at || auth.revoked_at >= sessionStartTime) {
+              return true;
+            }
+          }
         }
       }
 
-      // 2. Check card_vault_access_request.json
-      const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
-      if (reqFile) {
-        const reqContent = await this.downloadFileContent(reqFile.id);
-        const req = JSON.parse(reqContent);
-        if (req.status === 'REVOKED' || req.status === 'LOCKED') {
-          return true;
+      // 2. If unlocked via PUSH approval, inspect both records
+      if (authMode === 'PUSH') {
+        const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
+        if (reqFile) {
+          const reqContent = await this.downloadFileContent(reqFile.id);
+          const req = JSON.parse(reqContent);
+          if (req.status === 'REVOKED' || req.status === 'LOCKED') {
+            if (!sessionStartTime || !req.revoked_at || req.revoked_at >= sessionStartTime) {
+              return true;
+            }
+          }
+        }
+
+        const authFile = await this.findFile(DRIVE_AUTH_FILENAME);
+        if (authFile) {
+          const authContent = await this.downloadFileContent(authFile.id);
+          const auth = JSON.parse(authContent);
+          if (auth.status === 'REVOKED' || auth.status === 'LOCKED') {
+            if (!sessionStartTime || !auth.revoked_at || auth.revoked_at >= sessionStartTime) {
+              return true;
+            }
+          }
         }
       }
 

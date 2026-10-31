@@ -20,7 +20,7 @@ let memoryVault = {
 
 // Auto-lock timer / Periodic validation of mobile auth status
 async function verifyMobileAuth() {
-  if (!memoryVault.isAuthorized && !memoryVault.isUnlocked) return;
+  if (!memoryVault.isAuthorized || !memoryVault.isUnlocked) return;
 
   // Check expiration timestamp
   if (memoryVault.authExpiresAt && Date.now() > memoryVault.authExpiresAt) {
@@ -30,13 +30,16 @@ async function verifyMobileAuth() {
 
   // Poll Google Drive revocation or status
   try {
-    const isRevoked = await driveClient.isAuthorizationRevoked();
+    const isRevoked = await driveClient.isAuthorizationRevoked(
+      memoryVault.authMode,
+      memoryVault.sessionStartTime
+    );
     if (isRevoked) {
       lockVault('Authorization revoked from CardVault mobile application.');
       return;
     }
 
-    if (memoryVault.activePin) {
+    if (memoryVault.authMode === 'PIN' && memoryVault.activePin) {
       const authStatus = await driveClient.checkMobileAuthorization();
       if (!authStatus.authorized) {
         lockVault('Authorization revoked from CardVault mobile application.');
@@ -55,6 +58,9 @@ function lockVault(reason = 'Vault locked') {
   memoryVault.masterPassword = null;
   memoryVault.authExpiresAt = null;
   memoryVault.activePin = null;
+  memoryVault.authMode = null;
+  memoryVault.sessionStartTime = null;
+  memoryVault.activeRequestId = null;
   console.log('[CardVault]', reason);
   notifyAllTabsStatusChange();
 
@@ -89,7 +95,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Immediate check on revocation if active
       if (memoryVault.isAuthorized && memoryVault.isUnlocked) {
         try {
-          const isRevoked = await driveClient.isAuthorizationRevoked();
+          const isRevoked = await driveClient.isAuthorizationRevoked(
+            memoryVault.authMode,
+            memoryVault.sessionStartTime
+          );
           if (isRevoked) {
             lockVault('Authorization revoked from CardVault mobile application.');
           }
@@ -103,6 +112,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         lastSyncedAt: memoryVault.lastSyncedAt,
         authExpiresAt: memoryVault.authExpiresAt,
         activePin: memoryVault.activePin,
+        authMode: memoryVault.authMode,
       });
     })();
     return true;
@@ -223,6 +233,9 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
     memoryVault.lastSyncedAt = Date.now();
     memoryVault.authExpiresAt = check.expiresAt || (Date.now() + (30 * 60 * 1000));
     memoryVault.masterPassword = effectivePassword;
+    memoryVault.activeRequestId = requestId;
+    memoryVault.authMode = 'PUSH';
+    memoryVault.sessionStartTime = Date.now();
 
     notifyAllTabsStatusChange();
 
@@ -327,6 +340,8 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
   memoryVault.authExpiresAt = authResult.expiresAt || (Date.now() + (30 * 60 * 1000));
   memoryVault.masterPassword = effectivePassword;
   memoryVault.activePin = cleanPin;
+  memoryVault.authMode = 'PIN';
+  memoryVault.sessionStartTime = Date.now();
 
   notifyAllTabsStatusChange();
 

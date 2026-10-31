@@ -93,6 +93,12 @@ class ExtensionAuthService extends ChangeNotifier {
 
       if (driveService.isSignedIn) {
         await driveService.uploadTextFile(authFileName, payload);
+        // Reset any leftover REVOKED state on access request file so fresh sessions start clean
+        final reqClear = jsonEncode({
+          'status': 'IDLE',
+          'cleared_at': now.millisecondsSinceEpoch,
+        });
+        await driveService.uploadTextFile(DriveService.accessRequestFileName, reqClear);
       }
 
       _isAuthorized = true;
