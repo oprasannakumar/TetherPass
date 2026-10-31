@@ -69,14 +69,7 @@ function initUI() {
   // ── Auth Method Switching (Push vs PIN) ──
   document.getElementById('authMethodPushTab')?.addEventListener('click', () => setAuthMethod('push'));
   document.getElementById('authMethodPinTab')?.addEventListener('click', () => setAuthMethod('pin'));
-  document.getElementById('switchToPinLink')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    setAuthMethod('pin');
-  });
-  document.getElementById('switchToPushLink')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    setAuthMethod('push');
-  });
+
 
   // Push confirmation to mobile phone
   document.getElementById('requestPushApprovalBtn')?.addEventListener('click', handleRequestMobilePushApproval);
@@ -550,16 +543,12 @@ async function handleUnlockWithPin() {
   const pinInput = document.getElementById('pinInput');
   const passwordInput = document.getElementById('passwordInput');
   const pin = pinInput?.value.trim() || '';
-  const password = passwordInput?.value.trim() || '';
+  const password = passwordInput?.value.trim() || null;
 
   hideMessages();
 
   if (!pin || pin.length !== 6) {
     showError('Please enter the 6-digit PIN from CardVault on your phone.');
-    return;
-  }
-  if (!password || password.length < 4) {
-    showError('Please enter your Vault Master Password.');
     return;
   }
 

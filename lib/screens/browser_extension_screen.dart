@@ -157,17 +157,18 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
     }
 
     if (authenticated && mounted) {
-      final success = await authService.authorizeExtension(durationMinutes: 30);
+      final masterPwd = await sec.getMasterPassword();
+      final success = await authService.authorizeExtension(
+        durationMinutes: 30,
+        masterPassword: masterPwd,
+      );
       if (mounted) {
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text('✓ Desktop Extension authorized for 30 minutes!'),
-                ],
+              content: const Text(
+                '✓ Desktop Extension authorized for 30 minutes!',
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
               backgroundColor: Colors.green.shade700,
               behavior: SnackBarBehavior.floating,

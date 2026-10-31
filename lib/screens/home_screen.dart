@@ -240,16 +240,20 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       if (authenticated && mounted) {
-        await drive.respondToAccessRequest(requestId: requestId, approved: true, deviceName: deviceName);
+        final sec = context.read<VaultSecurityService>();
+        final masterPwd = await sec.getMasterPassword();
+        await drive.respondToAccessRequest(
+          requestId: requestId,
+          approved: true,
+          deviceName: deviceName,
+          masterPassword: masterPwd,
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text('✓ Windows Browser Extension approved for 30 minutes!'),
-                ],
+              content: const Text(
+                '✓ Windows Browser Extension approved for 30 minutes!',
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
               backgroundColor: Colors.green.shade700,
               behavior: SnackBarBehavior.floating,

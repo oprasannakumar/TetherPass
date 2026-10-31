@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
+import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
@@ -379,6 +382,7 @@ class DriveService extends ChangeNotifier {
     required String requestId,
     required bool approved,
     String? deviceName,
+    String? masterPassword,
   }) async {
     if (!isSignedIn) return false;
     try {
@@ -389,19 +393,46 @@ class DriveService extends ChangeNotifier {
       }
 
       final now = DateTime.now();
-      final payload = jsonEncode({
+      Map<String, dynamic>? requestSealedKey;
+      if (approved && masterPassword != null && masterPassword.isNotEmpty) {
+        final salt = enc.SecureRandom(16).bytes;
+        final iv = enc.SecureRandom(16).bytes;
+        final derived = _deriveKeyFromSecret(requestId, salt);
+        final key = enc.Key(derived);
+        final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
+        final encrypted = encrypter.encrypt(masterPassword, iv: enc.IV(iv));
+        requestSealedKey = {
+          'salt': base64Encode(salt),
+          'iv': base64Encode(iv),
+          'ciphertext': encrypted.base64,
+        };
+      }
+
+      final payloadMap = <String, dynamic>{
         'requestId': requestId,
         'status': approved ? 'APPROVED' : 'DENIED',
         'approvedAt': now.millisecondsSinceEpoch,
         'expiresAt': now.add(const Duration(minutes: 30)).millisecondsSinceEpoch,
         'device': deviceName ?? 'Windows PC (CardVault Extension)',
         'approvedByDevice': 'CardVault Mobile Client',
-      });
-      await uploadTextFile(accessRequestFileName, payload);
+      };
+      if (requestSealedKey != null) {
+        payloadMap['request_sealed_key'] = requestSealedKey;
+      }
+
+      await uploadTextFile(accessRequestFileName, jsonEncode(payloadMap));
       return true;
     } catch (_) {
       return false;
     }
+  }
+
+  static Uint8List _deriveKeyFromSecret(String secret, Uint8List salt) {
+    var hash = Hmac(sha256, utf8.encode(secret)).convert(salt).bytes;
+    for (int i = 0; i < 9999; i++) {
+      hash = Hmac(sha256, utf8.encode(secret)).convert(hash).bytes;
+    }
+    return Uint8List.fromList(hash);
   }
 
   Future<String?> _findNamedFile(drive.DriveApi api, String fileName) async {

@@ -138,9 +138,30 @@ async function decryptCardVaultBackup(rawPayload, masterPassword) {
   throw new Error('Failed to decrypt vault: Incorrect Master Password or corrupted backup file.');
 }
 
+/**
+ * Decrypts a master password sealed with a secret (6-digit PIN or requestId)
+ */
+async function decryptSealedMasterPassword(sealedKeyObj, secret) {
+  if (!sealedKeyObj || !sealedKeyObj.salt || !sealedKeyObj.iv || !sealedKeyObj.ciphertext) {
+    throw new Error('Missing sealed key metadata.');
+  }
+  const saltBytes = base64ToUint8Array(sealedKeyObj.salt);
+  const ivBytes = base64ToUint8Array(sealedKeyObj.iv);
+  const cipherBytes = base64ToUint8Array(sealedKeyObj.ciphertext);
+
+  const aesKey = await deriveKeyCardVaultDart(String(secret).trim(), saltBytes);
+  const decryptedBuffer = await crypto.subtle.decrypt(
+    { name: 'AES-CBC', iv: ivBytes },
+    aesKey,
+    cipherBytes
+  );
+  return new TextDecoder().decode(decryptedBuffer);
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     decryptCardVaultBackup,
+    decryptSealedMasterPassword,
     deriveKeyCardVaultDart,
     deriveKeyStandardPBKDF2,
     base64ToUint8Array,

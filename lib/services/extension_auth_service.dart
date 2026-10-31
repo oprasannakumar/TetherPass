@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
+import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter/foundation.dart';
 import 'drive_service.dart';
 
@@ -48,7 +51,10 @@ class ExtensionAuthService extends ChangeNotifier {
   }
 
   /// Authorizes the browser extension for [durationMinutes] (default 30 mins)
-  Future<bool> authorizeExtension({int durationMinutes = 30}) async {
+  Future<bool> authorizeExtension({
+    int durationMinutes = 30,
+    String? masterPassword,
+  }) async {
     _isLoading = true;
     notifyListeners();
 
@@ -58,13 +64,33 @@ class ExtensionAuthService extends ChangeNotifier {
 
       if (_currentPin.isEmpty) _generateNewPin();
 
-      final payload = jsonEncode({
+      Map<String, dynamic>? pinSealedKey;
+      if (masterPassword != null && masterPassword.isNotEmpty) {
+        final salt = enc.SecureRandom(16).bytes;
+        final iv = enc.SecureRandom(16).bytes;
+        final derived = _deriveKeyFromSecret(_currentPin, salt);
+        final key = enc.Key(derived);
+        final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.cbc));
+        final encrypted = encrypter.encrypt(masterPassword, iv: enc.IV(iv));
+        pinSealedKey = {
+          'salt': base64Encode(salt),
+          'iv': base64Encode(iv),
+          'ciphertext': encrypted.base64,
+        };
+      }
+
+      final payloadMap = <String, dynamic>{
         'status': 'AUTHORIZED',
         'authorized_at': now.millisecondsSinceEpoch,
         'expires_at': expiry.millisecondsSinceEpoch,
         'pairing_pin': _currentPin,
         'device': 'Windows Browser Extension',
-      });
+      };
+      if (pinSealedKey != null) {
+        payloadMap['pin_sealed_key'] = pinSealedKey;
+      }
+
+      final payload = jsonEncode(payloadMap);
 
       if (driveService.isSignedIn) {
         await driveService.uploadTextFile(authFileName, payload);
@@ -76,14 +102,21 @@ class ExtensionAuthService extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      debugPrint('Error authorizing extension: $e');
+      debugPrint('Error authorizing extension: ');
       _isLoading = false;
       notifyListeners();
       return false;
     }
   }
 
-  /// Revokes desktop browser extension authorization immediately
+  static Uint8List _deriveKeyFromSecret(String secret, Uint8List salt) {
+    var hash = Hmac(sha256, utf8.encode(secret)).convert(salt).bytes;
+    for (int i = 0; i < 9999; i++) {
+      hash = Hmac(sha256, utf8.encode(secret)).convert(hash).bytes;
+    }
+    return Uint8List.fromList(hash);
+  }
+
   Future<void> revokeExtension() async {
     _isLoading = true;
     notifyListeners();

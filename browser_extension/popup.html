@@ -98,14 +98,14 @@
         </div>
 
         <div class="auth-box">
-          <!-- Master Password (Always Required) -->
-          <div class="form-group">
-            <label for="passwordInput">Vault Master Password</label>
-            <input type="password" id="passwordInput" placeholder="Enter your Master Password" autocomplete="off" />
-          </div>
-
           <!-- ── MODE A: PUSH CONFIRMATION (Default) ── -->
           <div id="pushModeContainer">
+            <!-- Master Password -->
+            <div class="form-group">
+              <label for="passwordInput">Vault Master Password</label>
+              <input type="password" id="passwordInput" placeholder="Enter your Master Password" autocomplete="off" />
+            </div>
+
             <!-- Multi-Mobile Device Selector & Management -->
             <div id="deviceSelectorGroup" class="form-group" style="display: none; margin-bottom: 12px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
@@ -124,13 +124,10 @@
               <button id="requestPushApprovalBtn" class="btn btn-primary">
                 <span class="btn-icon">📲</span> Send Confirmation Pop-up to Mobile
               </button>
-              <div style="margin-top: 8px; text-align: center;">
-                <a href="#" id="switchToPinLink" style="font-size: 11px; color: #64748B; text-decoration: underline;">Use 6-digit PIN instead</a>
-              </div>
             </div>
           </div>
 
-          <!-- ── MODE B: MANUAL 6-DIGIT PIN (No Push confirmation button) ── -->
+          <!-- ── MODE B: MANUAL 6-DIGIT PIN (No Password Needed) ── -->
           <div id="manualPinBox" style="display: none;">
             <div class="form-group">
               <label for="pinInput">6-Digit Mobile PIN</label>
@@ -142,9 +139,6 @@
             <button id="unlockWithPinBtn" class="btn btn-primary" style="margin-top: 4px;">
               <span class="btn-icon">🔓</span> Authorize with PIN & Sync
             </button>
-            <div style="margin-top: 8px; text-align: center;">
-              <a href="#" id="switchToPushLink" style="font-size: 11px; color: #64748B; text-decoration: underline;">Use Push Pop-up instead</a>
-            </div>
           </div>
 
           <!-- Active Waiting State for Mobile Confirmation -->

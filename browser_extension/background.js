@@ -164,9 +164,27 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
 
   const check = await driveClient.checkAccessRequestStatus(requestId);
   if (check.status === 'APPROVED') {
+    let effectivePassword = masterPassword;
+    if (!effectivePassword && check.request_sealed_key) {
+      try {
+        effectivePassword = await decryptSealedMasterPassword(check.request_sealed_key, requestId);
+      } catch (e) {
+        console.warn('[CardVault] Could not decrypt request_sealed_key:', e.message);
+      }
+    }
+
+    if (!effectivePassword) {
+      return {
+        status: 'APPROVED',
+        success: false,
+        error: 'PASSWORD_REQUIRED',
+        message: 'Master Password required to decrypt vault. Please re-enter your password or re-authorize.'
+      };
+    }
+
     // Mobile approved with biometrics! Download backup from Drive
     const backupPayload = await driveClient.fetchEncryptedVaultBackup();
-    const decryptedItems = await decryptCardVaultBackup(backupPayload, masterPassword);
+    const decryptedItems = await decryptCardVaultBackup(backupPayload, effectivePassword);
 
     // Save in RAM
     memoryVault.isAuthorized = true;
@@ -174,7 +192,7 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
     memoryVault.items = decryptedItems;
     memoryVault.lastSyncedAt = Date.now();
     memoryVault.authExpiresAt = check.expiresAt || (Date.now() + (30 * 60 * 1000));
-    memoryVault.masterPassword = masterPassword;
+    memoryVault.masterPassword = effectivePassword;
 
     notifyAllTabsStatusChange();
 
@@ -250,8 +268,26 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
     backupPayload = await driveClient.fetchEncryptedVaultBackup();
   }
 
-  // 4. Decrypt Vault with Master Password
-  const decryptedItems = await decryptCardVaultBackup(backupPayload, masterPassword);
+  // 4. Resolve Master Password (auto-decrypt from pin_sealed_key if not entered)
+  let effectivePassword = masterPassword;
+  if (!effectivePassword && authResult.pin_sealed_key) {
+    try {
+      effectivePassword = await decryptSealedMasterPassword(authResult.pin_sealed_key, cleanPin);
+    } catch (e) {
+      console.warn('[CardVault] Could not decrypt pin_sealed_key:', e.message);
+    }
+  }
+
+  if (!effectivePassword) {
+    return {
+      success: false,
+      error: 'PASSWORD_REQUIRED',
+      message: 'Master Password required to decrypt vault. Please re-authorize Desktop Extension from CardVault on your phone.'
+    };
+  }
+
+  // 5. Decrypt Vault with Master Password
+  const decryptedItems = await decryptCardVaultBackup(backupPayload, effectivePassword);
 
   // 5. Store exclusively in RAM
   memoryVault.isAuthorized = true;
@@ -259,7 +295,7 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
   memoryVault.items = decryptedItems;
   memoryVault.lastSyncedAt = Date.now();
   memoryVault.authExpiresAt = authResult.expiresAt || (Date.now() + (30 * 60 * 1000));
-  memoryVault.masterPassword = masterPassword;
+  memoryVault.masterPassword = effectivePassword;
   memoryVault.activePin = cleanPin;
 
   notifyAllTabsStatusChange();
