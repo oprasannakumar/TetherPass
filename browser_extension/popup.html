@@ -174,14 +174,16 @@
             <span class="session-pulse-dot"></span>
             <span class="session-title">Vault Active</span>
           </div>
-          <span id="sessionTimer" class="session-timer-pill">29 min left</span>
+          <span id="sessionTimer" class="session-timer-pill">Expires in ~30 min</span>
         </div>
-        <div style="display: flex; gap: 6px; align-items: center;">
-          <button id="openDeviceManagerFromUnlockedBtn" class="btn-lock-session" style="color: #475569; border-color: #CBD5E1; background: #F8FAFC;" title="Manage Linked Phones">
-            <span>📱 Devices</span>
+        <div class="session-actions">
+          <button id="openDeviceManagerFromUnlockedBtn" class="btn-lock-session btn-devices-session" title="Manage Linked Phones">
+            <span class="action-icon">📱</span>
+            <span>Devices</span>
           </button>
-          <button id="lockNowBtn" class="btn-lock-session" title="Lock extension immediately">
-            <span>🔒 Lock</span>
+          <button id="lockNowBtn" class="btn-lock-session btn-danger-session" title="Lock extension immediately">
+            <span class="action-icon">🔒</span>
+            <span>Lock</span>
           </button>
         </div>
       </div>
