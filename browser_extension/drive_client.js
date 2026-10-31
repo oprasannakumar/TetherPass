@@ -428,40 +428,80 @@ class DriveClient {
   }
 
   /**
-   * Marks a specific desktop session as LOCKED in Google Drive.
+   * Marks a specific desktop session (and access request) as LOCKED in Google Drive.
    * Called immediately when the user manually locks the browser extension.
    * This ensures the mobile app sees the lock in real-time.
    */
-  async markSessionLocked(sessionId) {
-    if (!this.token || !sessionId) return;
+  async markSessionLocked(sessionId = null) {
+    if (!this.token) return;
     try {
-      const file = await this.findFile(DRIVE_SESSIONS_FILENAME);
-      if (!file) return;
-
-      const content = await this.downloadFileContent(file.id);
-      const data = JSON.parse(content);
-      const sessions = data.sessions || [];
-
-      let updated = false;
-      for (const s of sessions) {
-        if (s && s.sessionId === sessionId) {
-          s.status = 'LOCKED';
-          s.lockedAt = Date.now();
-          updated = true;
-          break;
+      // 1. Also update card_vault_access_request.json if it exists and was approved
+      try {
+        const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
+        if (reqFile) {
+          const reqContent = await this.downloadFileContent(reqFile.id);
+          const req = JSON.parse(reqContent);
+          if (req && (req.requestId === sessionId || !sessionId || req.status === 'APPROVED')) {
+            req.status = 'LOCKED';
+            req.locked_at = Date.now();
+            await this.uploadAppDataFile(DRIVE_REQUEST_FILENAME, JSON.stringify(req));
+            console.log('[TetherPass] Access request marked LOCKED on Drive');
+          }
         }
+      } catch (e) {
+        console.warn('[TetherPass] Could not mark access request locked:', e.message);
       }
 
-      if (!updated) return; // Session not found in registry, nothing to update
+      // 2. Update card_vault_active_sessions.json
+      let sessions = [];
+      const file = await this.findFile(DRIVE_SESSIONS_FILENAME);
+      if (file) {
+        try {
+          const content = await this.downloadFileContent(file.id);
+          const data = JSON.parse(content);
+          sessions = data.sessions || [];
+        } catch (_) {}
+      }
+
+      let updated = false;
+      if (sessionId) {
+        for (const s of sessions) {
+          if (s && s.sessionId === sessionId) {
+            s.status = 'LOCKED';
+            s.lockedAt = Date.now();
+            updated = true;
+            break;
+          }
+        }
+        if (!updated) {
+          sessions.unshift({
+            sessionId,
+            status: 'LOCKED',
+            lockedAt: Date.now()
+          });
+        }
+      } else {
+        for (const s of sessions) {
+          if (s && s.status === 'ACTIVE') {
+            s.status = 'LOCKED';
+            s.lockedAt = Date.now();
+            updated = true;
+          }
+        }
+        if (!updated && sessions.length > 0) {
+          sessions[0].status = 'LOCKED';
+          sessions[0].lockedAt = Date.now();
+        }
+      }
 
       const payload = JSON.stringify({
         version: 1,
         updatedAt: Date.now(),
-        sessions
+        sessions: sessions.slice(0, 20)
       });
 
       await this.uploadAppDataFile(DRIVE_SESSIONS_FILENAME, payload);
-      console.log('[TetherPass] Session marked as LOCKED on Drive:', sessionId);
+      console.log('[TetherPass] Sessions file updated with LOCKED on Drive:', sessionId || 'all');
     } catch (e) {
       console.warn('[TetherPass] markSessionLocked failed:', e.message);
     }

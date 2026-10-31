@@ -938,7 +938,16 @@ async function refreshStatus() {
 
 async function handleLock() {
   currentVaultItems = { cards: [], bankAccounts: [] };
-  await sendExtensionMessage({ action: 'LOCK_VAULT' });
+  if (currentOAuthToken) {
+    driveClient.setToken(currentOAuthToken);
+    try {
+      await driveClient.markSessionLocked();
+    } catch (_) {}
+  }
+  await sendExtensionMessage({
+    action: 'LOCK_VAULT',
+    payload: { token: currentOAuthToken }
+  });
   applyLockedUI();
 }
 

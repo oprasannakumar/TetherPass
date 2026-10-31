@@ -250,7 +250,14 @@ async function verifyMobileAuth() {
 }
 
 async function lockVault(reason = 'Vault locked') {
-  const sessionIdToLock = memoryVault.sessionId;
+  let sessionIdToLock = memoryVault.sessionId || memoryVault.activeRequestId;
+
+  if (!sessionIdToLock) {
+    try {
+      const sessData = await chrome.storage.local.get('tetherpass_session');
+      sessionIdToLock = sessData?.tetherpass_session?.sessionId || sessData?.tetherpass_session?.activeRequestId;
+    } catch (_) {}
+  }
 
   memoryVault.isAuthorized = false;
   memoryVault.isUnlocked = false;
@@ -267,12 +274,21 @@ async function lockVault(reason = 'Vault locked') {
   console.log('[TetherPass]', reason);
 
   // ── Mark session as LOCKED in Google Drive so mobile app sees it immediately ──
-  if (sessionIdToLock) {
-    try {
-      await driveClient.markSessionLocked(sessionIdToLock);
-    } catch (e) {
-      console.warn('[TetherPass] Could not mark session locked on Drive:', e.message);
+  try {
+    if (!driveClient.token) {
+      const stored = await chrome.storage.local.get('googleOAuthToken');
+      if (stored?.googleOAuthToken) {
+        driveClient.setToken(stored.googleOAuthToken);
+      }
     }
+    if (driveClient.token) {
+      await driveClient.markSessionLocked(sessionIdToLock);
+      console.log('[TetherPass] Session marked LOCKED on Drive:', sessionIdToLock);
+    } else {
+      console.warn('[TetherPass] No token available — cannot mark session LOCKED on Drive');
+    }
+  } catch (e) {
+    console.warn('[TetherPass] Could not mark session locked on Drive:', e.message);
   }
 
   notifyAllTabsStatusChange();
@@ -326,6 +342,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (action === 'LOCK_VAULT') {
+      if (payload?.token) driveClient.setToken(payload.token);
       await lockVault('User requested desktop lock');
       sendResponse({ success: true });
       return;

@@ -541,7 +541,7 @@ class DriveService extends ChangeNotifier {
         try {
           final req = jsonDecode(reqText) as Map<String, dynamic>;
           final reqId = req['requestId'] as String? ?? '';
-          final status = req['status'] as String? ?? '';
+          final status = (req['status'] as String? ?? '').toUpperCase();
           final approvedAt = (req['approvedAt'] as num?)?.toInt() ?? (req['timestamp'] as num?)?.toInt() ?? 0;
           final expiresAt = (req['expiresAt'] as num?)?.toInt() ?? 0;
           final device = req['device'] as String? ?? 'Windows PC (TetherPass Extension)';
@@ -558,9 +558,19 @@ class DriveService extends ChangeNotifier {
                   'status': 'ACTIVE',
                 };
               }
-            } else if (status == 'REVOKED') {
+            } else if (status == 'REVOKED' || status == 'LOCKED' || status == 'TERMINATED') {
+              final lockStatus = status == 'LOCKED' ? 'LOCKED' : 'TERMINATED';
               if (sessionMap.containsKey(reqId)) {
-                sessionMap[reqId]!['status'] = 'TERMINATED';
+                sessionMap[reqId]!['status'] = lockStatus;
+              } else {
+                sessionMap[reqId] = {
+                  'sessionId': reqId,
+                  'deviceName': device,
+                  'authMode': 'PUSH',
+                  'createdAt': approvedAt > 0 ? approvedAt : (expiresAt - 30 * 60 * 1000),
+                  'expiresAt': expiresAt,
+                  'status': lockStatus,
+                };
               }
             }
           }
