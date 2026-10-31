@@ -5,12 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../services/autofill_bridge_service.dart';
 import '../services/database_service.dart';
 import '../services/drive_service.dart';
-import '../services/extension_auth_service.dart';
 import '../services/secure_backup_export_service.dart';
 import '../services/vault_security_service.dart';
 import '../widgets/app_tour_dialog.dart';
@@ -24,8 +22,9 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObserver {
   bool _biometricEnabled = true;
+  bool _isAutofillEnabled = false;
 
   // GlobalKeys for pointing directly to each setting in the spotlight tour
   final GlobalKey _accountKey = GlobalKey();
@@ -114,7 +113,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadSettings();
+    _checkAutofillStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkAutofillStatus();
+    }
+  }
+
+  Future<void> _checkAutofillStatus() async {
+    final enabled = await AutofillBridgeService.isAutofillEnabled();
+    if (mounted) {
+      setState(() => _isAutofillEnabled = enabled);
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -826,29 +847,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.keyboard_rounded,
               title: 'Keyboard Payment Autofill',
               subtitle: 'Show card nicknames above keyboard to fill card, expiry, or CVV',
-              trailing: FutureBuilder<bool>(
-                future: AutofillBridgeService.isAutofillEnabled(),
-                builder: (context, snapshot) {
-                  final isEnabled = snapshot.data ?? false;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isEnabled ? Colors.green.shade50 : const Color(0xFFFFF7ED),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isEnabled ? Colors.green.shade300 : const Color(0xFFFFB74D),
-                      ),
-                    ),
-                    child: Text(
-                      isEnabled ? 'Active' : 'Configure',
-                      style: TextStyle(
-                        color: isEnabled ? Colors.green.shade700 : const Color(0xFFFF6F00),
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  );
-                },
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _isAutofillEnabled ? Colors.green.shade50 : const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _isAutofillEnabled ? Colors.green.shade300 : const Color(0xFFFFB74D),
+                  ),
+                ),
+                child: Text(
+                  _isAutofillEnabled ? 'Active' : 'Configure',
+                  style: TextStyle(
+                    color: _isAutofillEnabled ? Colors.green.shade700 : const Color(0xFFFF6F00),
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
               onTap: () async {
                 final opened = await AutofillBridgeService.openAutofillSettings();
@@ -859,6 +874,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   );
                 }
+                _checkAutofillStatus();
               },
             ),
 
@@ -866,29 +882,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.laptop_windows_rounded,
               title: 'Browser Extension (Windows)',
               subtitle: 'Autofill cards, accounts, IFSC & passwords in Chrome/Edge',
-              trailing: Consumer<ExtensionAuthService>(
-                builder: (context, auth, _) {
-                  final active = auth.isAuthorized;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: active ? Colors.green.shade50 : const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: active ? Colors.green.shade300 : const Color(0xFFCBD5E1),
-                      ),
-                    ),
-                    child: Text(
-                      active ? 'Authorized' : 'Pair',
-                      style: TextStyle(
-                        color: active ? Colors.green.shade700 : const Color(0xFF64748B),
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  );
-                },
-              ),
+              trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
               onTap: () {
                 Navigator.push(
                   context,

@@ -37,7 +37,18 @@ class MainActivity: FlutterFragmentActivity() {
                 "isAutofillEnabled" -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         val afm = getSystemService(AutofillManager::class.java)
-                        result.success(afm?.hasEnabledAutofillServices() == true)
+                        val hasAny = afm?.hasEnabledAutofillServices() == true
+                        if (!hasAny) {
+                            result.success(false)
+                        } else {
+                            try {
+                                val currentService = Settings.Secure.getString(contentResolver, "autofill_service")
+                                val isOurs = currentService != null && currentService.contains(packageName)
+                                result.success(isOurs)
+                            } catch (e: Exception) {
+                                result.success(false)
+                            }
+                        }
                     } else {
                         result.success(false)
                     }
