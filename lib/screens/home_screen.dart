@@ -818,6 +818,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 try {
                   final count = await drive.restore(masterPassword: pwd);
+                  try {
+                    final sec = context.read<VaultSecurityService>();
+                    await sec.saveMasterPassword(pwd);
+                  } catch (_) {}
                   await _loadItems();
                   if (mounted) {
                     Navigator.pop(dlgCtx);

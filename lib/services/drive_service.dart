@@ -14,12 +14,7 @@ import 'secure_backup_export_service.dart';
 import 'vault_security_service.dart';
 import 'device_identity_service.dart';
 
-class MasterPasswordRequiredException implements Exception {
-  final String payload;
-  const MasterPasswordRequiredException(this.payload);
-  @override
-  String toString() => 'Master Password required to decrypt this cloud backup.';
-}
+export 'secure_backup_export_service.dart' show MasterPasswordRequiredException;
 
 /// Handles Google Drive App Data backup and restore.
 class DriveService extends ChangeNotifier {
@@ -165,25 +160,44 @@ class DriveService extends ChangeNotifier {
     final encryptedPayload = await downloadRawBackupPayload();
 
     // 1. If encrypted with Master Password via SecureBackupExportService
-    if (encryptedPayload.startsWith('{') && encryptedPayload.contains('CARDVAULT_SECURE_BACKUP_V1')) {
+    final isMasterPasswordEncrypted = encryptedPayload.startsWith('{') &&
+        (encryptedPayload.contains('TETHERPASS_SECURE_BACKUP_V1') ||
+         encryptedPayload.contains('CARDVAULT_SECURE_BACKUP_V1'));
+
+    if (isMasterPasswordEncrypted) {
       final pwd = masterPassword ?? await vaultSecurityService?.getMasterPassword();
       if (pwd == null || pwd.isEmpty) {
         throw MasterPasswordRequiredException(encryptedPayload);
       }
-      final items = SecureBackupExportService.importVaultWithPassword(
-        backupPayload: encryptedPayload,
-        userPassword: pwd,
-      );
-      int count = 0;
-      for (final item in items) {
-        await databaseService.insertItem(item);
-        count++;
+      try {
+        final items = SecureBackupExportService.importVaultWithPassword(
+          backupPayload: encryptedPayload,
+          userPassword: pwd,
+        );
+        int count = 0;
+        for (final item in items) {
+          await databaseService.insertItem(item);
+          count++;
+        }
+        return count;
+      } catch (e) {
+        // If decryption with cached masterPassword failed, prompt user to enter their password
+        throw MasterPasswordRequiredException(encryptedPayload);
       }
-      return count;
     }
 
     // 2. Legacy device-hardware-encrypted payload
-    return await databaseService.importEncryptedBackup(encryptedPayload, masterPassword: masterPassword);
+    try {
+      return await databaseService.importEncryptedBackup(encryptedPayload, masterPassword: masterPassword);
+    } on MasterPasswordRequiredException {
+      rethrow;
+    } catch (e) {
+      if (e.toString().toLowerCase().contains('pad block') ||
+          e.toString().toLowerCase().contains('master password')) {
+        throw MasterPasswordRequiredException(encryptedPayload);
+      }
+      rethrow;
+    }
   }
 
   // ─── Custom Text File Management (for Browser Extension Auth) ─────────────

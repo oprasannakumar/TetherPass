@@ -4,6 +4,13 @@ import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 import '../models/vault_item.dart';
 
+class MasterPasswordRequiredException implements Exception {
+  final String payload;
+  const MasterPasswordRequiredException(this.payload);
+  @override
+  String toString() => 'Master Password required to decrypt this cloud backup.';
+}
+
 /// Service to generate and restore password-protected offline vault backups.
 /// Uses PBKDF2 key derivation and AES-256-GCM / CBC encryption.
 class SecureBackupExportService {
