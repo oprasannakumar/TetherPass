@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../services/device_identity_service.dart';
@@ -14,9 +13,6 @@ class BrowserExtensionScreen extends StatefulWidget {
 }
 
 class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
-  static const String extensionFolderPath =
-      r'C:\Users\bhask\.gemini\antigravity\scratch\card_vault_extension';
-
   List<Map<String, dynamic>> _devices = [];
   String _currentDeviceId = '';
   String _currentDeviceName = '';
@@ -529,95 +525,8 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                 ],
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            // ── Setup Guide: How to Load in Windows Chrome/Edge ──
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: const [
-                      Icon(Icons.help_outline_rounded, color: Color(0xFFFF6F00), size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Windows Chrome / Edge Setup Guide',
-                        style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _buildStepRow('1', 'Open Google Chrome or Microsoft Edge on Windows and navigate to: chrome://extensions or edge://extensions'),
-                  _buildStepRow('2', 'Turn on "Developer mode" toggle switch in top-right corner.'),
-                  _buildStepRow('3', 'Click "Load unpacked" button on the top-left toolbar.'),
-                  _buildStepRow('4', 'Select the extension directory on your PC:'),
-                  Container(
-                    margin: const EdgeInsets.only(left: 28, top: 4, bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            extensionFolderPath,
-                            style: TextStyle(fontFamily: 'Courier', fontSize: 10, color: Color(0xFF0F172A), fontWeight: FontWeight.bold),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () {
-                            Clipboard.setData(const ClipboardData(text: extensionFolderPath));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Folder path copied!'), duration: Duration(seconds: 1)),
-                            );
-                          },
-                          child: const Icon(Icons.copy_rounded, size: 16, color: Color(0xFFFF6F00)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _buildStepRow('5', 'TetherPass icon appears in your toolbar! Enter your Master Password and tap "Send Confirmation Pop-up" to approve access with your biometric lock.'),
-                ],
-              ),
-            ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildStepRow(String num, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 20,
-            height: 20,
-            decoration: const BoxDecoration(
-              color: Color(0xFFFFF7ED),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Text(num, style: const TextStyle(color: Color(0xFFFF6F00), fontSize: 10, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(text, style: const TextStyle(color: Color(0xFF475569), fontSize: 12, height: 1.35)),
-          ),
-        ],
       ),
     );
   }
