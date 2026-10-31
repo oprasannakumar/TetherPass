@@ -9,6 +9,7 @@ const DRIVE_BACKUP_FILENAME = 'card_vault_backup_v2.json';
 const DRIVE_AUTH_FILENAME = 'card_vault_extension_auth.json';
 const DRIVE_REQUEST_FILENAME = 'card_vault_access_request.json';
 const DRIVE_DEVICES_FILENAME = 'card_vault_devices.json';
+const DRIVE_SESSIONS_FILENAME = 'card_vault_active_sessions.json';
 
 class DriveClient {
   constructor() {
@@ -305,20 +306,48 @@ class DriveClient {
   }
 
   /**
-   * Checks if desktop authorization was explicitly revoked or locked from the mobile app.
+   * Checks if desktop authorization was explicitly revoked or terminated from the mobile app.
    * @param {string} authMode 'PIN' or 'PUSH'
    * @param {number} sessionStartTime timestamp when current session was unlocked
+   * @param {string} sessionId unique ID of this session
    */
-  async isAuthorizationRevoked(authMode, sessionStartTime) {
+  async isAuthorizationRevoked(authMode, sessionStartTime, sessionId) {
     const now = Date.now();
-    // Cache revocation check results for 15 seconds to prevent spamming Google Drive
-    if (this._lastRevokeCheckTime && (now - this._lastRevokeCheckTime < 15000)) {
+    // Cache revocation check results for 10 seconds to prevent spamming Google Drive
+    if (this._lastRevokeCheckTime && (now - this._lastRevokeCheckTime < 10000)) {
       return this._lastRevokeResult || false;
     }
     this._lastRevokeCheckTime = now;
 
     try {
-      // 1. If unlocked via PIN, only inspect the PIN authorization record (card_vault_extension_auth.json)
+      // 0. Inspect card_vault_active_sessions.json (multi-session registry)
+      const sessionsFile = await this.findFile(DRIVE_SESSIONS_FILENAME);
+      if (sessionsFile) {
+        try {
+          const content = await this.downloadFileContent(sessionsFile.id);
+          const data = JSON.parse(content);
+          const sessions = data.sessions || [];
+          for (const s of sessions) {
+            if (!s) continue;
+            // Check matching sessionId
+            if (sessionId && s.sessionId === sessionId) {
+              if (s.status === 'TERMINATED' || s.status === 'REVOKED') {
+                this._lastRevokeResult = true;
+                return true;
+              }
+            }
+            // Check if terminated recently after session began
+            if (s.status === 'TERMINATED' && s.terminatedAt && sessionStartTime && s.terminatedAt > (sessionStartTime + 2000)) {
+              if (!sessionId || s.sessionId === sessionId || s.authMode === authMode) {
+                this._lastRevokeResult = true;
+                return true;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 1. If unlocked via PIN, inspect the PIN authorization record (card_vault_extension_auth.json)
       if (authMode === 'PIN' || !authMode) {
         const authFile = await this.findFile(DRIVE_AUTH_FILENAME);
         if (authFile) {
@@ -355,6 +384,46 @@ class DriveClient {
     } catch (_) {
       // Soft error (network timeout or rate limit) - do NOT falsely revoke
       return false;
+    }
+  }
+
+  /**
+   * Records active desktop session into Google Drive session registry
+   */
+  async recordActiveSession({ sessionId, deviceName, authMode, createdAt, expiresAt }) {
+    if (!this.token) return;
+    try {
+      let sessions = [];
+      const file = await this.findFile(DRIVE_SESSIONS_FILENAME);
+      if (file) {
+        try {
+          const content = await this.downloadFileContent(file.id);
+          const data = JSON.parse(content);
+          sessions = data.sessions || [];
+        } catch (_) {}
+      }
+
+      sessions = sessions.filter(s => s && s.sessionId !== sessionId);
+      sessions.unshift({
+        sessionId,
+        deviceName: deviceName || 'Windows PC (TetherPass Extension)',
+        authMode: authMode || 'PUSH',
+        createdAt: createdAt || Date.now(),
+        expiresAt: expiresAt || (Date.now() + 30 * 60 * 1000),
+        status: 'ACTIVE'
+      });
+
+      if (sessions.length > 20) sessions = sessions.slice(0, 20);
+
+      const payload = JSON.stringify({
+        version: 1,
+        updatedAt: Date.now(),
+        sessions
+      });
+
+      await this.uploadAppDataFile(DRIVE_SESSIONS_FILENAME, payload);
+    } catch (e) {
+      console.warn('[TetherPass] Could not record active session:', e.message);
     }
   }
 

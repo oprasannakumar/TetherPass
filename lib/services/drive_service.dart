@@ -232,6 +232,7 @@ class DriveService extends ChangeNotifier {
 
   static const accessRequestFileName = 'card_vault_access_request.json';
   static const devicesFileName = 'card_vault_devices.json';
+  static const activeSessionsFileName = 'card_vault_active_sessions.json';
 
   /// Registers this mobile device in Google Drive so Windows Extension can detect multiple devices.
   /// Automatically clears any stale removal mark for this device, establishes fresh session time, and deduplicates.
@@ -489,6 +490,321 @@ class DriveService extends ChangeNotifier {
       }
 
       await uploadTextFile(accessRequestFileName, jsonEncode(payloadMap));
+
+      if (approved) {
+        await recordActiveSession(
+          sessionId: requestId,
+          deviceName: deviceName ?? 'Windows PC (TetherPass Extension)',
+          authMode: 'PUSH',
+          createdAt: now.millisecondsSinceEpoch,
+          expiresAt: now.add(const Duration(minutes: 30)).millisecondsSinceEpoch,
+        );
+      }
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ─── Active Desktop Sessions Management ────────────────────────────────────
+
+  /// Fetches all active and recent desktop sessions from Google Drive.
+  /// Merges records from activeSessionsFileName, accessRequestFileName, and card_vault_extension_auth.json.
+  Future<List<Map<String, dynamic>>> getActiveDesktopSessions() async {
+    if (!isSignedIn) return [];
+    try {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final Map<String, Map<String, dynamic>> sessionMap = {};
+
+      // 1. Read from card_vault_active_sessions.json
+      final text = await downloadTextFile(activeSessionsFileName);
+      if (text != null && text.trim().isNotEmpty) {
+        try {
+          final data = jsonDecode(text) as Map<String, dynamic>;
+          final list = (data['sessions'] as List<dynamic>?) ?? [];
+          for (final item in list) {
+            if (item is Map) {
+              final map = Map<String, dynamic>.from(item);
+              final id = map['sessionId'] as String? ?? '';
+              if (id.isNotEmpty) {
+                sessionMap[id] = map;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 2. Synthesize/merge from card_vault_access_request.json (Push approvals)
+      final reqText = await downloadTextFile(accessRequestFileName);
+      if (reqText != null && reqText.trim().isNotEmpty) {
+        try {
+          final req = jsonDecode(reqText) as Map<String, dynamic>;
+          final reqId = req['requestId'] as String? ?? '';
+          final status = req['status'] as String? ?? '';
+          final approvedAt = (req['approvedAt'] as num?)?.toInt() ?? (req['timestamp'] as num?)?.toInt() ?? 0;
+          final expiresAt = (req['expiresAt'] as num?)?.toInt() ?? 0;
+          final device = req['device'] as String? ?? 'Windows PC (TetherPass Extension)';
+
+          if (reqId.isNotEmpty) {
+            if (status == 'APPROVED' && expiresAt > now) {
+              if (!sessionMap.containsKey(reqId)) {
+                sessionMap[reqId] = {
+                  'sessionId': reqId,
+                  'deviceName': device,
+                  'authMode': 'PUSH',
+                  'createdAt': approvedAt > 0 ? approvedAt : (expiresAt - 30 * 60 * 1000),
+                  'expiresAt': expiresAt,
+                  'status': 'ACTIVE',
+                };
+              }
+            } else if (status == 'REVOKED') {
+              if (sessionMap.containsKey(reqId)) {
+                sessionMap[reqId]!['status'] = 'TERMINATED';
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 3. Synthesize/merge from card_vault_extension_auth.json (PIN approvals)
+      final authText = await downloadTextFile('card_vault_extension_auth.json');
+      if (authText != null && authText.trim().isNotEmpty) {
+        try {
+          final auth = jsonDecode(authText) as Map<String, dynamic>;
+          final status = auth['status'] as String? ?? '';
+          final authAt = (auth['authorized_at'] as num?)?.toInt() ?? 0;
+          final expiresAt = (auth['expires_at'] as num?)?.toInt() ?? 0;
+          final device = auth['device'] as String? ?? 'Windows Browser Extension (PIN)';
+          final pin = auth['pairing_pin'] as String? ?? '';
+
+          if (pin.isNotEmpty) {
+            final pinSessionId = 'pin_$pin';
+            if (status == 'AUTHORIZED' && expiresAt > now) {
+              if (!sessionMap.containsKey(pinSessionId)) {
+                sessionMap[pinSessionId] = {
+                  'sessionId': pinSessionId,
+                  'deviceName': device,
+                  'authMode': 'PIN',
+                  'createdAt': authAt > 0 ? authAt : (expiresAt - 30 * 60 * 1000),
+                  'expiresAt': expiresAt,
+                  'status': 'ACTIVE',
+                  'pin': pin,
+                };
+              }
+            } else if (status == 'REVOKED') {
+              if (sessionMap.containsKey(pinSessionId)) {
+                sessionMap[pinSessionId]!['status'] = 'TERMINATED';
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 4. Compute active status and minutes remaining for each session
+      final List<Map<String, dynamic>> results = [];
+      for (final s in sessionMap.values) {
+        final expiresAt = (s['expiresAt'] as num?)?.toInt() ?? 0;
+        final rawStatus = (s['status'] as String? ?? 'ACTIVE').toUpperCase();
+        final bool isExpired = now > expiresAt;
+        final bool isTerminated = rawStatus == 'TERMINATED' || rawStatus == 'REVOKED';
+        final bool isActive = !isTerminated && !isExpired;
+
+        s['isCurrentlyActive'] = isActive;
+        if (isActive) {
+          s['status'] = 'ACTIVE';
+          s['minutesRemaining'] = ((expiresAt - now) / 60000).ceil().clamp(0, 30);
+        } else if (isTerminated) {
+          s['status'] = 'TERMINATED';
+          s['minutesRemaining'] = 0;
+        } else {
+          s['status'] = 'EXPIRED';
+          s['minutesRemaining'] = 0;
+        }
+
+        results.add(s);
+      }
+
+      // Sort: Active sessions first, then by createdAt descending
+      results.sort((a, b) {
+        final aActive = a['isCurrentlyActive'] == true ? 1 : 0;
+        final bActive = b['isCurrentlyActive'] == true ? 1 : 0;
+        if (aActive != bActive) return bActive.compareTo(aActive);
+        final aCreated = (a['createdAt'] as num?)?.toInt() ?? 0;
+        final bCreated = (b['createdAt'] as num?)?.toInt() ?? 0;
+        return bCreated.compareTo(aCreated);
+      });
+
+      return results;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Records an active desktop session on Drive
+  Future<bool> recordActiveSession({
+    required String sessionId,
+    required String deviceName,
+    required String authMode,
+    required int createdAt,
+    required int expiresAt,
+  }) async {
+    if (!isSignedIn) return false;
+    try {
+      List<dynamic> sessionList = [];
+      final text = await downloadTextFile(activeSessionsFileName);
+      if (text != null && text.trim().isNotEmpty) {
+        try {
+          final data = jsonDecode(text) as Map<String, dynamic>;
+          sessionList = (data['sessions'] as List<dynamic>?) ?? [];
+        } catch (_) {}
+      }
+
+      sessionList.removeWhere((s) => s is Map && s['sessionId'] == sessionId);
+      sessionList.insert(0, {
+        'sessionId': sessionId,
+        'deviceName': deviceName,
+        'authMode': authMode,
+        'createdAt': createdAt,
+        'expiresAt': expiresAt,
+        'status': 'ACTIVE',
+      });
+
+      if (sessionList.length > 20) {
+        sessionList = sessionList.sublist(0, 20);
+      }
+
+      await uploadTextFile(activeSessionsFileName, jsonEncode({
+        'version': 1,
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        'sessions': sessionList,
+      }));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Terminates a specific desktop session from the mobile phone
+  Future<bool> terminateDesktopSession(String sessionId) async {
+    if (!isSignedIn) return false;
+    try {
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      // 1. Update card_vault_active_sessions.json
+      List<dynamic> sessionList = [];
+      final text = await downloadTextFile(activeSessionsFileName);
+      if (text != null && text.trim().isNotEmpty) {
+        try {
+          final data = jsonDecode(text) as Map<String, dynamic>;
+          sessionList = (data['sessions'] as List<dynamic>?) ?? [];
+        } catch (_) {}
+      }
+
+      bool found = false;
+      String? authMode;
+      for (final s in sessionList) {
+        if (s is Map && s['sessionId'] == sessionId) {
+          s['status'] = 'TERMINATED';
+          s['terminatedAt'] = now;
+          authMode = s['authMode'] as String?;
+          found = true;
+        }
+      }
+
+      if (!found) {
+        sessionList.insert(0, {
+          'sessionId': sessionId,
+          'status': 'TERMINATED',
+          'terminatedAt': now,
+        });
+      }
+
+      await uploadTextFile(activeSessionsFileName, jsonEncode({
+        'version': 1,
+        'updatedAt': now,
+        'sessions': sessionList,
+      }));
+
+      // 2. Clear / Revoke corresponding access request or auth file
+      if (authMode == 'PUSH' || sessionId.startsWith('req_')) {
+        final reqClear = jsonEncode({
+          'requestId': sessionId,
+          'status': 'REVOKED',
+          'message': 'Session terminated from TetherPass mobile application.',
+          'revoked_at': now,
+        });
+        await uploadTextFile(accessRequestFileName, reqClear);
+      } else if (authMode == 'PIN' || sessionId.startsWith('pin_')) {
+        final authClear = jsonEncode({
+          'status': 'REVOKED',
+          'revoked_at': now,
+          'device': 'Windows Browser Extension',
+        });
+        await uploadTextFile('card_vault_extension_auth.json', authClear);
+      } else {
+        final revokePayload = jsonEncode({
+          'status': 'REVOKED',
+          'revoked_at': now,
+          'revokedSessionId': sessionId,
+        });
+        await uploadTextFile(accessRequestFileName, revokePayload);
+        await uploadTextFile('card_vault_extension_auth.json', revokePayload);
+      }
+
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Terminates all desktop sessions from the mobile phone
+  Future<bool> terminateAllDesktopSessions() async {
+    if (!isSignedIn) return false;
+    try {
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      // 1. Mark all sessions terminated in card_vault_active_sessions.json
+      List<dynamic> sessionList = [];
+      final text = await downloadTextFile(activeSessionsFileName);
+      if (text != null && text.trim().isNotEmpty) {
+        try {
+          final data = jsonDecode(text) as Map<String, dynamic>;
+          sessionList = (data['sessions'] as List<dynamic>?) ?? [];
+        } catch (_) {}
+      }
+
+      for (final s in sessionList) {
+        if (s is Map) {
+          s['status'] = 'TERMINATED';
+          s['terminatedAt'] = now;
+        }
+      }
+
+      await uploadTextFile(activeSessionsFileName, jsonEncode({
+        'version': 1,
+        'updatedAt': now,
+        'sessions': sessionList,
+      }));
+
+      // 2. Revoke access request record
+      final reqClear = jsonEncode({
+        'status': 'REVOKED',
+        'message': 'All desktop sessions terminated from TetherPass mobile application.',
+        'revoked_at': now,
+      });
+      await uploadTextFile(accessRequestFileName, reqClear);
+
+      // 3. Revoke PIN authorization record
+      final authClear = jsonEncode({
+        'status': 'REVOKED',
+        'revoked_at': now,
+        'device': 'Windows Browser Extension',
+      });
+      await uploadTextFile('card_vault_extension_auth.json', authClear);
+
+      notifyListeners();
       return true;
     } catch (_) {
       return false;

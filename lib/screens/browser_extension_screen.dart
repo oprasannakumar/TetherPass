@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -24,10 +25,113 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
   String _currentDeviceName = '';
   bool _loadingDevices = false;
 
+  List<Map<String, dynamic>> _desktopSessions = [];
+  bool _loadingSessions = false;
+  Timer? _sessionsRefreshTimer;
+
   @override
   void initState() {
     super.initState();
     _loadDeviceIdentityAndDevices();
+    _fetchSessions();
+    _sessionsRefreshTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (mounted) _fetchSessions();
+    });
+  }
+
+  @override
+  void dispose() {
+    _sessionsRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchSessions() async {
+    final drive = context.read<DriveService>();
+    if (!drive.isSignedIn) return;
+    final sessions = await drive.getActiveDesktopSessions();
+    if (mounted) {
+      setState(() {
+        _desktopSessions = sessions;
+      });
+    }
+  }
+
+  String _formatSessionTime(int ms) {
+    if (ms <= 0) return 'Just now';
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+    final hour = dt.hour.toString().padLeft(2, '0');
+    final minute = dt.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  Future<void> _terminateSession(String sessionId, String deviceName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Terminate Desktop Session?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Text('Are you sure you want to terminate the active session on "$deviceName"? The browser extension on that computer will be locked immediately.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Terminate Session'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final drive = context.read<DriveService>();
+      final ok = await drive.terminateDesktopSession(sessionId);
+      if (ok && mounted) {
+        await _fetchSessions();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Session on "$deviceName" terminated and locked.'),
+              backgroundColor: Colors.red.shade700,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _terminateAllSessions() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Terminate ALL Sessions?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: const Text('Are you sure you want to terminate all active browser extension sessions? All connected desktop extensions will be locked immediately.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Terminate All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final drive = context.read<DriveService>();
+      final ok = await drive.terminateAllDesktopSessions();
+      if (ok && mounted) {
+        await _fetchSessions();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('All active desktop sessions terminated and locked.'),
+              backgroundColor: Colors.red.shade700,
+            ),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _loadDeviceIdentityAndDevices() async {
@@ -398,6 +502,11 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                 ],
               ),
             ),
+
+            const SizedBox(height: 14),
+
+            // ── Active Desktop Sessions ──
+            _buildActiveSessionsSection(drive),
 
             const SizedBox(height: 14),
 
@@ -818,6 +927,329 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
           Expanded(
             child: Text(text, style: const TextStyle(color: Color(0xFF475569), fontSize: 12, height: 1.35)),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveSessionsSection(DriveService drive) {
+    final activeList = _desktopSessions.where((s) => s['isCurrentlyActive'] == true).toList();
+    final inactiveList = _desktopSessions.where((s) => s['isCurrentlyActive'] != true).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: activeList.isNotEmpty ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.laptop_chromebook_rounded,
+                      color: activeList.isNotEmpty ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'ACTIVE DESKTOP SESSIONS (${activeList.length})',
+                    style: const TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  if (activeList.length > 1) ...[
+                    InkWell(
+                      onTap: _terminateAllSessions,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEE2E2),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'Terminate All',
+                          style: TextStyle(
+                            color: Color(0xFFDC2626),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  InkWell(
+                    onTap: _loadingSessions ? null : _fetchSessions,
+                    child: Row(
+                      children: [
+                        _loadingSessions
+                            ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.refresh_rounded, size: 16, color: Color(0xFF64748B)),
+                        const SizedBox(width: 4),
+                        const Text('Refresh', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Browser extensions currently unlocked on Windows. Terminating a session locks the extension immediately.',
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 11, height: 1.35),
+          ),
+          const SizedBox(height: 14),
+
+          if (!drive.isSignedIn) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Sign in to Google Drive in Settings to view and terminate live desktop sessions.',
+                      style: TextStyle(color: Color(0xFF92400E), fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (activeList.isEmpty && inactiveList.isEmpty) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: const [
+                  Icon(Icons.phonelink_off_rounded, size: 32, color: Color(0xFF94A3B8)),
+                  SizedBox(height: 8),
+                  Text(
+                    'No Active Desktop Sessions',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF334155)),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'When you unlock the extension on Windows, its active session and time remaining will appear here.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            // Active Sessions
+            if (activeList.isNotEmpty) ...[
+              ...activeList.map((s) => _buildSessionTile(s, isActive: true)),
+            ] else ...[
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.check_circle_outline_rounded, size: 16, color: Color(0xFF64748B)),
+                    SizedBox(width: 8),
+                    Text(
+                      'No desktop extensions are currently active.',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Inactive / Terminated Sessions (if any)
+            if (inactiveList.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: Text(
+                    'Recent / Past Sessions (${inactiveList.length})',
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.bold),
+                  ),
+                  children: inactiveList.map((s) => _buildSessionTile(s, isActive: false)).toList(),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSessionTile(Map<String, dynamic> s, {required bool isActive}) {
+    final sessionId = (s['sessionId'] as String?) ?? '';
+    final deviceName = (s['deviceName'] as String?) ?? 'Windows Browser Extension';
+    final authMode = (s['authMode'] as String?) ?? 'PUSH';
+    final minsLeft = (s['minutesRemaining'] as num?)?.toInt() ?? 0;
+    final createdAt = (s['createdAt'] as num?)?.toInt() ?? 0;
+    final status = (s['status'] as String?) ?? (isActive ? 'ACTIVE' : 'EXPIRED');
+
+    final isPush = authMode.toUpperCase() == 'PUSH';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isActive ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isActive ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isActive ? Colors.green.shade100 : const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.laptop_windows_rounded,
+                  color: isActive ? const Color(0xFF15803D) : const Color(0xFF475569),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            deviceName,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isPush ? const Color(0xFFEFF6FF) : const Color(0xFFFFF7ED),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: isPush ? const Color(0xFFBFDBFE) : const Color(0xFFFFEDD5)),
+                          ),
+                          child: Text(
+                            isPush ? 'PUSH APPROVAL' : 'PIN PAIRING',
+                            style: TextStyle(
+                              color: isPush ? const Color(0xFF1D4ED8) : const Color(0xFFC2410C),
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        if (isActive) ...[
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF16A34A),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Active • $minsLeft min${minsLeft == 1 ? "" : "s"} left',
+                            style: const TextStyle(
+                              color: Color(0xFF15803D),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ] else ...[
+                          Text(
+                            status == 'TERMINATED' ? '● Terminated' : '○ Expired',
+                            style: TextStyle(
+                              color: status == 'TERMINATED' ? Colors.red.shade700 : const Color(0xFF94A3B8),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                        if (createdAt > 0) ...[
+                          Text(
+                            '  •  Started ${_formatSessionTime(createdAt)}',
+                            style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (isActive) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFDC2626),
+                    side: const BorderSide(color: Color(0xFFFCA5A5)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.stop_circle_outlined, size: 15),
+                  label: const Text(
+                    'Terminate Session',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                  onPressed: () => _terminateSession(sessionId, deviceName),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

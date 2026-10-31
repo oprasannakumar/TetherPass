@@ -99,6 +99,15 @@ class ExtensionAuthService extends ChangeNotifier {
           'cleared_at': now.millisecondsSinceEpoch,
         });
         await driveService.uploadTextFile(DriveService.accessRequestFileName, reqClear);
+
+        // Record into active sessions registry
+        await driveService.recordActiveSession(
+          sessionId: 'pin_$_currentPin',
+          deviceName: 'Windows Browser Extension (PIN)',
+          authMode: 'PIN',
+          createdAt: now.millisecondsSinceEpoch,
+          expiresAt: expiry.millisecondsSinceEpoch,
+        );
       }
 
       _isAuthorized = true;
@@ -127,27 +136,9 @@ class ExtensionAuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final payload = jsonEncode({
-        'status': 'REVOKED',
-        'authorized_at': null,
-        'expires_at': null,
-        'pairing_pin': null,
-        'device': 'Windows Browser Extension',
-        'revoked_at': now,
-      });
-
       if (driveService.isSignedIn) {
-        // 1. Mark the auth record as REVOKED
-        await driveService.uploadTextFile(authFileName, payload);
-
-        // 2. ALSO mark access request record as REVOKED so push approvals lock immediately
-        final reqPayload = jsonEncode({
-          'status': 'REVOKED',
-          'message': 'Authorization revoked from TetherPass mobile application.',
-          'revoked_at': now,
-        });
-        await driveService.uploadTextFile(DriveService.accessRequestFileName, reqPayload);
+        // Terminate all desktop sessions
+        await driveService.terminateAllDesktopSessions();
       }
     } catch (e) {
       debugPrint('Error revoking extension: $e');

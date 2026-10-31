@@ -26,6 +26,7 @@ let memoryVault = {
   authMode: null,
   sessionStartTime: null,
   activeRequestId: null,
+  sessionId: null,
 };
 
 // Universal normalizer for raw decrypted vault items into structured suggestions
@@ -127,6 +128,7 @@ async function persistSession() {
     authMode: memoryVault.authMode,
     sessionStartTime: memoryVault.sessionStartTime,
     activeRequestId: memoryVault.activeRequestId,
+    sessionId: memoryVault.sessionId,
   };
 
   try {
@@ -185,6 +187,7 @@ async function restoreSessionIfNeeded() {
         authMode: sess.authMode || null,
         sessionStartTime: sess.sessionStartTime || now,
         activeRequestId: sess.activeRequestId || null,
+        sessionId: sess.sessionId || null,
       };
       return true;
     }
@@ -219,14 +222,15 @@ async function verifyMobileAuth() {
     return;
   }
 
-  // Poll Google Drive for intentional remote revocation only
+  // Poll Google Drive for intentional remote revocation or termination from mobile
   try {
     const isRevoked = await driveClient.isAuthorizationRevoked(
       memoryVault.authMode,
-      memoryVault.sessionStartTime
+      memoryVault.sessionStartTime,
+      memoryVault.sessionId
     );
     if (isRevoked) {
-      await lockVault('Authorization revoked from TetherPass mobile application.');
+      await lockVault('Session terminated from TetherPass mobile application.');
       return;
     }
   } catch (_) {
@@ -244,6 +248,7 @@ async function lockVault(reason = 'Vault locked') {
   memoryVault.authMode = null;
   memoryVault.sessionStartTime = null;
   memoryVault.activeRequestId = null;
+  memoryVault.sessionId = null;
 
   await clearPersistedSession();
   console.log('[TetherPass]', reason);
@@ -452,6 +457,7 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
 
     // Save in RAM and session storage with a full 30-minute desktop session
     const desktopSessionDurationMs = 30 * 60 * 1000;
+    const sessionId = requestId || ('sess_' + Date.now());
     memoryVault.isAuthorized = true;
     memoryVault.isUnlocked = true;
     memoryVault.items = decryptedItems;
@@ -459,10 +465,22 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
     memoryVault.authExpiresAt = Date.now() + desktopSessionDurationMs;
     memoryVault.masterPassword = effectivePassword;
     memoryVault.activeRequestId = requestId;
+    memoryVault.sessionId = sessionId;
     memoryVault.authMode = 'PUSH';
     memoryVault.sessionStartTime = Date.now();
 
     await persistSession();
+
+    // Register active session in Google Drive
+    try {
+      await driveClient.recordActiveSession({
+        sessionId,
+        deviceName: 'Windows PC (TetherPass Extension)',
+        authMode: 'PUSH',
+        createdAt: memoryVault.sessionStartTime,
+        expiresAt: memoryVault.authExpiresAt
+      });
+    } catch (_) {}
 
     notifyAllTabsStatusChange();
 
@@ -561,6 +579,7 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
 
   // 5. Store in RAM and session storage with a full 30-minute desktop session
   const desktopSessionDurationMs = 30 * 60 * 1000;
+  const sessionId = 'pin_' + cleanPin;
   memoryVault.isAuthorized = true;
   memoryVault.isUnlocked = true;
   memoryVault.items = decryptedItems;
@@ -568,10 +587,22 @@ async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairi
   memoryVault.authExpiresAt = Date.now() + desktopSessionDurationMs;
   memoryVault.masterPassword = effectivePassword;
   memoryVault.activePin = cleanPin;
+  memoryVault.sessionId = sessionId;
   memoryVault.authMode = 'PIN';
   memoryVault.sessionStartTime = Date.now();
 
   await persistSession();
+
+  // Register active session in Google Drive
+  try {
+    await driveClient.recordActiveSession({
+      sessionId,
+      deviceName: 'Windows Browser Extension (PIN)',
+      authMode: 'PIN',
+      createdAt: memoryVault.sessionStartTime,
+      expiresAt: memoryVault.authExpiresAt
+    });
+  } catch (_) {}
 
   notifyAllTabsStatusChange();
 
