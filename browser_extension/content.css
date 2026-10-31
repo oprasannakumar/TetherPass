@@ -118,8 +118,12 @@
   border-bottom: none !important;
 }
 
-.cv-item-row:hover {
+.cv-item-row:hover,
+.cv-item-row.cv-selected {
   background: #FFF7ED !important;
+  outline: 2px solid #FF6F00 !important;
+  outline-offset: -2px !important;
+  border-radius: 8px !important;
 }
 
 .cv-item-icon {

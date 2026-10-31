@@ -221,10 +221,95 @@
     }
   });
 
+  let selectedItemIndex = -1;
+  let managedInput = null;
+  let originalAutocomplete = null;
+
+  function suppressBrowserAutofill(input) {
+    if (!input) return;
+    managedInput = input;
+    originalAutocomplete = input.getAttribute('autocomplete');
+    input.setAttribute('autocomplete', 'off');
+  }
+
+  function restoreBrowserAutofill() {
+    if (managedInput) {
+      if (originalAutocomplete !== null) {
+        managedInput.setAttribute('autocomplete', originalAutocomplete);
+      } else {
+        managedInput.removeAttribute('autocomplete');
+      }
+      managedInput = null;
+      originalAutocomplete = null;
+    }
+  }
+
+  function updateRowHighlight(rows) {
+    if (!rows) return;
+    rows.forEach((r, idx) => {
+      if (idx === selectedItemIndex) {
+        r.classList.add('cv-selected');
+        r.scrollIntoView({ block: 'nearest' });
+      } else {
+        r.classList.remove('cv-selected');
+      }
+    });
+  }
+
+  // Intercept ArrowDown, ArrowUp, Enter, and Escape in capture phase
+  // so browser native password manager (Google Password Manager) DOES NOT hijack!
+  document.addEventListener('keydown', (e) => {
+    if (!activeDropdown) return;
+
+    const rows = activeDropdown.querySelectorAll('.cv-item-row');
+    if (!rows || rows.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      selectedItemIndex++;
+      if (selectedItemIndex >= rows.length) selectedItemIndex = 0;
+      updateRowHighlight(rows);
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      selectedItemIndex--;
+      if (selectedItemIndex < 0) selectedItemIndex = rows.length - 1;
+      updateRowHighlight(rows);
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      if (selectedItemIndex >= 0 && selectedItemIndex < rows.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        rows[selectedItemIndex].click();
+        return;
+      }
+    }
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      removeDropdown();
+      return;
+    }
+  }, true);
+
   function removeDropdown() {
+    restoreBrowserAutofill();
     if (activeDropdown) {
       activeDropdown.remove();
       activeDropdown = null;
+      selectedItemIndex = -1;
     }
   }
 
@@ -235,6 +320,8 @@
     if (!targetInput || isInputFilled(targetInput)) {
       return;
     }
+
+    suppressBrowserAutofill(targetInput);
 
     const rect = targetInput.getBoundingClientRect();
     const dropdown = document.createElement('div');
@@ -287,6 +374,11 @@
               <div class="cv-item-sub">•••• ${last4} | Exp: ${escapeHtml(card.expiry || '••/••')}</div>
             </div>
           `;
+          itemRow.addEventListener('mouseenter', () => {
+            const allRows = itemsList.querySelectorAll('.cv-item-row');
+            selectedItemIndex = Array.from(allRows).indexOf(itemRow);
+            updateRowHighlight(allRows);
+          });
           itemRow.addEventListener('click', (ev) => {
             ev.stopPropagation();
             ev.preventDefault();
@@ -312,6 +404,11 @@
                   <div class="cv-item-sub">A/C: ${escapeHtml(acc.accountNumber)} ${acc.ifscCode ? '| IFSC: ' + escapeHtml(acc.ifscCode) : ''}</div>
                 </div>
               `;
+              itemRow.addEventListener('mouseenter', () => {
+                const allRows = itemsList.querySelectorAll('.cv-item-row');
+                selectedItemIndex = Array.from(allRows).indexOf(itemRow);
+                updateRowHighlight(allRows);
+              });
               itemRow.addEventListener('click', (ev) => {
                 ev.stopPropagation();
                 ev.preventDefault();
@@ -334,6 +431,11 @@
                 <div class="cv-item-sub">User: ${escapeHtml(bank.userId || '••••')}</div>
               </div>
             `;
+            itemRow.addEventListener('mouseenter', () => {
+              const allRows = itemsList.querySelectorAll('.cv-item-row');
+              selectedItemIndex = Array.from(allRows).indexOf(itemRow);
+              updateRowHighlight(allRows);
+            });
             itemRow.addEventListener('click', (ev) => {
               ev.stopPropagation();
               ev.preventDefault();
@@ -360,6 +462,11 @@
               <div class="cv-item-sub">${escapeHtml(pwd.username)} ${pwd.website ? '• ' + escapeHtml(pwd.website) : ''}</div>
             </div>
           `;
+          itemRow.addEventListener('mouseenter', () => {
+            const allRows = itemsList.querySelectorAll('.cv-item-row');
+            selectedItemIndex = Array.from(allRows).indexOf(itemRow);
+            updateRowHighlight(allRows);
+          });
           itemRow.addEventListener('click', (ev) => {
             ev.stopPropagation();
             ev.preventDefault();
@@ -384,6 +491,11 @@
       }
 
       dropdown.appendChild(itemsList);
+      const initialRows = itemsList.querySelectorAll('.cv-item-row');
+      if (initialRows.length > 0) {
+        selectedItemIndex = 0;
+        updateRowHighlight(initialRows);
+      }
     }
 
     document.body.appendChild(dropdown);
