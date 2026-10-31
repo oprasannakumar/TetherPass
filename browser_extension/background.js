@@ -30,10 +30,16 @@ let memoryVault = {
 
 // ── Persistent Storage (Survives Service Worker Restarts & Inactivity for full 30 mins) ──
 async function persistSession() {
+  let suggestions = null;
+  try {
+    suggestions = await handleGetAutofillSuggestions({ fieldType: 'ALL' });
+  } catch (_) {}
+
   const sessionData = {
     isAuthorized: memoryVault.isAuthorized,
     isUnlocked: memoryVault.isUnlocked,
     items: memoryVault.items,
+    suggestions: suggestions,
     lastSyncedAt: memoryVault.lastSyncedAt,
     authExpiresAt: memoryVault.authExpiresAt,
     masterPassword: memoryVault.masterPassword,
@@ -194,6 +200,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     await restoreSessionIfNeeded();
 
     if (action === 'GET_STATUS') {
+      let suggestions = { cards: [], bankAccounts: [], passwords: [] };
+      if (memoryVault.isAuthorized && memoryVault.isUnlocked) {
+        try {
+          suggestions = await handleGetAutofillSuggestions({ fieldType: 'ALL' });
+        } catch (_) {}
+      }
       sendResponse({
         isAuthorized: memoryVault.isAuthorized,
         isUnlocked: memoryVault.isUnlocked,
@@ -202,6 +214,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         authExpiresAt: memoryVault.authExpiresAt,
         activePin: memoryVault.activePin,
         authMode: memoryVault.authMode,
+        items: suggestions
       });
       return;
     }

@@ -810,6 +810,18 @@ body {
   transition: all 0.1s ease;
 }
 
+.copy-chip.fill-page-chip {
+  background: #EFF6FF;
+  border-color: #93C5FD;
+  color: #1D4ED8;
+}
+
+.copy-chip.fill-page-chip:hover {
+  background: #2563EB;
+  border-color: #2563EB;
+  color: #FFFFFF;
+}
+
 .copy-chip:hover {
   background: #FF6F00;
   color: #FFFFFF;

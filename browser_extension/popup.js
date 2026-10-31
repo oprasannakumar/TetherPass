@@ -41,6 +41,21 @@ function sendExtensionMessage(message) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   initUI();
+
+  // Instant 0ms session recovery from local storage cache (ZERO delay, NO locked screen flicker)
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const data = await chrome.storage.local.get(['tetherpass_session', 'google_account']);
+      const sess = data?.tetherpass_session;
+      const now = Date.now();
+      if (sess && sess.isAuthorized && sess.isUnlocked && (!sess.authExpiresAt || now < sess.authExpiresAt)) {
+        applyUnlockedUI(sess);
+      } else {
+        applyLockedUI();
+      }
+    }
+  } catch (_) {}
+
   await initDesktopDeviceName();
   await loadSavedGoogleAccount();
   await refreshStatus();
@@ -744,47 +759,82 @@ function updateCountdownDisplay() {
   }
 }
 
-async function refreshStatus() {
-  const status = await sendExtensionMessage({ action: 'GET_STATUS' });
-
+function applyUnlockedUI(data) {
   const statusBadge = document.getElementById('statusBadge');
   const statusText = document.getElementById('statusText');
   const lockedView = document.getElementById('lockedView');
   const unlockedView = document.getElementById('unlockedView');
 
+  if (statusBadge) statusBadge.className = 'status-badge unlocked';
+  if (statusText) statusText.textContent = 'Unlocked';
+  lockedView?.classList.remove('active');
+  unlockedView?.classList.add('active');
+
+  const expAt = data.authExpiresAt || data.expiresAt;
+  if (expAt) {
+    cachedAuthExpiresAt = expAt;
+    updateCountdownDisplay();
+  }
+
+  const items = data.items || data.suggestions;
+  if (items && (items.cards || items.bankAccounts || items.passwords)) {
+    currentVaultItems = items;
+    updateCounts();
+    renderVaultList();
+  }
+}
+
+function applyLockedUI() {
+  cachedAuthExpiresAt = null;
+  const statusBadge = document.getElementById('statusBadge');
+  const statusText = document.getElementById('statusText');
+  const lockedView = document.getElementById('lockedView');
+  const unlockedView = document.getElementById('unlockedView');
+
+  if (statusBadge) statusBadge.className = 'status-badge locked';
+  if (statusText) statusText.textContent = 'Locked';
+  lockedView?.classList.add('active');
+  unlockedView?.classList.remove('active');
+  currentVaultItems = { cards: [], bankAccounts: [], passwords: [] };
+  const vaultList = document.getElementById('vaultList');
+  if (vaultList) vaultList.innerHTML = '';
+}
+
+function fillPageWithCard(card, btn) {
+  if (typeof chrome === 'undefined' || !chrome.tabs) return;
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs && tabs[0] && tabs[0].id) {
+      chrome.tabs.sendMessage(tabs[0].id, {
+        action: 'FILL_CARD_NOW',
+        card: card
+      }, (res) => {
+        if (btn) {
+          const original = btn.textContent;
+          btn.textContent = res && res.count > 0 ? `✓ Filled (${res.count})` : '✓ Sent!';
+          btn.classList.add('copied');
+          setTimeout(() => {
+            btn.textContent = original;
+            btn.classList.remove('copied');
+          }, 1800);
+        }
+      });
+    }
+  });
+}
+
+async function refreshStatus() {
+  const status = await sendExtensionMessage({ action: 'GET_STATUS' });
   if (status && status.isAuthorized && status.isUnlocked) {
-    if (statusBadge) statusBadge.className = 'status-badge unlocked';
-    if (statusText) statusText.textContent = 'Unlocked';
-    lockedView?.classList.remove('active');
-    unlockedView?.classList.add('active');
-
-    if (status.authExpiresAt) {
-      cachedAuthExpiresAt = status.authExpiresAt;
-      updateCountdownDisplay();
-    }
-
-    const res = await sendExtensionMessage({ action: 'GET_AUTOFILL_SUGGESTIONS', payload: { fieldType: 'ALL' } });
-    if (res && res.authorized) {
-      currentVaultItems = res;
-      updateCounts();
-      renderVaultList();
-    }
-  } else {
-    cachedAuthExpiresAt = null;
-    if (statusBadge) statusBadge.className = 'status-badge locked';
-    if (statusText) statusText.textContent = 'Locked';
-    lockedView?.classList.add('active');
-    unlockedView?.classList.remove('active');
-    currentVaultItems = { cards: [], bankAccounts: [] };
-    const vaultList = document.getElementById('vaultList');
-    if (vaultList) vaultList.innerHTML = '';
+    applyUnlockedUI(status);
+  } else if (status && !status.isUnlocked) {
+    applyLockedUI();
   }
 }
 
 async function handleLock() {
   currentVaultItems = { cards: [], bankAccounts: [] };
   await sendExtensionMessage({ action: 'LOCK_VAULT' });
-  await refreshStatus();
+  applyLockedUI();
 }
 
 function showError(msg) {
@@ -856,11 +906,22 @@ function renderVaultList(query = '') {
         </div>
         <div class="tile-number">${formattedNum || '•••• •••• •••• ••••'}</div>
         <div class="tile-actions">
+          <button class="copy-chip fill-page-chip" title="Autofill this card into current active web page">⚡ Fill Page</button>
           <button class="copy-chip" data-copy="${card.cardNumber}">Copy Number</button>
           ${card.expiry ? `<button class="copy-chip" data-copy="${card.expiry}">Exp: ${card.expiry}</button>` : ''}
           ${card.cvv ? `<button class="copy-chip" data-copy="${card.cvv}">CVV</button>` : ''}
+          <button class="copy-chip" data-copy="${card.cardNumber} ${card.expiry || ''} ${card.cvv || ''}">📋 All</button>
         </div>
       `;
+
+      const fillBtn = tile.querySelector('.fill-page-chip');
+      if (fillBtn) {
+        fillBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          fillPageWithCard(card, fillBtn);
+        });
+      }
+
       list.appendChild(tile);
     });
   } else if (currentTab === 'banks') {
@@ -961,7 +1022,7 @@ function renderVaultList(query = '') {
   }
 
   // Attach clipboard listener
-  list.querySelectorAll('.copy-chip:not(.open-site)').forEach(btn => {
+  list.querySelectorAll('.copy-chip:not(.open-site):not(.fill-page-chip)').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const text = btn.getAttribute('data-copy');

@@ -775,6 +775,80 @@
     }, 15000);
   }
 
+  // ── Listener for Direct Autofill from Extension Popup ──
+  if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message && message.action === 'VAULT_STATUS_CHANGED') {
+        if (!message.isAuthorized) removeDropdown();
+      }
+
+      if (message && message.action === 'FILL_CARD_NOW' && message.card) {
+        const count = fillAllCardInputsOnPage(message.card);
+        showFillToast(count > 0 ? 'Card details autofilled!' : 'No payment inputs found on page');
+        sendResponse({ success: true, count });
+      }
+    });
+  }
+
+  function fillAllCardInputsOnPage(card) {
+    const inputs = Array.from(document.querySelectorAll('input')).filter(inp => {
+      return inp.type !== 'hidden' && inp.type !== 'submit' && inp.type !== 'button';
+    });
+
+    let filledCount = 0;
+    inputs.forEach(inp => {
+      const type = classifyInput(inp);
+      if (type === 'CARD_NUMBER' && card.cardNumber) {
+        const formatted = getCardNumberFormattedForInput(inp, card.cardNumber);
+        setInputValue(inp, formatted);
+        filledCount++;
+      } else if (type === 'EXPIRY' && card.expiry) {
+        const formatted = getExpiryFormattedForInput(inp, card.expiry);
+        setInputValue(inp, formatted);
+        filledCount++;
+      } else if (type === 'CVV' && card.cvv) {
+        setInputValue(inp, card.cvv);
+        filledCount++;
+      } else if (type === 'CARD_HOLDER' && card.cardHolder) {
+        setInputValue(inp, card.cardHolder);
+        filledCount++;
+      }
+    });
+
+    return filledCount;
+  }
+
+  function showFillToast(text) {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0F172A;
+      color: #FFFFFF;
+      padding: 10px 20px;
+      border-radius: 24px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid rgba(255, 111, 0, 0.5);
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    `;
+    toast.innerHTML = `<span>🛡️</span><span>${escapeHtml(text)}</span>`;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 300);
+    }, 2200);
+  }
+
   // Intercept form submissions to offer saving new credentials
   document.addEventListener('submit', (e) => {
     try {
