@@ -91,18 +91,7 @@
           <span class="section-title">Mobile Approval & Decrypt</span>
         </div>
 
-        <!-- Method Tabs: Push Notification vs 6-Digit PIN -->
-        <div class="method-tabs">
-          <button type="button" id="authMethodPushTab" class="method-tab active">
-            <span>📲 Push Pop-up</span>
-          </button>
-          <button type="button" id="authMethodPinTab" class="method-tab">
-            <span>🔢 6-Digit PIN</span>
-          </button>
-        </div>
-
         <div class="auth-box">
-          <!-- ── MODE A: PUSH CONFIRMATION (Default) ── -->
           <div id="pushModeContainer">
             <!-- Compact This Computer Device Row -->
             <div style="display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 3px 7px; margin-bottom: 5px; font-size: 10.5px;">
@@ -135,20 +124,6 @@
                 <span class="btn-icon">📲</span> Send Confirmation Pop-up to Mobile
               </button>
             </div>
-          </div>
-
-          <!-- ── MODE B: MANUAL 6-DIGIT PIN (No Password Needed) ── -->
-          <div id="manualPinBox" style="display: none;">
-            <div class="form-group">
-              <label for="pinInput">6-Digit Mobile PIN</label>
-              <input type="text" id="pinInput" placeholder="e.g. 837507" maxlength="6" autocomplete="off" />
-              <div style="font-size: 10px; color: #64748B; margin-top: 4px; line-height: 1.3;">
-                View 6-digit code on phone: <strong>TetherPass → Settings → Browser Extension</strong>.
-              </div>
-            </div>
-            <button id="unlockWithPinBtn" class="btn btn-primary" style="margin-top: 4px;">
-              <span class="btn-icon">🔓</span> Authorize with PIN & Sync
-            </button>
           </div>
 
           <!-- Active Waiting State for Mobile Confirmation -->

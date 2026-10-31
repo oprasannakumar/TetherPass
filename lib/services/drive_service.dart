@@ -567,43 +567,10 @@ class DriveService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // 3. Synthesize/merge from card_vault_extension_auth.json (PIN approvals)
-      final authText = await downloadTextFile('card_vault_extension_auth.json');
-      if (authText != null && authText.trim().isNotEmpty) {
-        try {
-          final auth = jsonDecode(authText) as Map<String, dynamic>;
-          final status = auth['status'] as String? ?? '';
-          final authAt = (auth['authorized_at'] as num?)?.toInt() ?? 0;
-          final expiresAt = (auth['expires_at'] as num?)?.toInt() ?? 0;
-          final device = auth['device'] as String? ?? 'Windows Browser Extension (PIN)';
-          final pin = auth['pairing_pin'] as String? ?? '';
-
-          if (pin.isNotEmpty) {
-            final pinSessionId = 'pin_$pin';
-            if (status == 'AUTHORIZED' && expiresAt > now) {
-              if (!sessionMap.containsKey(pinSessionId)) {
-                sessionMap[pinSessionId] = {
-                  'sessionId': pinSessionId,
-                  'deviceName': device,
-                  'authMode': 'PIN',
-                  'createdAt': authAt > 0 ? authAt : (expiresAt - 30 * 60 * 1000),
-                  'expiresAt': expiresAt,
-                  'status': 'ACTIVE',
-                  'pin': pin,
-                };
-              }
-            } else if (status == 'REVOKED') {
-              if (sessionMap.containsKey(pinSessionId)) {
-                sessionMap[pinSessionId]!['status'] = 'TERMINATED';
-              }
-            }
-          }
-        } catch (_) {}
-      }
-
-      // 4. Compute active status and minutes remaining for each session
+      // 3. Compute active status and minutes remaining for each session (Push approvals only)
       final List<Map<String, dynamic>> results = [];
       for (final s in sessionMap.values) {
+        if (s['authMode'] == 'PIN') continue; // PIN authorization removed
         final expiresAt = (s['expiresAt'] as num?)?.toInt() ?? 0;
         final rawStatus = (s['status'] as String? ?? 'ACTIVE').toUpperCase();
         final bool isExpired = now > expiresAt;

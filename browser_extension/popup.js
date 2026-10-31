@@ -11,7 +11,6 @@ let currentOAuthToken = null;
 let localBackupPayload = null;
 let activePollingInterval = null;
 let activeCountdownInterval = null;
-let currentAuthMethod = 'push'; // 'push' or 'pin'
 let cachedDevices = [];
 
 const driveClient = new DriveClient();
@@ -83,17 +82,9 @@ function initUI() {
     fileInput.addEventListener('change', handleFileSelected);
   }
 
-  // ── Auth Method Switching (Push vs PIN) ──
-  document.getElementById('authMethodPushTab')?.addEventListener('click', () => setAuthMethod('push'));
-  document.getElementById('authMethodPinTab')?.addEventListener('click', () => setAuthMethod('pin'));
-
-
   // Push confirmation to mobile phone
   document.getElementById('requestPushApprovalBtn')?.addEventListener('click', handleRequestMobilePushApproval);
   document.getElementById('cancelApprovalRequestBtn')?.addEventListener('click', cancelApprovalPolling);
-
-  // Unlock with 6-digit PIN
-  document.getElementById('unlockWithPinBtn')?.addEventListener('click', handleUnlockWithPin);
 
   // ── Device Manager Modal ──
   document.getElementById('openDeviceManagerBtn')?.addEventListener('click', openDeviceManagerModal);
@@ -153,32 +144,6 @@ function initUI() {
   });
 }
 
-function setAuthMethod(method, save = true) {
-  currentAuthMethod = method;
-  const pushTab = document.getElementById('authMethodPushTab');
-  const pinTab = document.getElementById('authMethodPinTab');
-  const pushModeContainer = document.getElementById('pushModeContainer');
-  const pinBox = document.getElementById('manualPinBox');
-
-  if (method === 'pin') {
-    pushTab?.classList.remove('active');
-    pinTab?.classList.add('active');
-    // When in PIN mode, remove/hide push confirmation button and device selector completely
-    if (pushModeContainer) pushModeContainer.style.display = 'none';
-    if (pinBox) pinBox.style.display = 'block';
-    // Clear any active push polling if user switches to PIN
-    cancelApprovalPolling();
-  } else {
-    pinTab?.classList.remove('active');
-    pushTab?.classList.add('active');
-    if (pushModeContainer) pushModeContainer.style.display = 'block';
-    if (pinBox) pinBox.style.display = 'none';
-  }
-
-  if (save && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.set({ preferredAuthMethod: method });
-  }
-}
 
 let currentGooglePicture = null;
 
@@ -696,50 +661,6 @@ function cancelApprovalPolling() {
   if (waitingCard) waitingCard.style.display = 'none';
 }
 
-/**
- * 🔢 Fallback: Unlock using 6-digit PIN
- */
-async function handleUnlockWithPin() {
-  const pinInput = document.getElementById('pinInput');
-  const passwordInput = document.getElementById('passwordInput');
-  const pin = pinInput?.value.trim() || '';
-  const password = passwordInput?.value.trim() || null;
-
-  hideMessages();
-
-  if (!pin || pin.length !== 6) {
-    showError('Please enter the 6-digit PIN from TetherPass on your phone.');
-    return;
-  }
-
-  const btn = document.getElementById('unlockWithPinBtn');
-  if (btn) btn.disabled = true;
-
-  try {
-    const response = await sendExtensionMessage({
-      action: 'SYNC_AND_UNLOCK',
-      payload: {
-        token: currentOAuthToken,
-        masterPassword: password,
-        pairingPin: pin,
-        deviceName: cachedDesktopDeviceName || 'Windows PC (Chrome)',
-        rawBackupText: localBackupPayload
-      }
-    });
-
-    if (response && response.success) {
-      if (pinInput) pinInput.value = '';
-      if (passwordInput) passwordInput.value = '';
-      await refreshStatus();
-    } else {
-      showError(response?.message || response?.error || 'PIN authorization failed.');
-    }
-  } catch (err) {
-    showError(`Error: ${err.message}`);
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
 
 let cachedAuthExpiresAt = null;
 

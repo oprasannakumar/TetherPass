@@ -372,23 +372,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
 
-    if (action === 'SYNC_AND_UNLOCK') {
-      try {
-        const res = await handleSyncAndUnlock(payload);
-        sendResponse(res);
-      } catch (err) {
-        sendResponse({ success: false, error: err.message });
-      }
-      return;
-    }
-
-    if (action === 'AUTHORIZE_WITH_PIN') {
-      try {
-        const res = await handleAuthorizeWithPin(payload);
-        sendResponse(res);
-      } catch (err) {
-        sendResponse({ success: false, error: err.message });
-      }
+    if (action === 'SYNC_AND_UNLOCK' || action === 'AUTHORIZE_WITH_PIN') {
+      sendResponse({ success: false, error: 'PIN_AUTH_REMOVED', message: 'PIN authorization has been removed. Please use Mobile Push Approval.' });
       return;
     }
 
@@ -522,128 +507,6 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
   return check;
 }
 
-async function handleSyncAndUnlock({ token, masterPassword, rawBackupText, pairingPin, deviceName }) {
-  if (token) driveClient.setToken(token);
-
-  // 1. Validate entered PIN format
-  if (!pairingPin || pairingPin.trim().length !== 6) {
-    return {
-      success: false,
-      error: 'INVALID_PIN_LENGTH',
-      message: 'Please enter the 6-digit PIN displayed on your TetherPass mobile app (Settings → Browser Extension).'
-    };
-  }
-
-  const cleanPin = pairingPin.trim();
-
-  // 2. Strict Mobile Authorization Verification
-  let authResult = { authorized: false };
-  let authCheckAttempted = false;
-
-  try {
-    authResult = await driveClient.checkMobileAuthorization();
-    authCheckAttempted = true;
-  } catch (e) {
-    console.warn('[TetherPass] Drive auth check notice:', e.message);
-  }
-
-  // If Drive auth was checked:
-  if (authCheckAttempted) {
-    if (!authResult.authorized) {
-      return {
-        success: false,
-        error: 'MOBILE_AUTH_REQUIRED',
-        message: authResult.message || 'Desktop extension is NOT authorized on your mobile app. Open TetherPass on your phone → Settings → Browser Extension and tap Authorize.'
-      };
-    }
-
-    // STRICT CHECK: The entered PIN MUST match the active PIN generated on mobile!
-    if (!authResult.pin || cleanPin !== String(authResult.pin).trim()) {
-      return {
-        success: false,
-        error: 'INCORRECT_PIN',
-        message: 'Access Denied: Incorrect 6-digit PIN. The PIN you entered does not match the active session on your phone.'
-      };
-    }
-  } else {
-    // Drive check could not be completed (e.g. no cloud token)
-    // If rawBackupText is not provided either, we cannot proceed
-    if (!rawBackupText) {
-      return {
-        success: false,
-        error: 'NO_DATA_SOURCE',
-        message: 'Could not connect to Google Drive or local backup file. Please provide a backup file or Google OAuth token.'
-      };
-    }
-  }
-
-  // 3. Fetch encrypted backup from Google Drive (or use provided backup text)
-  let backupPayload = rawBackupText;
-  if (!backupPayload) {
-    backupPayload = await driveClient.fetchEncryptedVaultBackup();
-  }
-
-  // 4. Resolve Master Password (auto-decrypt from pin_sealed_key if not entered)
-  let effectivePassword = masterPassword;
-  if (!effectivePassword && authResult.pin_sealed_key) {
-    try {
-      effectivePassword = await decryptSealedMasterPassword(authResult.pin_sealed_key, cleanPin);
-    } catch (e) {
-      console.warn('[CardVault] Could not decrypt pin_sealed_key:', e.message);
-    }
-  }
-
-  if (!effectivePassword) {
-    return {
-      success: false,
-      error: 'PASSWORD_REQUIRED',
-      message: 'PIN authorization key not found on Google Drive. Please tap "Authorize Desktop Extension" in TetherPass on your phone to generate a fresh pairing session.'
-    };
-  }
-
-  // 5. Decrypt Vault with Master Password
-  const decryptedItems = await decryptCardVaultBackup(backupPayload, effectivePassword);
-
-  // 5. Store in RAM and session storage with a full 30-minute desktop session
-  const desktopSessionDurationMs = 30 * 60 * 1000;
-  const sessionId = 'pin_' + cleanPin;
-  memoryVault.isAuthorized = true;
-  memoryVault.isUnlocked = true;
-  memoryVault.items = decryptedItems;
-  memoryVault.lastSyncedAt = Date.now();
-  memoryVault.authExpiresAt = Date.now() + desktopSessionDurationMs;
-  memoryVault.masterPassword = effectivePassword;
-  memoryVault.activePin = cleanPin;
-  memoryVault.sessionId = sessionId;
-  memoryVault.authMode = 'PIN';
-  memoryVault.sessionStartTime = Date.now();
-
-  await persistSession();
-
-  // Register active session in Google Drive
-  try {
-    const devName = deviceName || await getDesktopDeviceName('Windows Browser Extension (PIN)');
-    await driveClient.recordActiveSession({
-      sessionId,
-      deviceName: devName,
-      authMode: 'PIN',
-      createdAt: memoryVault.sessionStartTime,
-      expiresAt: memoryVault.authExpiresAt
-    });
-  } catch (_) {}
-
-  notifyAllTabsStatusChange();
-
-  return {
-    success: true,
-    itemCount: decryptedItems.length,
-    expiresAt: memoryVault.authExpiresAt
-  };
-}
-
-async function handleAuthorizeWithPin({ pin, masterPassword }) {
-  return await handleSyncAndUnlock({ masterPassword, pairingPin: pin });
-}
 
 function extractDomain(urlOrHost) {
   if (!urlOrHost) return '';

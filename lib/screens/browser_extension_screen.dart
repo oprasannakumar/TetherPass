@@ -3,11 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../services/auth_service.dart';
 import '../services/device_identity_service.dart';
 import '../services/drive_service.dart';
-import '../services/extension_auth_service.dart';
-import '../services/vault_security_service.dart';
 
 class BrowserExtensionScreen extends StatefulWidget {
   const BrowserExtensionScreen({super.key});
@@ -216,142 +213,15 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
     }
   }
 
-  Future<void> _handleAuthorize() async {
-    final sec = context.read<VaultSecurityService>();
-    final auth = context.read<AuthService>();
-    final authService = context.read<ExtensionAuthService>();
-
-    // 1. Optional Google Drive sync
-    // If signed in, the session token is synced to Drive as well.
-    // If not signed in, local PIN authorization remains fully active.
-
-    // 2. Security Check: Authenticate via Biometrics or Master Password
-    final isBiometricEnabled = await sec.isBiometricEnabled();
-    final canAuth = await auth.canAuthenticate();
-
-    bool authenticated = false;
-    String? masterPwd;
-
-    if (isBiometricEnabled && canAuth) {
-      authenticated = await auth.authenticate(
-        reason: 'Authorize TetherPass Browser Extension on Windows PC',
-      );
-      if (authenticated) {
-        masterPwd = await sec.getMasterPassword();
-      }
-    }
-
-    if (!authenticated || masterPwd == null || masterPwd.isEmpty) {
-      if (!mounted) return;
-      // Prompt for Master Password if biometric fails, isn't enabled, or password not yet cached
-      masterPwd = await _promptMasterPasswordDialog();
-      authenticated = masterPwd != null && masterPwd.isNotEmpty;
-    }
-
-    if (!authenticated || masterPwd == null || masterPwd.isEmpty) {
-      // User cancelled password prompt
-      return;
-    }
-
-    if (mounted) {
-      final success = await authService.authorizeExtension(
-        durationMinutes: 30,
-        masterPassword: masterPwd,
-      );
-      if (mounted) {
-        if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      'Browser extension approved for 30 mins',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.green.shade700,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to update authorization in Google Drive.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  Future<String?> _promptMasterPasswordDialog() async {
-    final sec = context.read<VaultSecurityService>();
-    final ctrl = TextEditingController();
-    String? errorText;
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDlgState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Verify Master Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Enter your Master Password to authorize desktop autofill.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-              const SizedBox(height: 12),
-              TextField(
-                controller: ctrl,
-                obscureText: true,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: 'Master Password',
-                  errorText: errorText,
-                  prefixIcon: const Icon(Icons.lock_rounded, color: Color(0xFFFF6F00)),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
-              onPressed: () async {
-                final text = ctrl.text.trim();
-                final ok = await sec.verifyMasterPassword(text);
-                if (ok) {
-                  await sec.saveMasterPassword(text);
-                  if (ctx.mounted) {
-                    Navigator.pop(ctx, text);
-                  }
-                } else {
-                  setDlgState(() => errorText = 'Incorrect Master Password');
-                }
-              },
-              child: const Text('Verify & Authorize'),
-            ),
-          ],
-        ),
-      ),
-    );
-    return result;
-  }
 
   @override
   Widget build(BuildContext context) {
-    final authService = context.watch<ExtensionAuthService>();
     final drive = context.watch<DriveService>();
-    final isAuthorized = authService.isAuthorized;
+    final activeSessions = _desktopSessions.where((s) => s['isCurrentlyActive'] == true).toList();
+    final isAuthorized = activeSessions.isNotEmpty;
+    final int? minMinsLeft = activeSessions.isNotEmpty
+        ? activeSessions.map((s) => (s['minutesRemaining'] as num?)?.toInt() ?? 0).reduce((a, b) => a < b ? a : b)
+        : null;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -404,13 +274,13 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: isAuthorized ? Colors.greenAccent.withValues(alpha: 0.25) : const Color(0xFFFF6F00).withValues(alpha: 0.25),
+                                color: isAuthorized ? Colors.greenAccent.withValues(alpha: 0.25) : const Color(0xFF64748B).withValues(alpha: 0.25),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                isAuthorized ? '● DESKTOP AUTHORIZED' : '🔒 DESKTOP LOCKED',
+                                isAuthorized ? '● DESKTOP CONNECTED' : '🔒 DESKTOP LOCKED',
                                 style: TextStyle(
-                                  color: isAuthorized ? Colors.greenAccent : const Color(0xFFFFB74D),
+                                  color: isAuthorized ? Colors.greenAccent : const Color(0xFFCBD5E1),
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 1,
@@ -419,7 +289,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              isAuthorized ? 'Autofill Active on Windows PC' : 'Awaiting Mobile Authorization',
+                              isAuthorized ? '${activeSessions.length} Active Desktop Session${activeSessions.length > 1 ? "s" : ""}' : 'Awaiting Mobile Push Approval',
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                             ),
                           ],
@@ -427,14 +297,14 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                       ),
                     ],
                   ),
-                  if (isAuthorized && authService.expiresAt != null) ...[
+                  if (isAuthorized && minMinsLeft != null) ...[
                     const Divider(color: Colors.white24, height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Session Expiry:', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        const Text('Next Session Expiry:', style: TextStyle(color: Colors.white70, fontSize: 12)),
                         Text(
-                          '${authService.expiresAt!.difference(DateTime.now()).inMinutes} minutes remaining',
+                          '$minMinsLeft minutes remaining',
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                         ),
                       ],
@@ -489,148 +359,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
             // ── Active Desktop Sessions ──
             _buildActiveSessionsSection(drive),
 
-            const SizedBox(height: 14),
-
-            // ── 6-Digit One-Time Pairing PIN Section ──
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'DESKTOP PAIRING PIN',
-                        style: TextStyle(color: Color(0xFFFF6F00), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                      ),
-                      InkWell(
-                        onTap: () {
-                          authService.regeneratePin();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Generated fresh 6-digit PIN'), duration: Duration(seconds: 1)),
-                          );
-                        },
-                        child: Row(
-                          children: const [
-                            Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF64748B)),
-                            SizedBox(width: 4),
-                            Text('Regenerate', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // PIN Display
-                  InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: authService.currentPin));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('PIN copied to clipboard!'), duration: Duration(seconds: 1)),
-                      );
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFCBD5E1)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            authService.currentPin,
-                            style: const TextStyle(
-                              color: Color(0xFF0F172A),
-                              fontFamily: 'Courier',
-                              fontSize: 30,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 10,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.copy_rounded, color: Color(0xFF94A3B8), size: 18),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Enter this 6-digit code in the TetherPass extension popup on your Windows browser along with your Master Password.',
-                    style: TextStyle(color: Color(0xFF64748B), fontSize: 11, height: 1.4),
-                  ),
-                ],
-              ),
-            ),
-
             const SizedBox(height: 16),
-
-            // ── Authorization Button Actions ──
-            if (!isAuthorized) ...[
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6F00),
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 52),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 2,
-                ),
-                icon: const Icon(Icons.verified_user_rounded),
-                label: authService.isLoading
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text('Authorize Desktop Extension', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                onPressed: authService.isLoading ? null : _handleAuthorize,
-              ),
-            ] else ...[
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade600,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                icon: const Icon(Icons.lock_reset_rounded),
-                label: const Text('Revoke Desktop Authorization Now', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                onPressed: authService.isLoading ? null : () async {
-                  await authService.revokeExtension();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-                            SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                'Desktop authorization revoked and extension locked',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                              ),
-                            ),
-                          ],
-                        ),
-                        backgroundColor: Colors.red.shade700,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    );
-                  }
-                },
-              ),
-            ],
-
-            const SizedBox(height: 20),
 
             // ── Linked Mobile Phones Management ──
             Container(
@@ -878,7 +607,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                       ],
                     ),
                   ),
-                  _buildStepRow('5', 'TetherPass icon appears in your toolbar! Enter your 6-digit PIN and Master Password to unlock autofill across all websites.'),
+                  _buildStepRow('5', 'TetherPass icon appears in your toolbar! Enter your Master Password and tap "Send Confirmation Pop-up" to approve access with your biometric lock.'),
                 ],
               ),
             ),
@@ -1088,25 +817,14 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
   Widget _buildSessionTile(Map<String, dynamic> s, {required bool isActive}) {
     final sessionId = (s['sessionId'] as String?) ?? '';
     final deviceName = (s['deviceName'] as String?) ?? 'Windows Browser Extension';
-    final authMode = (s['authMode'] as String?) ?? 'PUSH';
     final minsLeft = (s['minutesRemaining'] as num?)?.toInt() ?? 0;
     final createdAt = (s['createdAt'] as num?)?.toInt() ?? 0;
     final status = (s['status'] as String?) ?? (isActive ? 'ACTIVE' : 'EXPIRED');
 
-    final isPush = authMode.toUpperCase() == 'PUSH';
-
-    final borderColor = isActive
-        ? (isPush ? const Color(0xFF3B82F6) : const Color(0xFFF97316))
-        : (isPush ? const Color(0xFFBFDBFE) : const Color(0xFFFFEDD5));
-    final bannerBg = isActive
-        ? (isPush ? const Color(0xFFEFF6FF) : const Color(0xFFFFF7ED))
-        : const Color(0xFFF8FAFC);
-    final bannerBorderBottom = isActive
-        ? (isPush ? const Color(0xFFDBEAFE) : const Color(0xFFFFEDD5))
-        : const Color(0xFFE2E8F0);
-    final iconColor = isActive
-        ? (isPush ? const Color(0xFF2563EB) : const Color(0xFFEA580C))
-        : const Color(0xFF64748B);
+    final borderColor = isActive ? const Color(0xFF3B82F6) : const Color(0xFFE2E8F0);
+    final bannerBg = isActive ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC);
+    final bannerBorderBottom = isActive ? const Color(0xFFDBEAFE) : const Color(0xFFE2E8F0);
+    final iconColor = isActive ? const Color(0xFF2563EB) : const Color(0xFF64748B);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1120,7 +838,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
         boxShadow: isActive
             ? [
                 BoxShadow(
-                  color: (isPush ? Colors.blue : Colors.orange).withValues(alpha: 0.08),
+                  color: Colors.blue.withValues(alpha: 0.08),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -1130,7 +848,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Device Name Header Banner (Distinguished by color, labels removed)
+          // Device Name Header Banner
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
@@ -1143,7 +861,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
             child: Row(
               children: [
                 Icon(
-                  isPush ? Icons.touch_app_rounded : Icons.dialpad_rounded,
+                  Icons.touch_app_rounded,
                   color: iconColor,
                   size: 20,
                 ),
