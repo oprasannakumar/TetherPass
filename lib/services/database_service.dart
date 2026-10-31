@@ -13,7 +13,7 @@ import 'secure_backup_export_service.dart';
 class DatabaseService {
   static const _dbName = 'card_vault_v2.db';
   static const _tableName = 'vault_items';
-  static const _dbVersion = 6;
+  static const _dbVersion = 7;
 
   final CryptoService cryptoService;
   Database? _db;
@@ -63,7 +63,8 @@ class DatabaseService {
         mpin_expiry TEXT,
         account_number TEXT,
         ifsc_code TEXT,
-        accounts TEXT
+        accounts TEXT,
+        website TEXT
       )
     ''');
   }
@@ -107,6 +108,11 @@ class DatabaseService {
     if (oldVersion < 6) {
       try {
         await db.execute('ALTER TABLE $_tableName ADD COLUMN accounts TEXT DEFAULT ""');
+      } catch (_) {}
+    }
+    if (oldVersion < 7) {
+      try {
+        await db.execute('ALTER TABLE $_tableName ADD COLUMN website TEXT DEFAULT ""');
       } catch (_) {}
     }
   }
@@ -238,6 +244,7 @@ class DatabaseService {
       'notes': _safeEncrypt(item.notes),
       'created_at': item.createdAt.toIso8601String(),
       'updated_at': item.updatedAt.toIso8601String(),
+      'website': _safeEncrypt(item.website),
       // Card
       'card_number': _safeEncrypt(item.cardNumber),
       'card_holder': item.cardHolder,
@@ -269,12 +276,15 @@ class DatabaseService {
   VaultItem _decryptItemMap(Map<String, dynamic> map) {
     return VaultItem(
       id: map['id'] as String,
-      type: map['type'] == 'netBanking' ? VaultItemType.netBanking : VaultItemType.card,
-      bankName: map['bank_name'] as String? ?? 'Other Bank',
+      type: map['type'] == 'password'
+          ? VaultItemType.password
+          : (map['type'] == 'netBanking' ? VaultItemType.netBanking : VaultItemType.card),
+      bankName: map['bank_name'] as String? ?? (map['type'] == 'password' ? 'Website Password' : 'Other Bank'),
       nickname: map['nickname'] as String? ?? 'My Item',
       notes: _safeDecrypt(map['notes'] as String?),
       createdAt: DateTime.tryParse(map['created_at'] as String? ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(map['updated_at'] as String? ?? '') ?? DateTime.now(),
+      website: _safeDecrypt(map['website'] as String?),
       // Card
       cardNumber: _safeDecrypt(map['card_number'] as String?),
       cardHolder: map['card_holder'] as String? ?? '',

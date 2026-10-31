@@ -635,6 +635,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (_selectedFilter == 1 && (!item.isCard || !item.isCredit)) return false;
       if (_selectedFilter == 2 && (!item.isCard || !item.isDebit)) return false;
       if (_selectedFilter == 3 && !item.isNetBanking) return false;
+      if (_selectedFilter == 4 && !item.isPassword) return false;
 
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
@@ -642,8 +643,12 @@ class _HomeScreenState extends State<HomeScreen> {
         final matchBank = item.bankName.toLowerCase().contains(q);
         final matchHolder = item.cardHolder.toLowerCase().contains(q);
         final matchAcc = item.allAccounts.any((a) => a.accountNumber.toLowerCase().contains(q) || a.ifscCode.toLowerCase().contains(q));
-        final matchType = item.isCard ? (item.isDebit ? 'debit' : 'credit') : 'bank';
-        return matchNick || matchBank || matchHolder || matchAcc || matchType.contains(q);
+        final matchUser = item.userId.toLowerCase().contains(q);
+        final matchWeb = item.website.toLowerCase().contains(q);
+        final matchType = item.isCard
+            ? (item.isDebit ? 'debit' : 'credit')
+            : (item.isPassword ? 'password' : 'bank');
+        return matchNick || matchBank || matchHolder || matchAcc || matchUser || matchWeb || matchType.contains(q);
       }
       return true;
     }).toList();
@@ -1033,6 +1038,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       _buildFilterChip('Debit Cards (${_items.where((i) => i.isCard && i.isDebit).length})', 2),
                       const SizedBox(width: 8),
                       _buildFilterChip('Bank (${_items.where((i) => i.isNetBanking).length})', 3),
+                      const SizedBox(width: 8),
+                      _buildFilterChip('Passwords (${_items.where((i) => i.isPassword).length})', 4),
                     ],
                   ),
                 ),
@@ -1184,6 +1191,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ];
       iconBg = const Color(0xFFFEF08A);
       iconColor = const Color(0xFFB45309);
+    } else if (item.isPassword) {
+      iconBg = const Color(0xFF6366F1).withValues(alpha: 0.12);
+      iconColor = const Color(0xFF4F46E5);
     } else {
       iconBg = item.isCard
           ? (item.isDebit
@@ -1220,9 +1230,11 @@ class _HomeScreenState extends State<HomeScreen> {
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(
-            item.isCard
-                ? (item.isDebit ? Icons.account_balance_wallet_rounded : Icons.credit_card_rounded)
-                : Icons.account_balance_rounded,
+            item.isPassword
+                ? Icons.vpn_key_rounded
+                : (item.isCard
+                    ? (item.isDebit ? Icons.account_balance_wallet_rounded : Icons.credit_card_rounded)
+                    : Icons.account_balance_rounded),
             color: iconColor,
             size: 22,
           ),
@@ -1243,7 +1255,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (item.isCard) ...[
+            if (item.isPassword) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFC7D2FE)),
+                ),
+                child: const Text(
+                  'PASSWORD',
+                  style: TextStyle(
+                    color: Color(0xFF4338CA),
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ] else if (item.isCard) ...[
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
@@ -1287,8 +1316,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-
-
             ] else ...[
               if (item.isAnyPasswordExpired)
                 Container(
@@ -1336,13 +1363,15 @@ class _HomeScreenState extends State<HomeScreen> {
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(
-            item.isCard
-                ? '${item.isDebit ? "Debit" : "Credit"}  •  ${item.cardNetwork}  •  ${item.maskedCardNumber}'
-                : (item.allAccounts.isNotEmpty
-                    ? (item.allAccounts.length > 1
-                        ? '${item.allAccounts.length} Accounts  •  Primary: ${item.allAccounts.first.maskedAccountNumber}'
-                        : 'A/C: ${item.allAccounts.first.maskedAccountNumber}${item.allAccounts.first.ifscCode.isNotEmpty ? "  •  ${item.allAccounts.first.ifscCode}" : ""}')
-                    : 'User ID: ${item.userId.isEmpty ? "—" : item.userId}'),
+            item.isPassword
+                ? '${item.website.isNotEmpty ? "${item.website}  •  " : ""}${item.userId.isNotEmpty ? item.userId : "Password Saved"}'
+                : (item.isCard
+                    ? '${item.isDebit ? "Debit" : "Credit"}  •  ${item.cardNetwork}  •  ${item.maskedCardNumber}'
+                    : (item.allAccounts.isNotEmpty
+                        ? (item.allAccounts.length > 1
+                            ? '${item.allAccounts.length} Accounts  •  Primary: ${item.allAccounts.first.maskedAccountNumber}'
+                            : 'A/C: ${item.allAccounts.first.maskedAccountNumber}${item.allAccounts.first.ifscCode.isNotEmpty ? "  •  ${item.allAccounts.first.ifscCode}" : ""}')
+                        : 'User ID: ${item.userId.isEmpty ? "—" : item.userId}')),
             style: TextStyle(
               color: isExpired
                   ? Colors.red.shade800

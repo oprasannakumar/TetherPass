@@ -78,10 +78,12 @@
       return 'PASSWORD';
     }
 
-    // 8. User ID / Customer ID / Username
+    // 8. User ID / Customer ID / Username / Email
     if (
-      raw.includes('customer_id') || raw.includes('cust_id') || raw.includes('userid') ||
-      raw.includes('user_id') || raw.includes('cif') || autocomplete.includes('username')
+      type === 'email' || autocomplete.includes('username') || autocomplete.includes('email') ||
+      raw.includes('username') || raw.includes('user_name') || raw.includes('email') ||
+      raw.includes('login') || raw.includes('userid') || raw.includes('user_id') ||
+      raw.includes('customer_id') || raw.includes('cust_id') || raw.includes('cif')
     ) {
       return 'USER_ID';
     }
@@ -233,6 +235,27 @@
         });
       }
 
+      // 3. WEBSITE PASSWORDS (Matching current domain)
+      if (['USER_ID', 'PASSWORD'].includes(fieldType) && data.passwords && data.passwords.length > 0) {
+        data.passwords.forEach(pwd => {
+          const itemRow = document.createElement('div');
+          itemRow.className = 'cv-item-row';
+          itemRow.innerHTML = `
+            <div class="cv-item-icon">🌐</div>
+            <div class="cv-item-info">
+              <div class="cv-item-title">${escapeHtml(pwd.nickname)}</div>
+              <div class="cv-item-sub">${escapeHtml(pwd.username)} ${pwd.website ? '• ' + escapeHtml(pwd.website) : ''}</div>
+            </div>
+          `;
+          itemRow.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            fillPasswordCredentials(targetInput, pwd, fieldType);
+            removeDropdown();
+          });
+          itemsList.appendChild(itemRow);
+        });
+      }
+
       if (itemsList.children.length === 0) {
         const emptyNotice = document.createElement('div');
         emptyNotice.className = 'cv-empty-notice';
@@ -309,6 +332,22 @@
       if (t === 'PASSWORD' && (bank.loginPassword || bank.profilePassword)) {
         setInputValue(inp, bank.loginPassword || bank.profilePassword);
       }
+    });
+  }
+
+  function fillPasswordCredentials(focusedInput, pwd, currentFieldType) {
+    const form = focusedInput.form || document;
+
+    if (currentFieldType === 'USER_ID') setInputValue(focusedInput, pwd.username);
+    if (currentFieldType === 'PASSWORD') setInputValue(focusedInput, pwd.password);
+
+    // Auto-fill sister input in form or page
+    const inputs = form.querySelectorAll('input');
+    inputs.forEach(inp => {
+      if (inp === focusedInput) return;
+      const t = classifyInput(inp);
+      if (t === 'USER_ID' && pwd.username) setInputValue(inp, pwd.username);
+      if (t === 'PASSWORD' && pwd.password) setInputValue(inp, pwd.password);
     });
   }
 

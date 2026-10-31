@@ -356,6 +356,26 @@ async function handleAuthorizeWithPin({ pin, masterPassword }) {
   return await handleSyncAndUnlock({ masterPassword, pairingPin: pin });
 }
 
+function extractDomain(urlOrHost) {
+  if (!urlOrHost) return '';
+  let str = urlOrHost.trim().toLowerCase();
+  str = str.replace(/^[a-zA-Z]+:\/\//, '');
+  str = str.split('/')[0].split('?')[0].split('#')[0];
+  str = str.split(':')[0];
+  return str.replace(/^www\./, '');
+}
+
+function doesDomainMatch(itemWebsite, pageHost) {
+  if (!itemWebsite || !pageHost) return false;
+  const itemDom = extractDomain(itemWebsite);
+  const pageDom = extractDomain(pageHost);
+  if (!itemDom || !pageDom) return false;
+  if (itemDom === pageDom) return true;
+  if (pageDom.endsWith('.' + itemDom)) return true;
+  if (itemDom.endsWith('.' + pageDom)) return true;
+  return false;
+}
+
 async function handleGetAutofillSuggestions({ fieldType, domain }) {
   // CRITICAL SECURITY CATCH: Check authorization from mobile application
   if (!memoryVault.isAuthorized || !memoryVault.isUnlocked) {
@@ -363,7 +383,8 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
       authorized: false,
       message: 'Authorize on CardVault mobile app to enable autofill',
       cards: [],
-      bankAccounts: []
+      bankAccounts: [],
+      passwords: []
     };
   }
 
@@ -374,20 +395,42 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
       authorized: false,
       message: 'Mobile session expired. Please re-authorize on phone.',
       cards: [],
-      bankAccounts: []
+      bankAccounts: [],
+      passwords: []
     };
   }
 
   // Group items using universal normalizer for Flutter VaultItem maps
   const cards = [];
   const bankAccounts = [];
+  const passwords = [];
 
   for (const item of memoryVault.items) {
     const type = (item.type || '').toLowerCase();
+    const isPassword = type === 'password';
     const rawCardNumber = (item.card_number || item.cardNumber || '').replace(/\s+/g, '');
-    const isCard = type === 'card' || (!type.includes('bank') && rawCardNumber.length >= 12);
+    const isCard = !isPassword && (type === 'card' || (!type.includes('bank') && rawCardNumber.length >= 12));
 
-    if (isCard) {
+    if (isPassword) {
+      const pwdItem = {
+        id: item.id || String(Math.random()),
+        nickname: item.nickname || item.bank_name || 'Website Password',
+        website: item.website || '',
+        username: item.user_id || item.userId || item.username || '',
+        password: item.login_password || item.loginPassword || item.password || '',
+        notes: item.notes || ''
+      };
+
+      // Strict domain matching for website logins:
+      // If requested by webpage autofill on a specific domain, only suggest matching credentials!
+      if (domain && fieldType !== 'ALL') {
+        if (doesDomainMatch(pwdItem.website, domain)) {
+          passwords.push(pwdItem);
+        }
+      } else {
+        passwords.push(pwdItem);
+      }
+    } else if (isCard) {
       cards.push({
         id: item.id || String(Math.random()),
         nickname: item.nickname || item.card_holder || item.cardHolder || 'Card',
@@ -447,7 +490,8 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
   return {
     authorized: true,
     cards,
-    bankAccounts
+    bankAccounts,
+    passwords
   };
 }
 

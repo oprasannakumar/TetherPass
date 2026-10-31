@@ -794,11 +794,12 @@ function updateCounts() {
 
   const cards = currentVaultItems.cards || [];
   const banks = currentVaultItems.bankAccounts || [];
+  const passwords = currentVaultItems.passwords || [];
   const pwdBanks = banks.filter(b => b.loginPassword || b.profilePassword || b.mpin);
 
   if (cardsCount) cardsCount.textContent = cards.length;
   if (banksCount) banksCount.textContent = banks.reduce((sum, b) => sum + (b.accounts?.length || 1), 0);
-  if (pwdCount) pwdCount.textContent = pwdBanks.length;
+  if (pwdCount) pwdCount.textContent = passwords.length + pwdBanks.length;
 }
 
 function renderVaultList(query = '') {
@@ -873,19 +874,54 @@ function renderVaultList(query = '') {
       });
     });
   } else if (currentTab === 'passwords') {
-    const banks = (currentVaultItems.bankAccounts || []).filter(b => b.loginPassword || b.profilePassword || b.mpin);
-    if (banks.length === 0) {
+    const pwds = (currentVaultItems.passwords || []).filter(p => {
+      if (!query) return true;
+      return (p.nickname || '').toLowerCase().includes(query) ||
+             (p.website || '').toLowerCase().includes(query) ||
+             (p.username || '').toLowerCase().includes(query);
+    });
+
+    const banks = (currentVaultItems.bankAccounts || []).filter(b => {
+      const hasCreds = b.loginPassword || b.profilePassword || b.mpin;
+      if (!query) return hasCreds;
+      return hasCreds &&
+             ((b.bankName || '').toLowerCase().includes(query) || (b.userId || '').toLowerCase().includes(query));
+    });
+
+    if (pwds.length === 0 && banks.length === 0) {
       list.innerHTML = '<div style="padding:20px;text-align:center;color:#94A3B8;font-size:12px;">No passwords saved in vault.</div>';
       return;
     }
 
+    // 1. Website Passwords
+    pwds.forEach(pwd => {
+      const tile = document.createElement('div');
+      tile.className = 'card-tile';
+      const webUrl = pwd.website ? (pwd.website.startsWith('http') ? pwd.website : 'https://' + pwd.website) : '';
+      tile.innerHTML = `
+        <div class="tile-header">
+          <span class="tile-title">🌐 ${escapeHtml(pwd.nickname)}</span>
+          <span class="tile-badge" style="background:#EEF2FF;color:#4338CA;border-color:#C7D2FE;">WEB</span>
+        </div>
+        ${pwd.website ? `<div style="font-size:11px;color:#3B82F6;margin-bottom:4px;word-break:break-all;">🔗 ${escapeHtml(pwd.website)}</div>` : ''}
+        <div style="font-size:11px;color:#475569;margin-bottom:6px;">👤 User: <strong>${escapeHtml(pwd.username || 'N/A')}</strong></div>
+        <div class="tile-actions">
+          ${pwd.username ? `<button class="copy-chip" data-copy="${pwd.username}">Copy User</button>` : ''}
+          ${pwd.password ? `<button class="copy-chip" data-copy="${pwd.password}">Copy Password</button>` : ''}
+          ${webUrl ? `<button class="copy-chip open-site" data-url="${webUrl}">Open Site</button>` : ''}
+        </div>
+      `;
+      list.appendChild(tile);
+    });
+
+    // 2. Bank Credentials
     banks.forEach(bank => {
       const tile = document.createElement('div');
       tile.className = 'card-tile';
       tile.innerHTML = `
         <div class="tile-header">
-          <span class="tile-title">${escapeHtml(bank.bankName)} Credentials</span>
-          <span class="tile-badge">CREDS</span>
+          <span class="tile-title">🏦 ${escapeHtml(bank.bankName)} Credentials</span>
+          <span class="tile-badge">BANK</span>
         </div>
         <div style="font-size:11px;color:#475569;margin-bottom:4px;">User: ${escapeHtml(bank.userId || 'N/A')}</div>
         <div class="tile-actions">
@@ -899,7 +935,7 @@ function renderVaultList(query = '') {
   }
 
   // Attach clipboard listener
-  list.querySelectorAll('.copy-chip').forEach(btn => {
+  list.querySelectorAll('.copy-chip:not(.open-site)').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const text = btn.getAttribute('data-copy');
@@ -912,6 +948,17 @@ function renderVaultList(query = '') {
           btn.textContent = original;
           btn.classList.remove('copied');
         }, 1200);
+      }
+    });
+  });
+
+  // Attach open-site listener
+  list.querySelectorAll('.open-site').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const url = btn.getAttribute('data-url');
+      if (url) {
+        chrome.tabs.create({ url });
       }
     });
   });

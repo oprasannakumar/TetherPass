@@ -182,7 +182,16 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   void _copyAllDetails() {
-    if (_item.isCard) {
+    if (_item.isPassword) {
+      final text = '''
+🏷️ Title: ${_item.nickname}
+🌐 Website: ${_item.website}
+👤 Username: ${_item.userId}
+🔑 Password: ${_item.loginPassword}
+${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
+'''.trim();
+      _copyToClipboard('Credentials', text);
+    } else if (_item.isCard) {
       final formattedNumber = _formatCardNumber(_item.cardNumber);
       final text = '''
 👤 Name: ${_item.cardHolder.toUpperCase()}
@@ -221,7 +230,16 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
   }
 
   void _shareDetails() {
-    if (_item.isCard) {
+    if (_item.isPassword) {
+      final text = '''
+🏷️ Title: ${_item.nickname}
+🌐 Website: ${_item.website}
+👤 Username: ${_item.userId}
+🔑 Password: ${_item.loginPassword}
+${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
+'''.trim();
+      Share.share(text, subject: '${_item.nickname} Credentials');
+    } else if (_item.isCard) {
       final formattedNumber = _formatCardNumber(_item.cardNumber);
       final text = '''
 👤 Name: ${_item.cardHolder.toUpperCase()}
@@ -341,7 +359,9 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
           child: Column(
             children: [
               // ── Top Stylized Card (All details displayed on card itself) ──
-              if (_item.isCard) ...[
+              if (_item.isPassword) ...[
+                _buildPasswordVisual(),
+              ] else if (_item.isCard) ...[
                 _buildCardVisual(),
                 if (_item.isCardExpired || _item.isCardExpiringSoon) ...[
                   const SizedBox(height: 12),
@@ -405,6 +425,234 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ─── Stylized Password Visual ──────────────────────────────────────────
+
+  Widget _buildPasswordVisual() {
+    const gradient = [
+      Color(0xFF312E81), // Indigo 900
+      Color(0xFF4338CA), // Indigo 700
+      Color(0xFF1E1B4B), // Indigo 950
+    ];
+    const textColor = Colors.white;
+    final hintColor = Colors.white.withValues(alpha: 0.6);
+    const accentColor = Color(0xFF818CF8);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.15), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4338CA).withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: Web Logo + Title + Badge
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.vpn_key_rounded, color: Color(0xFFFFB300), size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _item.nickname.toUpperCase(),
+                      style: const TextStyle(
+                        color: textColor,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        letterSpacing: 1.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'WEBSITE CREDENTIALS',
+                      style: TextStyle(
+                        color: hintColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 10,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: accentColor.withValues(alpha: 0.4)),
+                ),
+                child: const Text(
+                  'PASSWORD',
+                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // Website Address Row (if present)
+          if (_item.website.isNotEmpty) ...[
+            InkWell(
+              onTap: () => _copyToClipboard('Website URL', _item.website),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.language_rounded, color: Color(0xFF818CF8), size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('WEBSITE ADDRESS', style: TextStyle(color: hintColor, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                          const SizedBox(height: 2),
+                          Text(
+                            _item.website,
+                            style: const TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.copy_rounded, size: 18, color: Colors.white70),
+                      tooltip: 'Copy URL',
+                      onPressed: () => _copyToClipboard('Website URL', _item.website),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // Username / Email
+          InkWell(
+            onTap: () => _copyToClipboard('Username', _item.userId),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.person_outline_rounded, color: Color(0xFF818CF8), size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('USERNAME / EMAIL', style: TextStyle(color: hintColor, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                        const SizedBox(height: 2),
+                        Text(
+                          _item.userId.isEmpty ? '—' : _item.userId,
+                          style: const TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy_rounded, size: 18, color: Colors.white70),
+                    tooltip: 'Copy Username',
+                    onPressed: () => _copyToClipboard('Username', _item.userId),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Password Field with Eye toggle and copy
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.lock_outline_rounded, color: Color(0xFF818CF8), size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('PASSWORD', style: TextStyle(color: hintColor, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                      const SizedBox(height: 2),
+                      _isLoginPasswordRevealed
+                          ? Text(
+                              _item.loginPassword.isEmpty ? '—' : _item.loginPassword,
+                              style: const TextStyle(color: Color(0xFFFFB300), fontFamily: 'Courier', fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+                            )
+                          : const Text(
+                              '••••••••••••',
+                              style: TextStyle(color: Colors.white70, fontSize: 16, letterSpacing: 3),
+                            ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(_isLoginPasswordRevealed ? Icons.visibility_rounded : Icons.visibility_off_rounded, size: 18, color: Colors.white70),
+                  tooltip: _isLoginPasswordRevealed ? 'Hide' : 'Reveal',
+                  onPressed: () => setState(() => _isLoginPasswordRevealed = !_isLoginPasswordRevealed),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.copy_rounded, size: 18, color: Colors.white70),
+                  tooltip: 'Copy Password',
+                  onPressed: () => _copyToClipboard('Password', _item.loginPassword),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

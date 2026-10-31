@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/card_detector.dart';
 
-enum VaultItemType { card, netBanking }
+enum VaultItemType { card, netBanking, password }
 
 enum CardTier { standard, gold, platinum, infinite, signature }
 
@@ -80,6 +80,7 @@ class VaultItem {
   final String notes;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String website; // URL or domain for website passwords / bank portals
 
   // ── Card Specific Fields ──
   final String cardNumber; // Plaintext when in memory, encrypted in DB
@@ -116,6 +117,7 @@ class VaultItem {
     this.notes = '',
     required this.createdAt,
     required this.updatedAt,
+    this.website = '',
     // Card
     this.cardNumber = '',
     this.cardHolder = '',
@@ -146,6 +148,9 @@ class VaultItem {
   bool get isCard => type == VaultItemType.card;
   bool get isNetBanking => type == VaultItemType.netBanking;
   bool get isBank => type == VaultItemType.netBanking;
+  bool get isPassword => type == VaultItemType.password;
+  String get username => isPassword ? userId : '';
+  String get password => isPassword ? loginPassword : '';
 
   /// Returns list of all bank accounts (at least one if accountNumber is present)
   List<BankAccount> get allAccounts {
@@ -345,6 +350,7 @@ class VaultItem {
     String? notes,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? website,
     String? cardNumber,
     String? cardHolder,
     String? cardNetwork,
@@ -377,6 +383,7 @@ class VaultItem {
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      website: website ?? this.website,
       cardNumber: cardNumber ?? this.cardNumber,
       cardHolder: cardHolder ?? this.cardHolder,
       cardNetwork: cardNetwork ?? this.cardNetwork,
@@ -412,6 +419,7 @@ class VaultItem {
       'notes': notes,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'website': website,
       'card_number': cardNumber,
       'card_holder': cardHolder,
       'card_network': cardNetwork,
@@ -441,12 +449,15 @@ class VaultItem {
   factory VaultItem.fromMap(Map<String, dynamic> map) {
     return VaultItem(
       id: map['id'] as String,
-      type: map['type'] == 'netBanking' ? VaultItemType.netBanking : VaultItemType.card,
-      bankName: map['bank_name'] as String? ?? 'Other Bank',
+      type: map['type'] == 'password'
+          ? VaultItemType.password
+          : (map['type'] == 'netBanking' ? VaultItemType.netBanking : VaultItemType.card),
+      bankName: map['bank_name'] as String? ?? (map['type'] == 'password' ? 'Website Password' : 'Other Bank'),
       nickname: map['nickname'] as String? ?? 'My Item',
       notes: map['notes'] as String? ?? '',
       createdAt: DateTime.tryParse(map['created_at'] as String? ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(map['updated_at'] as String? ?? '') ?? DateTime.now(),
+      website: map['website'] as String? ?? '',
       cardNumber: map['card_number'] as String? ?? '',
       cardHolder: map['card_holder'] as String? ?? '',
       cardNetwork: map['card_network'] as String? ?? 'Visa',

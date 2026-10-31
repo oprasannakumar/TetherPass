@@ -100,6 +100,14 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
   DateTime? _profilePasswordExpiry;
   DateTime? _mpinExpiry;
 
+  // ── Password Manager controllers ──
+  final _pwdNicknameCtrl = TextEditingController();
+  final _pwdWebsiteCtrl = TextEditingController();
+  final _pwdUsernameCtrl = TextEditingController();
+  final _pwdPasswordCtrl = TextEditingController();
+  final _pwdNotesCtrl = TextEditingController();
+  bool _pwdPasswordVisible = false;
+
   // ── Validation Errors ──
   String? _cardNicknameError;
   String? _cardBankError;
@@ -111,6 +119,11 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
   String? _nbNicknameError;
   String? _nbUserIdError;
   String? _nbLoginPasswordError;
+
+  String? _pwdNicknameError;
+  String? _pwdWebsiteError;
+  String? _pwdUsernameError;
+  String? _pwdPasswordError;
 
   bool _isSaving = false;
 
@@ -125,9 +138,28 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
   void _startAddEditTour() {
     if (_tabController.index == 0) {
       _startCardFormTour();
-    } else {
+    } else if (_tabController.index == 1) {
       _startBankFormTour();
+    } else {
+      _startPasswordFormTour();
     }
+  }
+
+  void _startPasswordFormTour() {
+    final steps = <SpotlightTourStep>[
+      SpotlightTourStep(
+        targetKey: _tabBarKey,
+        icon: Icons.tab_rounded,
+        title: 'Vault Type Tabs',
+        description: 'Switch between Cards, Bank Accounts, or Website Credentials to store passwords for any site or app.',
+        isCircle: false,
+        borderRadius: 12,
+      ),
+    ];
+    SpotlightTourOverlay.show(
+      context: context,
+      steps: steps,
+    );
   }
 
   void _startCardFormTour() {
@@ -209,12 +241,23 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
   @override
   void initState() {
     super.initState();
-    final isEditingNetBanking = widget.initialItem?.isNetBanking ?? false;
-    _tabController = TabController(length: 2, vsync: this, initialIndex: isEditingNetBanking ? 1 : 0);
+    int initialTab = 0;
+    if (widget.initialItem?.isPassword ?? false) {
+      initialTab = 2;
+    } else if (widget.initialItem?.isNetBanking ?? false) {
+      initialTab = 1;
+    }
+    _tabController = TabController(length: 3, vsync: this, initialIndex: initialTab);
 
     if (widget.initialItem != null) {
       final it = widget.initialItem!;
-      if (it.isCard) {
+      if (it.isPassword) {
+        _pwdNicknameCtrl.text = it.nickname;
+        _pwdWebsiteCtrl.text = it.website;
+        _pwdUsernameCtrl.text = it.userId;
+        _pwdPasswordCtrl.text = it.loginPassword;
+        _pwdNotesCtrl.text = it.notes;
+      } else if (it.isCard) {
         _cardNicknameCtrl.text = it.nickname;
         _cardBankCtrl.text = it.bankName;
         _cardNumberCtrl.text = it.cardNumber;
@@ -318,6 +361,11 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
     _nbMpinCtrl.dispose();
     _nbCifCtrl.dispose();
     _nbNotesCtrl.dispose();
+    _pwdNicknameCtrl.dispose();
+    _pwdWebsiteCtrl.dispose();
+    _pwdUsernameCtrl.dispose();
+    _pwdPasswordCtrl.dispose();
+    _pwdNotesCtrl.dispose();
     super.dispose();
   }
 
@@ -1029,7 +1077,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
         _cardExpiryError = expErr;
         _cardCvvError = cvvErr;
       });
-    } else {
+    } else if (_tabController.index == 1) {
       final bank = _nbBankCtrl.text.trim();
       final nickname = _nbNicknameCtrl.text.trim();
       final userId = _nbUserIdCtrl.text.trim();
@@ -1058,6 +1106,27 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
         _nbNicknameError = nickErr;
         _nbUserIdError = null;
         _nbLoginPasswordError = null;
+      });
+    } else {
+      final nickname = _pwdNicknameCtrl.text.trim();
+      final username = _pwdUsernameCtrl.text.trim();
+      final password = _pwdPasswordCtrl.text.trim();
+
+      String? nickErr;
+      String? userErr;
+
+      if (nickname.isEmpty) {
+        nickErr = 'Title / Service Name is required (e.g. Google, GitHub)';
+        hasError = true;
+      }
+      if (username.isEmpty && password.isEmpty) {
+        userErr = 'Enter Username/Email or Password';
+        hasError = true;
+      }
+
+      setState(() {
+        _pwdNicknameError = nickErr;
+        _pwdUsernameError = userErr;
       });
     }
 
@@ -1149,7 +1218,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
         } else {
           await db.updateItem(card);
         }
-      } else {
+      } else if (_tabController.index == 1) {
         final accounts = <BankAccount>[];
         for (final pair in _accountRowControllers) {
           final accNum = pair.accountCtrl.text.trim().toUpperCase();
@@ -1188,6 +1257,25 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           await db.insertItem(nb);
         } else {
           await db.updateItem(nb);
+        }
+      } else {
+        final pwd = VaultItem(
+          id: widget.initialItem?.id ?? const Uuid().v4(),
+          type: VaultItemType.password,
+          bankName: _pwdNicknameCtrl.text.trim(),
+          nickname: _pwdNicknameCtrl.text.trim(),
+          website: _pwdWebsiteCtrl.text.trim(),
+          userId: _pwdUsernameCtrl.text.trim(),
+          loginPassword: _pwdPasswordCtrl.text.trim(),
+          notes: _pwdNotesCtrl.text.trim(),
+          createdAt: widget.initialItem?.createdAt ?? now,
+          updatedAt: now,
+        );
+
+        if (widget.initialItem == null) {
+          await db.insertItem(pwd);
+        } else {
+          await db.updateItem(pwd);
         }
       }
 
@@ -1249,6 +1337,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
               tabs: const [
                 Tab(icon: Icon(Icons.credit_card_rounded), text: 'Card'),
                 Tab(icon: Icon(Icons.account_balance_rounded), text: 'Bank'),
+                Tab(icon: Icon(Icons.vpn_key_rounded), text: 'Password'),
               ],
             ),
           ),
@@ -1259,6 +1348,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
         children: [
           _buildCardForm(),
           _buildNetBankingForm(),
+          _buildPasswordForm(),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -2264,6 +2354,251 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPasswordForm() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Banner introducing Password Manager
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                  const Color(0xFF6366F1).withValues(alpha: 0.05),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4F46E5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.vpn_key_rounded, color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Password Manager',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Save website & app logins. CardVault will suggest them automatically when you visit the website.',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 1. Nickname / Service Title (e.g. Google, GitHub, Netflix)
+          _buildTextField(
+            _pwdNicknameCtrl,
+            'Account / Service Title',
+            'e.g. Google, GitHub, Netflix, Amazon',
+            Icons.label_outline_rounded,
+            errorText: _pwdNicknameError,
+            onChanged: (val) {
+              if (_pwdNicknameError != null) setState(() => _pwdNicknameError = null);
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // 2. Website Address / URL
+          _buildTextField(
+            _pwdWebsiteCtrl,
+            'Website Address / URL',
+            'e.g. https://github.com or google.com',
+            Icons.language_rounded,
+            errorText: _pwdWebsiteError,
+            keyboardType: TextInputType.url,
+            onChanged: (val) {
+              if (_pwdWebsiteError != null) setState(() => _pwdWebsiteError = null);
+            },
+          ),
+          const Padding(
+            padding: EdgeInsets.only(left: 4, top: 4),
+            child: Text(
+              'Domain is matched automatically when you open this website in the browser.',
+              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontStyle: FontStyle.italic),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 3. Username / Email
+          _buildTextField(
+            _pwdUsernameCtrl,
+            'Username / Email Address',
+            'e.g. name@example.com or user123',
+            Icons.alternate_email_rounded,
+            errorText: _pwdUsernameError,
+            keyboardType: TextInputType.emailAddress,
+            onChanged: (val) {
+              if (_pwdUsernameError != null) setState(() => _pwdUsernameError = null);
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // 4. Password Field with Reveal Toggle & Generator
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _pwdPasswordError != null ? Colors.redAccent : const Color(0xFFCBD5E1),
+                width: _pwdPasswordError != null ? 1.6 : 1.2,
+              ),
+            ),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _pwdPasswordCtrl,
+                  obscureText: !_pwdPasswordVisible,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    hintText: 'Enter account password',
+                    floatingLabelBehavior: FloatingLabelBehavior.always,
+                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFF64748B)),
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            _pwdPasswordVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                            color: const Color(0xFF64748B),
+                          ),
+                          tooltip: _pwdPasswordVisible ? 'Hide Password' : 'Show Password',
+                          onPressed: () => setState(() => _pwdPasswordVisible = !_pwdPasswordVisible),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.paste_rounded, color: Color(0xFF64748B)),
+                          tooltip: 'Paste Password',
+                          onPressed: () async {
+                            final data = await Clipboard.getData('text/plain');
+                            if (data?.text != null && data!.text!.isNotEmpty) {
+                              setState(() {
+                                _pwdPasswordCtrl.text = data.text!;
+                              });
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    errorText: _pwdPasswordError,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(11),
+                      bottomRight: Radius.circular(11),
+                    ),
+                    border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                  ),
+                  child: Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: _generateStrongPassword,
+                        icon: const Icon(Icons.auto_awesome_rounded, size: 16, color: Color(0xFFFF6F00)),
+                        label: const Text(
+                          'Generate Strong Password',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFF6F00),
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (_pwdPasswordCtrl.text.isNotEmpty)
+                        Text(
+                          '${_pwdPasswordCtrl.text.length} chars',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 5. Notes
+          _buildTextField(
+            _pwdNotesCtrl,
+            'Notes (Optional)',
+            'Security questions, backup codes, recovery email, etc.',
+            Icons.notes_rounded,
+            isNotes: true,
+            maxLines: 3,
+            keyboardType: TextInputType.multiline,
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  void _generateStrongPassword() {
+    const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#%&*+=-';
+    final rand = DateTime.now().microsecondsSinceEpoch;
+    final buffer = StringBuffer();
+    var seed = rand;
+    for (int i = 0; i < 16; i++) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      buffer.write(chars[seed % chars.length]);
+    }
+    final generated = buffer.toString();
+    setState(() {
+      _pwdPasswordCtrl.text = generated;
+      _pwdPasswordVisible = true;
+    });
+    Clipboard.setData(ClipboardData(text: generated));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Expanded(child: Text('Strong 16-character password generated and copied to clipboard!')),
+          ],
+        ),
+        backgroundColor: Color(0xFF10B981),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
