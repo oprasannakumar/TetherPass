@@ -8,6 +8,13 @@ CardVault includes a companion **Manifest V3 Browser Extension** for Windows, al
 
 ---
 
+## 📦 Pre-built Android APK Download
+
+You can directly install CardVault on your Android phone without needing to compile:
+- **Universal Release Binary**: [`apk/CardVault_v2.apk`](apk/CardVault_v2.apk)
+
+---
+
 ## 🚀 Key Features
 
 ### 📱 Android Mobile Application (Flutter)

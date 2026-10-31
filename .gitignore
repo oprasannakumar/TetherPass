@@ -41,6 +41,7 @@ app.*.map.json
 /android/app/release
 *.apk
 *.aab
+!apk/*.apk
 /android/.gradle/
 /android/local.properties
 
