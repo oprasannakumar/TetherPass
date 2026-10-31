@@ -101,10 +101,33 @@
     return null;
   }
 
-  // Handle focus on fields
+  function requestSuggestionsForInput(target, fieldType) {
+    if (!target || (target.value && target.value.trim().length > 0)) {
+      removeDropdown();
+      return;
+    }
+
+    chrome.runtime.sendMessage(
+      { action: 'GET_AUTOFILL_SUGGESTIONS', payload: { fieldType, domain: window.location.hostname } },
+      (response) => {
+        // Double check target is still active element and still empty before rendering
+        if (!response || document.activeElement !== target) return;
+        if (target.value && target.value.trim().length > 0) return;
+        renderDropdown(target, fieldType, response);
+      }
+    );
+  }
+
+  // Handle focus on fields: Only suggest if field is empty
   document.addEventListener('focusin', async (e) => {
     const target = e.target;
     if (!target || target.tagName !== 'INPUT') return;
+
+    // Do NOT suggest if credentials are already present in the box
+    if (target.value && target.value.trim().length > 0) {
+      removeDropdown();
+      return;
+    }
 
     const fieldType = classifyInput(target);
     if (!fieldType) {
@@ -113,15 +136,46 @@
     }
 
     activeInput = target;
+    requestSuggestionsForInput(target, fieldType);
+  });
 
-    // Ask background script for suggestions
-    chrome.runtime.sendMessage(
-      { action: 'GET_AUTOFILL_SUGGESTIONS', payload: { fieldType, domain: window.location.hostname } },
-      (response) => {
-        if (!response) return;
-        renderDropdown(target, fieldType, response);
+  // Handle typing, clearing, and pasting in fields
+  document.addEventListener('input', (e) => {
+    const target = e.target;
+    if (!target || target.tagName !== 'INPUT') return;
+
+    // If text box now contains text/credentials, dismiss suggestions immediately
+    if (target.value && target.value.trim().length > 0) {
+      removeDropdown();
+      return;
+    }
+
+    // If text box is cleared (empty), and user is actively focused on it, re-trigger suggestions
+    if (document.activeElement === target && (!target.value || target.value.trim().length === 0)) {
+      const fieldType = classifyInput(target);
+      if (fieldType) {
+        activeInput = target;
+        requestSuggestionsForInput(target, fieldType);
+      } else {
+        removeDropdown();
       }
-    );
+    }
+  });
+
+  // Listen for Backspace/Delete clearing
+  document.addEventListener('keyup', (e) => {
+    const target = e.target;
+    if (!target || target.tagName !== 'INPUT') return;
+
+    if (document.activeElement === target && (!target.value || target.value.trim().length === 0)) {
+      if (!activeDropdown) {
+        const fieldType = classifyInput(target);
+        if (fieldType) {
+          activeInput = target;
+          requestSuggestionsForInput(target, fieldType);
+        }
+      }
+    }
   });
 
   // Close dropdown on outside click
@@ -140,6 +194,11 @@
 
   function renderDropdown(targetInput, fieldType, data) {
     removeDropdown();
+
+    // Guard: do not render if input already has credentials / value
+    if (targetInput && targetInput.value && targetInput.value.trim().length > 0) {
+      return;
+    }
 
     const rect = targetInput.getBoundingClientRect();
     const dropdown = document.createElement('div');
