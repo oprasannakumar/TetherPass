@@ -172,6 +172,10 @@ class DriveClient {
     return await res.json();
   }
 
+  async uploadAppDataFile(filename, textContent) {
+    return await this.uploadOrUpdateFile(filename, textContent);
+  }
+
   /**
    * Fetches the list of user's registered mobile phones from Google Drive.
    */
@@ -433,16 +437,37 @@ class DriveClient {
    * This ensures the session is instantly removed from the mobile phone screen.
    */
   async markSessionLocked(sessionId = null) {
+    if (!this.token) {
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        try {
+          const stored = await chrome.storage.local.get('googleOAuthToken');
+          if (stored?.googleOAuthToken) {
+            this.token = stored.googleOAuthToken;
+          }
+        } catch (_) {}
+      }
+    }
     if (!this.token) return;
     try {
       // 1. Overwrite card_vault_access_request.json with LOCKED status
       try {
+        let existingReqId = sessionId || '';
+        const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
+        if (reqFile) {
+          try {
+            const reqContent = await this.downloadFileContent(reqFile.id);
+            const req = JSON.parse(reqContent);
+            if (req?.requestId) existingReqId = req.requestId;
+          } catch (_) {}
+        }
+
         const reqClear = JSON.stringify({
+          requestId: existingReqId,
           status: 'LOCKED',
           locked_at: Date.now()
         });
-        await this.uploadAppDataFile(DRIVE_REQUEST_FILENAME, reqClear);
-        console.log('[TetherPass] Access request overwritten with LOCKED on Drive');
+        await this.uploadOrUpdateFile(DRIVE_REQUEST_FILENAME, reqClear);
+        console.log('[TetherPass] Access request overwritten with LOCKED on Drive, reqId:', existingReqId);
       } catch (e) {
         console.warn('[TetherPass] Could not overwrite access request:', e.message);
       }

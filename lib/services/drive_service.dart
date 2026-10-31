@@ -527,6 +527,12 @@ class DriveService extends ChangeNotifier {
             if (item is Map) {
               final map = Map<String, dynamic>.from(item);
               final id = map['sessionId'] as String? ?? '';
+              final sStatus = (map['status'] as String? ?? 'ACTIVE').toUpperCase();
+              final sExpires = (map['expiresAt'] as num?)?.toInt() ?? 0;
+              // Ignore any session that is locked, terminated, revoked, or expired
+              if (sStatus == 'LOCKED' || sStatus == 'TERMINATED' || sStatus == 'REVOKED' || (sExpires > 0 && now > sExpires)) {
+                continue;
+              }
               if (id.isNotEmpty) {
                 sessionMap[id] = map;
               }
@@ -546,32 +552,22 @@ class DriveService extends ChangeNotifier {
           final expiresAt = (req['expiresAt'] as num?)?.toInt() ?? 0;
           final device = req['device'] as String? ?? 'Windows PC (TetherPass Extension)';
 
-          if (reqId.isNotEmpty) {
-            if (status == 'APPROVED' && expiresAt > now) {
-              if (!sessionMap.containsKey(reqId)) {
-                sessionMap[reqId] = {
-                  'sessionId': reqId,
-                  'deviceName': device,
-                  'authMode': 'PUSH',
-                  'createdAt': approvedAt > 0 ? approvedAt : (expiresAt - 30 * 60 * 1000),
-                  'expiresAt': expiresAt,
-                  'status': 'ACTIVE',
-                };
-              }
-            } else if (status == 'REVOKED' || status == 'LOCKED' || status == 'TERMINATED') {
-              final lockStatus = status == 'LOCKED' ? 'LOCKED' : 'TERMINATED';
-              if (sessionMap.containsKey(reqId)) {
-                sessionMap[reqId]!['status'] = lockStatus;
-              } else {
-                sessionMap[reqId] = {
-                  'sessionId': reqId,
-                  'deviceName': device,
-                  'authMode': 'PUSH',
-                  'createdAt': approvedAt > 0 ? approvedAt : (expiresAt - 30 * 60 * 1000),
-                  'expiresAt': expiresAt,
-                  'status': lockStatus,
-                };
-              }
+          if (status == 'LOCKED' || status == 'REVOKED' || status == 'TERMINATED') {
+            // Extension is locked! Instantly remove all push sessions from mobile
+            sessionMap.removeWhere((key, val) =>
+                val['authMode'] == 'PUSH' ||
+                key.startsWith('req_') ||
+                (reqId.isNotEmpty && key == reqId));
+          } else if (status == 'APPROVED' && expiresAt > now && reqId.isNotEmpty) {
+            if (!sessionMap.containsKey(reqId)) {
+              sessionMap[reqId] = {
+                'sessionId': reqId,
+                'deviceName': device,
+                'authMode': 'PUSH',
+                'createdAt': approvedAt > 0 ? approvedAt : (expiresAt - 30 * 60 * 1000),
+                'expiresAt': expiresAt,
+                'status': 'ACTIVE',
+              };
             }
           }
         } catch (_) {}
