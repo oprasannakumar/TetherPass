@@ -429,6 +429,13 @@ class DriveService extends ChangeNotifier {
       final now = DateTime.now().millisecondsSinceEpoch;
 
       if (status == 'PENDING' && (expiresAt == null || now < expiresAt)) {
+        // QR scan requests must NOT pop up unsolicited approval dialogs on the phone!
+        // They are strictly approved when the user explicitly scans the QR code in BrowserExtensionScreen.
+        final authMode = (data['authMode'] ?? data['mode'] ?? '').toString().toUpperCase();
+        if (authMode == 'QR') {
+          return null;
+        }
+
         // Multi-device targeting check:
         final targetDeviceId = data['targetDeviceId'] as String?;
         final myId = await DeviceIdentityService.getDeviceId();

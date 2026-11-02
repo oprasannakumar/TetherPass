@@ -169,7 +169,7 @@ function initUI() {
   // Instant QR vs Push Unlock Tabs
   document.getElementById('tabModeQrBtn')?.addEventListener('click', () => switchUnlockTab('qr'));
   document.getElementById('tabModePushBtn')?.addEventListener('click', () => switchUnlockTab('push'));
-  document.getElementById('refreshQrBtn')?.addEventListener('click', () => startDirectQrPairing());
+  document.getElementById('refreshQrBtn')?.addEventListener('click', () => startDirectQrPairing(true));
 
   // ── Device Manager Modal ──
   document.getElementById('openDeviceManagerBtn')?.addEventListener('click', openDeviceManagerModal);
@@ -786,6 +786,7 @@ function cancelApprovalPolling() {
 let activeDirectQrInterval = null;
 let activeDirectQrCountdown = null;
 let currentDirectQrRequestId = null;
+let qrSessionExpiresAt = 0;
 
 function switchUnlockTab(tab) {
   const qrBtn = document.getElementById('tabModeQrBtn');
@@ -799,29 +800,37 @@ function switchUnlockTab(tab) {
     if (qrContainer) qrContainer.style.display = 'block';
     if (pushContainer) pushContainer.style.display = 'none';
 
-    if (!currentDirectQrRequestId) {
-      startDirectQrPairing();
-    }
+    // Start direct QR pairing (only if not already running a valid 30s session)
+    startDirectQrPairing(false);
   } else {
     pushBtn?.classList.add('active');
     qrBtn?.classList.remove('active');
     if (qrContainer) qrContainer.style.display = 'none';
     if (pushContainer) pushContainer.style.display = 'block';
 
-    stopDirectQrPairing();
+    stopDirectQrPairing(true);
   }
 }
 
-function stopDirectQrPairing() {
+function stopDirectQrPairing(clearSession = true) {
   if (activeDirectQrInterval) clearInterval(activeDirectQrInterval);
   if (activeDirectQrCountdown) clearInterval(activeDirectQrCountdown);
   activeDirectQrInterval = null;
   activeDirectQrCountdown = null;
-  currentDirectQrRequestId = null;
+  if (clearSession) {
+    currentDirectQrRequestId = null;
+    qrSessionExpiresAt = 0;
+  }
 }
 
-async function startDirectQrPairing() {
-  stopDirectQrPairing();
+async function startDirectQrPairing(force = false) {
+  const now = Date.now();
+  // Strictly enforce: regenerate ONLY after 30s or when user hits refresh
+  if (!force && currentDirectQrRequestId && qrSessionExpiresAt > now) {
+    return; // Current QR code is still valid and actively counting down
+  }
+
+  stopDirectQrPairing(true);
 
   const loadingEl = document.getElementById('qrLoadingState');
   const readyEl = document.getElementById('qrReadyState');
@@ -835,7 +844,7 @@ async function startDirectQrPairing() {
         <div style="font-size: 24px; margin-bottom: 6px;">🔗</div>
         <div style="font-weight: 700; color: #0F172A; margin-bottom: 4px;">Sign in with Google First</div>
         <div style="font-size: 11px; color: #64748B; line-height: 1.4;">
-          Click <strong>"Connect Google Drive"</strong> in Step 1 above so the desktop extension can securely sync with your phone.
+          Connect your Google Drive account above to generate a secure pairing QR code.
         </div>
       `;
     }
@@ -859,7 +868,8 @@ async function startDirectQrPairing() {
       payload: {
         token: currentOAuthToken,
         deviceName: myDevice,
-        targetDeviceId: 'ALL'
+        targetDeviceId: 'ALL',
+        authMode: 'QR' // Specifically QR mode: mobile app won't pop up unsolicited push dialog
       }
     });
 
@@ -868,15 +878,16 @@ async function startDirectQrPairing() {
         loadingEl.innerHTML = `
           <div style="color: #EF4444; font-weight: 600; margin-bottom: 6px;">⚠️ Pairing Setup Error</div>
           <div style="font-size: 11px; color: #64748B; margin-bottom: 8px;">${escapeHtml(startRes?.error || 'Could not connect to Google Drive')}</div>
-          <button type="button" id="retryDirectQrBtn" style="background: white; border: 1px solid #CBD5E1; border-radius: 6px; padding: 4px 12px; font-size: 11px; color: #334155; cursor: pointer; font-weight: 600;">🔄 Try Again</button>
+          <button type="button" id="retryDirectQrBtn" class="btn-refresh-qr">🔄 Try Again</button>
         `;
-        document.getElementById('retryDirectQrBtn')?.addEventListener('click', () => startDirectQrPairing());
+        document.getElementById('retryDirectQrBtn')?.addEventListener('click', () => startDirectQrPairing(true));
       }
       return;
     }
 
     const requestId = startRes.requestId;
     currentDirectQrRequestId = requestId;
+    qrSessionExpiresAt = Date.now() + 30000; // Exact 30-second validity window
 
     // Render pairing QR for mobile scan
     if (canvas && window.renderQRCode) {
@@ -887,15 +898,20 @@ async function startDirectQrPairing() {
     if (loadingEl) loadingEl.style.display = 'none';
     if (readyEl) readyEl.style.display = 'block';
 
-    let secondsLeft = 60;
-    if (timerEl) timerEl.textContent = `Waiting for scan (${secondsLeft}s)...`;
+    const updateCountdown = () => {
+      const remainingSecs = Math.max(0, Math.ceil((qrSessionExpiresAt - Date.now()) / 1000));
+      if (timerEl) timerEl.textContent = `Waiting for scan (${remainingSecs}s)...`;
+      return remainingSecs;
+    };
+
+    updateCountdown();
 
     activeDirectQrCountdown = setInterval(() => {
-      secondsLeft--;
-      if (timerEl) timerEl.textContent = `Waiting for scan (${secondsLeft}s)...`;
-      if (secondsLeft <= 0) {
-        stopDirectQrPairing();
-        if (timerEl) timerEl.textContent = `QR expired. Click "Refresh QR Code"`;
+      const remaining = updateCountdown();
+      if (remaining <= 0) {
+        // Exactly after 30 seconds: automatically regenerate a fresh QR code
+        stopDirectQrPairing(true);
+        startDirectQrPairing(true);
       }
     }, 1000);
 
@@ -907,24 +923,24 @@ async function startDirectQrPairing() {
         payload: {
           token: currentOAuthToken,
           requestId,
-          masterPassword: '' // Mobile phone provides request_sealed_key!
+          masterPassword: '' // Mobile phone provides request_sealed_key upon scan!
         }
       });
 
       if (!pollRes) return;
 
       if (pollRes.status === 'APPROVED' && pollRes.success) {
-        stopDirectQrPairing();
+        stopDirectQrPairing(true);
         showSuccess('✓ Mobile QR Verified! Vault unlocked.');
-        setTimeout(() => refreshStatus(), 500);
+        setTimeout(() => refreshStatus(), 400);
       } else if (pollRes.status === 'DENIED') {
-        stopDirectQrPairing();
+        stopDirectQrPairing(true);
         showError('Pairing request was denied on mobile phone.');
       } else if (pollRes.status === 'EXPIRED') {
-        stopDirectQrPairing();
-        if (timerEl) timerEl.textContent = `QR code expired. Click "Refresh QR Code"`;
+        stopDirectQrPairing(true);
+        startDirectQrPairing(true);
       }
-    }, 1500);
+    }, 1200);
 
   } catch (err) {
     if (loadingEl) {
@@ -935,9 +951,10 @@ async function startDirectQrPairing() {
         <div style="color: #64748B; font-size: 11px; margin-bottom: 10px;">${escapeHtml(err.message)}</div>
         <button type="button" id="retryDirectQrErrBtn" class="btn-refresh-qr">🔄 Try Again</button>
       `;
-      document.getElementById('retryDirectQrErrBtn')?.addEventListener('click', () => startDirectQrPairing());
+      document.getElementById('retryDirectQrErrBtn')?.addEventListener('click', () => startDirectQrPairing(true));
     }
   }
+}
 }
 
 

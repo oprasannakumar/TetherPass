@@ -450,12 +450,13 @@ async function getDesktopDeviceName(fallback = 'Windows PC (Chrome)') {
   return fallback;
 }
 
-async function handleStartMobileApprovalRequest({ token, deviceName, targetDeviceId }) {
+async function handleStartMobileApprovalRequest({ token, deviceName, targetDeviceId, authMode }) {
   if (token) driveClient.setToken(token);
   if (deviceName) lastRequestedDeviceName = deviceName;
   const req = await driveClient.sendAccessRequestToMobile(
     deviceName || 'Windows PC (TetherPass Extension)',
-    targetDeviceId || 'ALL'
+    targetDeviceId || 'ALL',
+    authMode || 'PUSH'
   );
   return {
     success: true,

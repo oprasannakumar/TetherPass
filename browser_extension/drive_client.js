@@ -195,9 +195,10 @@ class DriveClient {
    * If targetDeviceId is provided, only that specific phone will prompt.
    * Status starts as 'PENDING'.
    */
-  async sendAccessRequestToMobile(deviceName = 'Windows PC (TetherPass Extension)', targetDeviceId = 'ALL') {
+  async sendAccessRequestToMobile(deviceName = 'Windows PC (TetherPass Extension)', targetDeviceId = 'ALL', authMode = 'PUSH') {
     const requestId = 'req_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-    const expiresAt = Date.now() + 60000; // 60s timeout
+    const durationMs = (authMode === 'QR') ? 30000 : 60000; // 30s timeout for QR pairing
+    const expiresAt = Date.now() + durationMs;
 
     const payload = JSON.stringify({
       requestId,
@@ -205,7 +206,9 @@ class DriveClient {
       requestedAt: Date.now(),
       expiresAt,
       device: deviceName,
-      targetDeviceId: targetDeviceId || 'ALL'
+      targetDeviceId: targetDeviceId || 'ALL',
+      authMode: authMode,
+      mode: authMode
     }, null, 2);
 
     await this.uploadOrUpdateFile(DRIVE_REQUEST_FILENAME, payload);
