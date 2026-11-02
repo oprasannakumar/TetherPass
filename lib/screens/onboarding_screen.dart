@@ -156,16 +156,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFFFF6F00).withValues(alpha: 0.1),
+              color: Colors.white,
               border: Border.all(color: const Color(0xFFFF6F00).withValues(alpha: 0.3), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF6F00).withValues(alpha: 0.2),
+                  blurRadius: 28,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
-            child: const Icon(
-              Icons.shield_rounded,
-              size: 72,
-              color: Color(0xFFFF6F00),
+            child: ClipOval(
+              child: Image.asset(
+                'assets/icons/vault_logo.png',
+                width: 96,
+                height: 96,
+                fit: BoxFit.cover,
+              ),
             ),
           ),
           const SizedBox(height: 32),

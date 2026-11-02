@@ -225,25 +225,28 @@ class _UnlockScreenState extends State<UnlockScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Centered App Icon & Shield
+                // Centered App Icon & Vault Door
                 Container(
-                  padding: const EdgeInsets.all(22),
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.white,
                     border: Border.all(color: const Color(0xFFFF6F00).withValues(alpha: 0.3), width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFFF6F00).withValues(alpha: 0.15),
-                        blurRadius: 24,
+                        color: const Color(0xFFFF6F00).withValues(alpha: 0.2),
+                        blurRadius: 28,
                         offset: const Offset(0, 8),
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.shield_rounded,
-                    size: 64,
-                    color: Color(0xFFFF6F00),
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/icons/vault_logo.png',
+                      width: 88,
+                      height: 88,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
