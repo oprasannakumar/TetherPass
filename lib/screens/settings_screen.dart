@@ -238,10 +238,12 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   }
 
                   await sec.resetMasterPassword(newP);
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(this.context).showSnackBar(
-                    const SnackBar(content: Text('Master Password changed successfully!')),
-                  );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Master Password changed successfully!')),
+                    );
+                  }
                 },
               ),
             ],
@@ -263,8 +265,8 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           return AlertDialog(
             backgroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Row(
-              children: const [
+            title: const Row(
+              children: [
                 Icon(Icons.key_rounded, color: Color(0xFFFF6F00)),
                 SizedBox(width: 8),
                 Text('Recovery Key', style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold)),
@@ -324,10 +326,12 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 child: const Text('Regenerate Key'),
                 onPressed: () async {
                   final newK = await sec.regenerateRecoveryKey();
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(this.context).showSnackBar(
-                    SnackBar(content: Text('New Recovery Key generated: $newK')),
-                  );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('New Recovery Key generated: $newK')),
+                    );
+                  }
                 },
               ),
             ],

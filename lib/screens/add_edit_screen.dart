@@ -1598,7 +1598,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
               // Card Type (Network) Selector
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: _availableNetworks.contains(_cardNetwork) ? _cardNetwork : 'Visa',
+                  initialValue: _availableNetworks.contains(_cardNetwork) ? _cardNetwork : 'Visa',
                   isExpanded: true,
                   dropdownColor: Colors.white,
                   icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFFF6F00)),
@@ -1632,7 +1632,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
               // Card Tier Selector
               Expanded(
                 child: DropdownButtonFormField<CardTier>(
-                  value: _cardTier,
+                  initialValue: _cardTier,
                   isExpanded: true,
                   dropdownColor: Colors.white,
                   icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFFF6F00)),
@@ -1752,7 +1752,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
               children: [
                 Expanded(
                   child: DropdownButtonFormField<int>(
-                    value: _statementDay,
+                    initialValue: _statementDay,
                     dropdownColor: Colors.white,
                     icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFFF6F00)),
                     style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
@@ -1772,7 +1772,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                 const SizedBox(width: 12),
                 Expanded(
                   child: DropdownButtonFormField<int>(
-                    value: _dueDay,
+                    initialValue: _dueDay,
                     dropdownColor: Colors.white,
                     icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFFF6F00)),
                     style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
@@ -2245,7 +2245,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
     required ValueChanged<DateTime?> onChanged,
   }) {
     final now = DateTime.now();
-    final daysRemaining = expiryDate != null ? expiryDate.difference(now).inDays : null;
+    final daysRemaining = expiryDate?.difference(now).inDays;
     final isExpired = daysRemaining != null && daysRemaining < 0;
     final isSoon = daysRemaining != null && daysRemaining >= 0 && daysRemaining <= 15;
 
@@ -2331,13 +2331,13 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
               borderRadius: BorderRadius.circular(12),
               icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFFF6F00), size: 18),
               style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontWeight: FontWeight.bold),
-              items: [
-                const DropdownMenuItem(value: 'none', child: Text('No Expiry')),
-                const DropdownMenuItem(value: '30', child: Text('30 Days (1 Mo)')),
-                const DropdownMenuItem(value: '90', child: Text('90 Days (3 Mo)')),
-                const DropdownMenuItem(value: '180', child: Text('180 Days (6 Mo)')),
-                const DropdownMenuItem(value: '365', child: Text('365 Days (1 Yr)')),
-                const DropdownMenuItem(
+              items: const [
+                DropdownMenuItem(value: 'none', child: Text('No Expiry')),
+                DropdownMenuItem(value: '30', child: Text('30 Days (1 Mo)')),
+                DropdownMenuItem(value: '90', child: Text('90 Days (3 Mo)')),
+                DropdownMenuItem(value: '180', child: Text('180 Days (6 Mo)')),
+                DropdownMenuItem(value: '365', child: Text('365 Days (1 Yr)')),
+                DropdownMenuItem(
                   value: 'custom',
                   child: Text('Custom (Months/Days)...', style: TextStyle(color: Color(0xFFFF6F00))),
                 ),

@@ -434,7 +434,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () async {
                 final valid = await sec.verifyMasterPassword(ctrl.text.trim());
                 if (valid) {
-                  Navigator.of(ctx).pop(true);
+                  if (ctx.mounted) Navigator.of(ctx).pop(true);
                 } else {
                   setDlgState(() => errorText = 'Incorrect Master Password');
                 }
@@ -773,13 +773,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _promptDriveMasterPassword(String payload) async {
     final drive = context.read<DriveService>();
+    final sec = context.read<VaultSecurityService>();
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final passwordCtrl = TextEditingController();
     String? errorText;
 
     await showDialog(
       context: context,
       builder: (dlgCtx) => StatefulBuilder(
-        builder: (context, setDlgState) => AlertDialog(
+        builder: (dialogContext, setDlgState) => AlertDialog(
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Row(
@@ -832,13 +834,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 try {
                   final count = await drive.restore(masterPassword: pwd, rawPayload: payload.isNotEmpty ? payload : null);
                   try {
-                    final sec = context.read<VaultSecurityService>();
                     await sec.saveMasterPassword(pwd);
                   } catch (_) {}
                   await _loadItems();
-                  if (mounted) {
+                  if (dlgCtx.mounted) {
                     Navigator.pop(dlgCtx);
-                    ScaffoldMessenger.of(context).showSnackBar(
+                  }
+                  if (mounted) {
+                    scaffoldMessenger.showSnackBar(
                       SnackBar(
                         content: Text('✓ Restored $count items from Google Drive!'),
                         backgroundColor: Colors.green.shade800,
@@ -869,11 +872,11 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            const Row(
               children: [
-                const Icon(Icons.add_to_drive_rounded, color: Color(0xFFFF6F00), size: 24),
-                const SizedBox(width: 10),
-                const Text(
+                Icon(Icons.add_to_drive_rounded, color: Color(0xFFFF6F00), size: 24),
+                SizedBox(width: 10),
+                Text(
                   'Google Drive Cloud Sync',
                   style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold),
                 ),
@@ -932,8 +935,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   label: const Text('Disconnect Google Drive', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
                   onPressed: () async {
                     await drive.signOut();
-                    Navigator.pop(ctx);
-                    setState(() {});
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) setState(() {});
                   },
                 ),
               ),
@@ -1037,10 +1040,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 TextField(
                   onChanged: (val) => setState(() => _searchQuery = val),
                   style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     hintText: 'Search by bank or nickname...',
-                    prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 20),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                    prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 20),
+                    contentPadding: EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -1413,7 +1416,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.shield_outlined, size: 64, color: const Color(0xFFCBD5E1)),
+          const Icon(Icons.shield_outlined, size: 64, color: Color(0xFFCBD5E1)),
           const SizedBox(height: 16),
           const Text(
             'Your Vault is Empty',

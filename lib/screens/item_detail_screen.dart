@@ -273,7 +273,7 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
 🔑 Password: ${_item.loginPassword}
 ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
 '''.trim();
-      Share.share(text, subject: '${_item.nickname} Credentials');
+      SharePlus.instance.share(ShareParams(text: text, subject: '${_item.nickname} Credentials'));
     } else if (_item.isCard) {
       final formattedNumber = _formatCardNumber(_item.cardNumber);
       final text = '''
@@ -284,7 +284,7 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
 📅 Exp: ${_item.expiry} | 🔑 CVV: ${_item.cvv}
 ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
 '''.trim();
-      Share.share(text, subject: '${_item.nickname} Details');
+      SharePlus.instance.share(ShareParams(text: text, subject: '${_item.nickname} Details'));
     } else {
       final buffer = StringBuffer();
       buffer.writeln('🏦 Bank: ${_item.bankName.toUpperCase()}');
@@ -308,7 +308,7 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
       if (_item.profilePassword.isNotEmpty) buffer.writeln('🛡️ Profile Password: ${_item.profilePassword}');
       if (_item.mpin.isNotEmpty) buffer.writeln('📌 MPIN: ${_item.mpin}');
       if (_item.notes.isNotEmpty) buffer.writeln('📝 Notes: ${_item.notes}');
-      Share.share(buffer.toString().trim(), subject: '${_item.nickname} Bank Details');
+      SharePlus.instance.share(ShareParams(text: buffer.toString().trim(), subject: '${_item.nickname} Bank Details'));
     }
   }
 
@@ -1088,9 +1088,9 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
                                     letterSpacing: 2,
                                   ),
                                 )
-                              : Row(
+                              : const Row(
                                   mainAxisSize: MainAxisSize.min,
-                                  children: const [
+                                  children: [
                                     Icon(Icons.lock_rounded, color: Color(0xFFFFB300), size: 12),
                                     SizedBox(width: 3),
                                     Text(
@@ -1144,7 +1144,7 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
     final textColor = isLight ? Colors.black87 : Colors.white;
     final subColor = isLight ? Colors.black54 : Colors.white70;
     final hintColor = isLight ? Colors.black38 : Colors.white54;
-    final accentColor = const Color(0xFFFFB300);
+    const accentColor = Color(0xFFFFB300);
 
     return Container(
       width: double.infinity,
@@ -1178,7 +1178,7 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
                   color: textColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(Icons.account_balance_rounded, color: accentColor, size: 22),
+                child: const Icon(Icons.account_balance_rounded, color: accentColor, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1861,8 +1861,8 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: const [
+          const Row(
+            children: [
               Icon(Icons.speed_rounded, color: Color(0xFFFF6F00), size: 18),
               SizedBox(width: 8),
               Text(
