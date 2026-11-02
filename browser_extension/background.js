@@ -22,7 +22,6 @@ let memoryVault = {
   lastSyncedAt: null,
   authExpiresAt: null,
   masterPassword: null,
-  activePin: null,
   authMode: null,
   sessionStartTime: null,
   activeRequestId: null,
@@ -124,7 +123,6 @@ async function persistSession() {
     lastSyncedAt: memoryVault.lastSyncedAt,
     authExpiresAt: memoryVault.authExpiresAt,
     masterPassword: memoryVault.masterPassword,
-    activePin: memoryVault.activePin,
     authMode: memoryVault.authMode,
     sessionStartTime: memoryVault.sessionStartTime,
     activeRequestId: memoryVault.activeRequestId,
@@ -183,7 +181,6 @@ async function restoreSessionIfNeeded() {
         lastSyncedAt: sess.lastSyncedAt || now,
         authExpiresAt: sess.authExpiresAt,
         masterPassword: sess.masterPassword || null,
-        activePin: sess.activePin || null,
         authMode: sess.authMode || null,
         sessionStartTime: sess.sessionStartTime || now,
         activeRequestId: sess.activeRequestId || null,
@@ -264,7 +261,6 @@ async function lockVault(reason = 'Vault locked') {
   memoryVault.items = [];
   memoryVault.masterPassword = null;
   memoryVault.authExpiresAt = null;
-  memoryVault.activePin = null;
   memoryVault.authMode = null;
   memoryVault.sessionStartTime = null;
   memoryVault.activeRequestId = null;
@@ -337,7 +333,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         itemCount: memoryVault.items.length,
         lastSyncedAt: memoryVault.lastSyncedAt,
         authExpiresAt: memoryVault.authExpiresAt,
-        activePin: memoryVault.activePin,
         authMode: memoryVault.authMode,
         suggestions: suggestions,
       });
@@ -401,11 +396,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } catch (err) {
         sendResponse({ status: 'ERROR', error: err.message });
       }
-      return;
-    }
-
-    if (action === 'SYNC_AND_UNLOCK' || action === 'AUTHORIZE_WITH_PIN') {
-      sendResponse({ success: false, error: 'PIN_AUTH_REMOVED', message: 'PIN authorization has been removed. Please use Mobile Push Approval.' });
       return;
     }
 

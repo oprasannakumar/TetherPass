@@ -526,7 +526,7 @@ class DriveService extends ChangeNotifier {
   // ─── Active Desktop Sessions Management ────────────────────────────────────
 
   /// Fetches all active and recent desktop sessions from Google Drive.
-  /// Merges records from activeSessionsFileName, accessRequestFileName, and card_vault_extension_auth.json.
+  /// Merges records from activeSessionsFileName and accessRequestFileName.
   Future<List<Map<String, dynamic>>> getActiveDesktopSessions() async {
     if (!isSignedIn) return [];
     try {
@@ -589,11 +589,10 @@ class DriveService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // 3. Compute active status and minutes remaining for each session (Push approvals only)
+      // 3. Compute active status and minutes remaining for each session (Push approvals)
       // Any session that is locked, terminated, revoked, or expired is completely removed!
       final List<Map<String, dynamic>> results = [];
       for (final s in sessionMap.values) {
-        if (s['authMode'] == 'PIN') continue; // PIN authorization removed
         final expiresAt = (s['expiresAt'] as num?)?.toInt() ?? 0;
         final rawStatus = (s['status'] as String? ?? 'ACTIVE').toUpperCase();
         final bool isExpired = now > expiresAt;
@@ -751,14 +750,6 @@ class DriveService extends ChangeNotifier {
       });
       await uploadTextFile(accessRequestFileName, reqClear);
 
-      // 3. Revoke PIN authorization record
-      final authClear = jsonEncode({
-        'status': 'REVOKED',
-        'revoked_at': now,
-        'device': 'Windows Browser Extension',
-      });
-      await uploadTextFile('card_vault_extension_auth.json', authClear);
-
       notifyListeners();
       return true;
     } catch (_) {
@@ -815,20 +806,6 @@ class DriveService extends ChangeNotifier {
               req['extendedAt'] = now;
               await uploadTextFile(accessRequestFileName, jsonEncode(req));
             }
-          } catch (_) {}
-        }
-      }
-
-      // 3. Also update card_vault_extension_auth.json if PIN
-      if (authMode == 'PIN' || sessionId.startsWith('pin_')) {
-        final authText = await downloadTextFile('card_vault_extension_auth.json');
-        if (authText != null && authText.trim().isNotEmpty) {
-          try {
-            final auth = jsonDecode(authText) as Map<String, dynamic>;
-            auth['expires_at'] = newExpiresAt;
-            auth['status'] = 'AUTHORIZED';
-            auth['extended_at'] = now;
-            await uploadTextFile('card_vault_extension_auth.json', jsonEncode(auth));
           } catch (_) {}
         }
       }

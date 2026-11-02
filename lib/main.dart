@@ -8,7 +8,6 @@ import 'services/bin_database_service.dart';
 import 'services/crypto_service.dart';
 import 'services/database_service.dart';
 import 'services/drive_service.dart';
-import 'services/extension_auth_service.dart';
 import 'services/vault_security_service.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/unlock_screen.dart';
@@ -47,7 +46,6 @@ void main() async {
     databaseService: dbService,
     vaultSecurityService: securityService,
   );
-  final extensionAuthService = ExtensionAuthService(driveService: driveService);
 
   // Pre-load offline BIN database in background
   unawaited(BinDatabaseService.init());
@@ -62,7 +60,6 @@ void main() async {
         Provider<VaultSecurityService>.value(value: securityService),
         Provider<AuthService>.value(value: authService),
         ChangeNotifierProvider<DriveService>.value(value: driveService),
-        ChangeNotifierProvider<ExtensionAuthService>.value(value: extensionAuthService),
       ],
       child: TetherPassApp(initialRoute: isOnboarded ? '/unlock' : '/onboarding'),
     ),

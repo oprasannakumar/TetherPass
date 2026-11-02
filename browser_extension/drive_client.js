@@ -6,7 +6,6 @@
 
 const GOOGLE_CLIENT_ID = '455353267035-ikc7gak770ubpgvdru3p1lo3j88i0f1s.apps.googleusercontent.com';
 const DRIVE_BACKUP_FILENAME = 'card_vault_backup_v2.json';
-const DRIVE_AUTH_FILENAME = 'card_vault_extension_auth.json';
 const DRIVE_REQUEST_FILENAME = 'card_vault_access_request.json';
 const DRIVE_DEVICES_FILENAME = 'card_vault_devices.json';
 const DRIVE_SESSIONS_FILENAME = 'card_vault_active_sessions.json';
@@ -311,7 +310,7 @@ class DriveClient {
 
   /**
    * Checks if desktop authorization was explicitly revoked or terminated from the mobile app.
-   * @param {string} authMode 'PIN' or 'PUSH'
+   * @param {string} authMode 'PUSH'
    * @param {number} sessionStartTime timestamp when current session was unlocked
    * @param {string} sessionId unique ID of this session
    */
@@ -377,25 +376,6 @@ class DriveClient {
             }
           }
         } catch (_) {}
-      }
-
-      // 2. Inspect PIN authorization record (card_vault_extension_auth.json)
-      if (authMode === 'PIN' || !authMode) {
-        const authFile = await this.findFile(DRIVE_AUTH_FILENAME);
-        if (authFile) {
-          try {
-            const authContent = await this.downloadFileContent(authFile.id);
-            const auth = JSON.parse(authContent);
-            const authStatus = (auth.status || '').toUpperCase();
-            if (authStatus === 'REVOKED' || authStatus === 'LOCKED' || authStatus === 'TERMINATED') {
-              const authTime = auth.revoked_at || auth.locked_at || auth.terminated_at || 0;
-              if (authTime && sessionStartTime && authTime > (sessionStartTime + 1000)) {
-                this._lastRevokeResult = true;
-                return true;
-              }
-            }
-          } catch (_) {}
-        }
       }
 
       this._lastRevokeResult = false;
@@ -536,68 +516,16 @@ class DriveClient {
         }
       }
 
-      if (authMode === 'PUSH') {
+      if (authMode === 'PUSH' || !authMode) {
         const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
         if (reqFile) {
           const reqContent = await this.downloadFileContent(reqFile.id);
           const req = JSON.parse(reqContent);
           if (req.status === 'APPROVED' && req.expiresAt) return req.expiresAt;
         }
-      } else if (authMode === 'PIN') {
-        const authFile = await this.findFile(DRIVE_AUTH_FILENAME);
-        if (authFile) {
-          const authContent = await this.downloadFileContent(authFile.id);
-          const auth = JSON.parse(authContent);
-          if (auth.status === 'AUTHORIZED' && auth.expires_at) return auth.expires_at;
-        }
       }
     } catch (_) {}
     return null;
-  }
-
-  /**
-   * Checks authorization status record
-   */
-  async checkMobileAuthorization() {
-    try {
-      const file = await this.findFile(DRIVE_AUTH_FILENAME);
-      if (!file) {
-        return { authorized: false, reason: 'NO_AUTH_RECORD', message: 'No authorization request found. Please authorize extension in mobile app.' };
-      }
-
-      const content = await this.downloadFileContent(file.id);
-      const auth = JSON.parse(content);
-
-      if (auth.status === 'REVOKED') {
-        return {
-          authorized: false,
-          reason: 'REVOKED',
-          message: 'Authorization revoked from TetherPass mobile application.'
-        };
-      }
-
-      const now = Date.now();
-      const isExpired = auth.expires_at && now > auth.expires_at;
-
-      if (auth.status === 'AUTHORIZED' && !isExpired) {
-        return {
-          authorized: true,
-          pin: auth.pairing_pin,
-          expiresAt: auth.expires_at,
-          authorizedAt: auth.authorized_at,
-          device: auth.device,
-          pin_sealed_key: auth.pin_sealed_key
-        };
-      } else {
-        return {
-          authorized: false,
-          reason: isExpired ? 'EXPIRED' : (auth.status || 'LOCKED'),
-          message: isExpired ? 'Authorization expired. Please re-authorize on your phone.' : 'Locked from mobile app.'
-        };
-      }
-    } catch (err) {
-      return { authorized: false, reason: 'ERROR', message: err.message };
-    }
   }
 }
 
@@ -606,7 +534,6 @@ if (typeof module !== 'undefined' && module.exports) {
     DriveClient,
     GOOGLE_CLIENT_ID,
     DRIVE_BACKUP_FILENAME,
-    DRIVE_AUTH_FILENAME,
     DRIVE_REQUEST_FILENAME
   };
 }

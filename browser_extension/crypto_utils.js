@@ -139,7 +139,7 @@ async function decryptCardVaultBackup(rawPayload, masterPassword) {
 }
 
 /**
- * Decrypts a master password sealed with a secret (6-digit PIN or requestId)
+ * Decrypts a master password sealed with a secret (requestId for Push Approval)
  */
 async function decryptSealedMasterPassword(sealedKeyObj, secret) {
   if (!sealedKeyObj || !sealedKeyObj.salt || !sealedKeyObj.iv || !sealedKeyObj.ciphertext) {

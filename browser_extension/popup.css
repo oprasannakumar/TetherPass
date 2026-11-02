@@ -516,14 +516,6 @@ body {
   background: #FFFFFF;
 }
 
-#pinInput {
-  font-family: monospace;
-  font-size: 14px;
-  font-weight: 900;
-  letter-spacing: 4px;
-  text-align: center;
-}
-
 .btn {
   display: inline-flex;
   align-items: center;
