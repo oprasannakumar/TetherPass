@@ -16,6 +16,7 @@ import '../services/totp_service.dart';
 import '../widgets/card_input_formatter.dart';
 import '../widgets/card_widget.dart';
 import '../widgets/spotlight_tour.dart';
+import '../widgets/totp_qr_scanner_dialog.dart';
 
 class AddEditScreen extends StatefulWidget {
   final VaultItem? initialItem;
@@ -500,6 +501,43 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
         ),
       ),
     );
+  }
+
+  Future<void> _scanTotpQrCode() async {
+    final result = await TotpQrScannerDialog.scan(context);
+    if (result != null) {
+      setState(() {
+        _pwdTotpCtrl.text = result.secret;
+        if (result.issuer != null && _pwdNicknameCtrl.text.trim().isEmpty) {
+          _pwdNicknameCtrl.text = result.issuer!;
+        }
+        if (result.account != null && _pwdUsernameCtrl.text.trim().isEmpty) {
+          _pwdUsernameCtrl.text = result.account!;
+        }
+      });
+      if (mounted) {
+        final code = TotpService.generateCode(result.secret);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF0F172A),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '2FA Authenticator configured! Active code: $code',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _startNfcScan() async {
@@ -2615,6 +2653,32 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                   ],
                 ),
                 const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _scanTotpQrCode,
+                        icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 18),
+                        label: const Text(
+                          'Scan 2FA Setup QR Code',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF6F00),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
                 TextField(
                   controller: _pwdTotpCtrl,
                   textCapitalization: TextCapitalization.characters,
@@ -2635,18 +2699,28 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.paste_rounded, color: Color(0xFFFF6F00), size: 20),
-                      tooltip: 'Paste 2FA Secret Key',
-                      onPressed: () async {
-                        final data = await Clipboard.getData(Clipboard.kTextPlain);
-                        if (data?.text != null) {
-                          final parsed = TotpService.cleanKey(data!.text!);
-                          setState(() {
-                            _pwdTotpCtrl.text = parsed;
-                          });
-                        }
-                      },
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFFFF6F00), size: 20),
+                          tooltip: 'Scan QR Code',
+                          onPressed: _scanTotpQrCode,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.paste_rounded, color: Color(0xFF64748B), size: 20),
+                          tooltip: 'Paste 2FA Secret Key',
+                          onPressed: () async {
+                            final data = await Clipboard.getData(Clipboard.kTextPlain);
+                            if (data?.text != null) {
+                              final parsed = TotpService.cleanKey(data!.text!);
+                              setState(() {
+                                _pwdTotpCtrl.text = parsed;
+                              });
+                            }
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 ),
