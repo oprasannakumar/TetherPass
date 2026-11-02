@@ -28,7 +28,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px;
+  padding: 8px 12px;
   background: #FFFFFF;
   border-bottom: 1px solid #E2E8F0;
 }
@@ -66,13 +66,15 @@ body {
 }
 
 .status-badge.locked {
-  background: #FEE2E2;
-  color: #B91C1C;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #DC2626;
 }
 
 .status-badge.unlocked {
-  background: #DCFCE7;
-  color: #15803D;
+  background: #ECFDF5;
+  border: 1px solid #A7F3D0;
+  color: #059669;
 }
 
 .status-dot {
@@ -80,6 +82,342 @@ body {
   height: 6px;
   border-radius: 50%;
   background: currentColor;
+}
+
+/* ── Redesigned Modern Minimal Strip & Unlinked Hero ── */
+.unlinked-card {
+  text-align: center;
+  padding: 22px 16px;
+  background: #FFFFFF;
+  border-radius: 14px;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  margin: 10px 10px 6px;
+}
+.unlinked-icon {
+  font-size: 30px;
+  margin-bottom: 6px;
+}
+.unlinked-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0F172A;
+  margin-bottom: 4px;
+}
+.unlinked-subtitle {
+  font-size: 11px;
+  color: #64748B;
+  line-height: 1.4;
+  margin-bottom: 12px;
+}
+
+.account-strip {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E2E8F0;
+}
+.strip-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.avatar-circle-sm {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FF6F00, #EA580C);
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  overflow: hidden;
+}
+.strip-user-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.strip-email {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #0F172A;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 165px;
+}
+.strip-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  color: #059669;
+  font-weight: 600;
+}
+.status-dot-sm {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #10B981;
+}
+.strip-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-strip-action {
+  background: #F1F5F9;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  padding: 3px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.15s ease;
+}
+.btn-strip-action:hover {
+  background: #E2E8F0;
+  color: #0F172A;
+}
+.btn-strip-disconnect {
+  background: none;
+  border: none;
+  font-size: 10px;
+  font-weight: 600;
+  color: #94A3B8;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color 0.15s ease;
+}
+.btn-strip-disconnect:hover {
+  color: #EF4444;
+}
+
+/* ── Modern Segmented Control ── */
+.unlock-segmented-control {
+  display: flex;
+  gap: 4px;
+  background: #F1F5F9;
+  padding: 3px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #E2E8F0;
+}
+.segment-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748B;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.segment-btn:hover {
+  color: #0F172A;
+}
+.segment-btn.active {
+  background: #FFFFFF;
+  color: #FF6F00;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+.seg-icon {
+  font-size: 13px;
+}
+
+/* ── Hero Unlock Card ── */
+.unlock-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+.unlock-tab-pane {
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.qr-code-frame {
+  display: inline-block;
+  padding: 8px;
+  background: #FFFFFF;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  line-height: 0;
+  margin: 4px auto 8px;
+}
+.qr-code-frame canvas {
+  display: block;
+  border-radius: 6px;
+}
+.qr-instructions {
+  margin-top: 6px;
+  text-align: center;
+}
+.qr-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0F172A;
+}
+.qr-steps {
+  font-size: 11px;
+  color: #64748B;
+  margin-top: 2px;
+  line-height: 1.35;
+}
+.qr-timer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #B45309;
+  font-family: monospace;
+}
+.pulse-dot-amber {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #F59E0B;
+  box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+  animation: pulseDot 1.5s infinite;
+}
+@keyframes pulseDot {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+.btn-refresh-qr {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  background: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  padding: 5px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-refresh-qr:hover {
+  background: #E2E8F0;
+  color: #0F172A;
+}
+.qr-loading-box {
+  text-align: center;
+  padding: 26px 10px;
+  color: #64748B;
+}
+.spinner-ring {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border: 3px solid #E2E8F0;
+  border-top-color: #FF6F00;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 8px;
+}
+.qr-loading-text {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ── PC & Password Form Styles ── */
+.pc-device-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 5px 8px;
+  margin-bottom: 8px;
+  font-size: 11px;
+}
+.pc-device-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.pc-name {
+  font-weight: 700;
+  color: #0F172A;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+.btn-rename-pc {
+  background: none;
+  border: none;
+  color: #FF6F00;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.form-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 3px;
+}
+.form-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: #FFFFFF;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #0F172A;
+  outline: none;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+.form-input:focus {
+  border-color: #FF6F00;
+  box-shadow: 0 0 0 3px rgba(255, 111, 0, 0.12);
+}
+.btn-block {
+  width: 100%;
+  justify-content: center;
 }
 
 /* Views */

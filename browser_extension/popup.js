@@ -250,6 +250,9 @@ async function loadSavedGoogleAccount() {
       }
       if (data.googleAccountEmail) {
         setConnectedGoogleAccount(data.googleAccountEmail, data.googleAccountPicture || null, false);
+      } else {
+        const unlinked = document.getElementById('oauthUnlinkedBox');
+        if (unlinked) unlinked.style.display = 'block';
       }
       if (data.cachedBackupPayload) {
         localBackupPayload = data.cachedBackupPayload;
@@ -276,7 +279,7 @@ function setConnectedGoogleAccount(email, picture = null, save = true) {
 
   if (step1Sub) step1Sub.style.display = 'none';
   if (unlinkedBox) unlinkedBox.style.display = 'none';
-  if (linkedBox) linkedBox.style.display = 'block';
+  if (linkedBox) linkedBox.style.display = 'flex';
   if (emailDisplay) emailDisplay.textContent = email;
 
   if (currentGooglePicture && profileImg) {
@@ -563,6 +566,7 @@ async function handleGoogleSignIn() {
 }
 
 async function handleDisconnectOAuth() {
+  stopDirectQrPairing();
   currentOAuthToken = null;
   currentGoogleAccount = null;
   currentGooglePicture = null;
@@ -790,18 +794,8 @@ function switchUnlockTab(tab) {
   const pushContainer = document.getElementById('pushModeContainer');
 
   if (tab === 'qr') {
-    if (qrBtn) {
-      qrBtn.classList.add('active');
-      qrBtn.style.border = '1.5px solid #FF6F00';
-      qrBtn.style.background = '#FFF7ED';
-      qrBtn.style.color = '#C2410C';
-    }
-    if (pushBtn) {
-      pushBtn.classList.remove('active');
-      pushBtn.style.border = '1px solid #CBD5E1';
-      pushBtn.style.background = '#F8FAFC';
-      pushBtn.style.color = '#475569';
-    }
+    qrBtn?.classList.add('active');
+    pushBtn?.classList.remove('active');
     if (qrContainer) qrContainer.style.display = 'block';
     if (pushContainer) pushContainer.style.display = 'none';
 
@@ -809,18 +803,8 @@ function switchUnlockTab(tab) {
       startDirectQrPairing();
     }
   } else {
-    if (pushBtn) {
-      pushBtn.classList.add('active');
-      pushBtn.style.border = '1.5px solid #FF6F00';
-      pushBtn.style.background = '#FFF7ED';
-      pushBtn.style.color = '#C2410C';
-    }
-    if (qrBtn) {
-      qrBtn.classList.remove('active');
-      qrBtn.style.border = '1px solid #CBD5E1';
-      qrBtn.style.background = '#F8FAFC';
-      qrBtn.style.color = '#475569';
-    }
+    pushBtn?.classList.add('active');
+    qrBtn?.classList.remove('active');
     if (qrContainer) qrContainer.style.display = 'none';
     if (pushContainer) pushContainer.style.display = 'block';
 
@@ -897,7 +881,7 @@ async function startDirectQrPairing() {
     // Render pairing QR for mobile scan
     if (canvas && window.renderQRCode) {
       const pairUri = `tetherpass://pair?req=${encodeURIComponent(requestId)}&dev=${encodeURIComponent(myDevice)}`;
-      window.renderQRCode(canvas, pairUri, { size: 136 });
+      window.renderQRCode(canvas, pairUri, { size: 140 });
     }
 
     if (loadingEl) loadingEl.style.display = 'none';
@@ -944,7 +928,14 @@ async function startDirectQrPairing() {
 
   } catch (err) {
     if (loadingEl) {
-      loadingEl.innerHTML = `<div style="color: #EF4444; font-size: 11px;">Error: ${escapeHtml(err.message)}</div>`;
+      loadingEl.style.display = 'block';
+      if (readyEl) readyEl.style.display = 'none';
+      loadingEl.innerHTML = `
+        <div style="color: #EF4444; font-weight: 700; font-size: 12px; margin-bottom: 4px;">⚠️ Pairing Setup Error</div>
+        <div style="color: #64748B; font-size: 11px; margin-bottom: 10px;">${escapeHtml(err.message)}</div>
+        <button type="button" id="retryDirectQrErrBtn" class="btn-refresh-qr">🔄 Try Again</button>
+      `;
+      document.getElementById('retryDirectQrErrBtn')?.addEventListener('click', () => startDirectQrPairing());
     }
   }
 }

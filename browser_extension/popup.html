@@ -24,154 +24,158 @@
       <span>💡 Tip: Click the <strong>TetherPass</strong> icon in your browser toolbar to use autofill while browsing.</span>
     </div>
 
-    <!-- ── Screen 1: Locked & Authorization Required ── -->
-    <div id="lockedView" class="view-panel active">
-      
-      <!-- ── STEP 1: GOOGLE DRIVE LINK (OAUTH 2.0) ── -->
-      <div class="setup-section">
-        <div class="section-badge-row">
-          <span class="step-pill">STEP 1</span>
-          <span class="section-title">Google Drive Account</span>
-        </div>
-        <p id="step1Subtitle" class="section-subtitle" style="margin-bottom: 6px;">
-          Connect the Google Account used in TetherPass on your phone.
-        </p>
+    <!-- ── Account Strip (Shown when connected or unlinked) ── -->
+    <!-- Unlinked State Card -->
+    <div id="oauthUnlinkedBox" class="unlinked-card" style="display: none;">
+      <div class="unlinked-icon">☁️</div>
+      <div class="unlinked-title">Connect Google Drive</div>
+      <p id="step1Subtitle" class="unlinked-subtitle">
+        Sign in to link this browser extension with TetherPass on your phone.
+      </p>
+      <button id="googleOAuthBtn" class="btn btn-google">
+        <img src="icons/google_logo.svg" alt="G" class="google-logo" />
+        <span>Sign in with Google Account</span>
+      </button>
+    </div>
 
-        <!-- Unlinked state -->
-        <div id="oauthUnlinkedBox" class="account-card">
-          <button id="googleOAuthBtn" class="btn btn-google">
-            <img src="icons/google_logo.svg" alt="G" class="google-logo" />
-            <span>Sign in with Google Account</span>
-          </button>
+    <!-- Linked State Minimal Account Strip (Replaces the huge STEP 1 box!) -->
+    <div id="oauthLinkedBox" class="account-strip" style="display: none;">
+      <div class="strip-left">
+        <div class="avatar-circle-sm">
+          <img id="accountProfileImg" src="" alt="Profile" style="display: none; width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
+          <span id="accountAvatarLetter">O</span>
         </div>
-
-        <!-- Linked state -->
-        <div id="oauthLinkedBox" class="account-card linked" style="display: none;">
-          <div class="account-row">
-            <div class="avatar-circle">
-              <img id="accountProfileImg" src="" alt="Profile" style="display: none; width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
-              <span id="accountAvatarLetter">O</span>
-            </div>
-            <div class="account-details">
-              <div id="connectedEmailDisplay" class="account-email">oprasannak@gmail.com</div>
-              <div class="account-status">
-                <span class="status-indicator-dot"></span>
-                <span>Google Drive Connected</span>
-              </div>
-            </div>
-            <button id="disconnectOAuthBtn" class="btn-switch-account" title="Disconnect Google Drive account">Disconnect</button>
-          </div>
-          <div class="account-devices-bar" style="margin-top: 4px; padding-top: 4px; border-top: 1px dashed #CBD5E1; display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
-            <span style="color: #475569; display: flex; align-items: center; gap: 4px;">
-              <span>📱</span> <strong id="headerDeviceCount">0 Phones Linked</strong>
-            </span>
-            <button type="button" id="openDeviceManagerFromHeaderBtn" class="btn-manage-link" style="color: #FF6F00; font-weight: 700; cursor: pointer; background: transparent; border: none; padding: 1px 3px;">⚙️ Manage Devices</button>
+        <div class="strip-user-info">
+          <div id="connectedEmailDisplay" class="strip-email">user@gmail.com</div>
+          <div class="strip-status">
+            <span class="status-dot-sm"></span>
+            <span class="strip-status-text">Connected</span>
           </div>
         </div>
       </div>
+      <div class="strip-actions">
+        <button type="button" id="openDeviceManagerFromHeaderBtn" class="btn-strip-action" title="Manage Linked Phones">
+          <span class="strip-action-icon">📱</span>
+          <span id="headerDeviceCount" class="strip-action-text">1 Phone</span>
+        </button>
+        <button id="disconnectOAuthBtn" class="btn-strip-disconnect" title="Disconnect Google Account">
+          Disconnect
+        </button>
+      </div>
+    </div>
 
-      <!-- ── STEP 2: MOBILE CONFIRMATION & MASTER PASSWORD ── -->
-      <div class="setup-section" style="margin-top: 6px;">
-        <div class="section-badge-row" style="margin-bottom: 5px;">
-          <span class="step-pill">STEP 2</span>
-          <span class="section-title">Mobile Approval & Decrypt</span>
-        </div>
+    <!-- ── Screen 1: Locked & Authorization Required ── -->
+    <div id="lockedView" class="view-panel active">
+      
+      <!-- Modern Unlock Segmented Control -->
+      <div class="unlock-segmented-control">
+        <button type="button" id="tabModeQrBtn" class="segment-btn active">
+          <span class="seg-icon">📷</span>
+          <span>Instant QR Unlock</span>
+        </button>
+        <button type="button" id="tabModePushBtn" class="segment-btn">
+          <span class="seg-icon">🔑</span>
+          <span>Master Password</span>
+        </button>
+      </div>
 
-        <div class="auth-box">
-          <!-- Unlock Mode Switcher -->
-          <div style="display: flex; gap: 6px; margin-bottom: 10px;">
-            <button type="button" id="tabModeQrBtn" class="mode-tab-btn active" style="flex: 1; padding: 7px 4px; font-size: 11px; font-weight: 700; border-radius: 8px; border: 1.5px solid #FF6F00; background: #FFF7ED; color: #C2410C; cursor: pointer; transition: all 0.2s;">
-              📷 Instant QR Unlock
-            </button>
-            <button type="button" id="tabModePushBtn" class="mode-tab-btn" style="flex: 1; padding: 7px 4px; font-size: 11px; font-weight: 600; border-radius: 8px; border: 1px solid #CBD5E1; background: #F8FAFC; color: #475569; cursor: pointer; transition: all 0.2s;">
-              ⌨️ Master Password
-            </button>
+      <!-- Hero Card for Unlock Action -->
+      <div class="unlock-card">
+        
+        <!-- TAB 1: Instant QR Code View -->
+        <div id="qrUnlockModeContainer" class="unlock-tab-pane" style="text-align: center;">
+          <div id="qrLoadingState" class="qr-loading-box">
+            <div class="spinner-ring"></div>
+            <div class="qr-loading-text">Generating secure pairing QR code...</div>
           </div>
-
-          <!-- TAB 1: Instant QR Code View -->
-          <div id="qrUnlockModeContainer" style="text-align: center; padding: 4px 0 8px;">
-            <div id="qrLoadingState" style="padding: 24px 10px; font-size: 12px; color: #64748B;">
-              <div style="display: inline-block; width: 22px; height: 22px; border: 3px solid #E2E8F0; border-top-color: #FF6F00; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 8px;"></div>
-              <div>Generating secure pairing QR code...</div>
+          
+          <div id="qrReadyState" style="display: none;">
+            <!-- Canvas QR Code Frame -->
+            <div class="qr-code-frame">
+              <canvas id="directPairingQrCanvas" width="140" height="140"></canvas>
             </div>
-            <div id="qrReadyState" style="display: none;">
-              <div style="background: white; padding: 8px; border-radius: 14px; display: inline-block; border: 2.5px solid #FF6F00; box-shadow: 0 4px 16px rgba(255, 111, 0, 0.2);">
-                <canvas id="directPairingQrCanvas" width="136" height="136"></canvas>
+            
+            <div class="qr-instructions">
+              <div class="qr-title">Scan with TetherPass on Phone</div>
+              <div class="qr-steps">
+                Open App &gt; <strong>Browser Extension</strong> &gt; <strong>Scan Desktop QR</strong>
               </div>
-              <div style="margin-top: 8px; font-size: 12.5px; font-weight: 700; color: #0F172A;">
-                Scan with TetherPass Mobile App
+            </div>
+
+            <!-- Pulsing Status Pill -->
+            <div>
+              <div class="qr-timer-pill">
+                <span class="pulse-dot-amber"></span>
+                <span id="qrWaitingTimer">Waiting for scan (60s)...</span>
               </div>
-              <div style="font-size: 11px; color: #64748B; margin-top: 2px; line-height: 1.3;">
-                Open App &gt; <strong>Browser Extension</strong> &gt; <strong>Scan Desktop Extension QR</strong>
-              </div>
-              <div id="qrWaitingTimer" style="font-size: 11px; color: #FF6F00; font-weight: 700; margin-top: 6px; font-family: monospace;">
-                Waiting for scan (60s)...
-              </div>
-              <button type="button" id="refreshQrBtn" style="margin-top: 8px; background: white; border: 1px solid #CBD5E1; border-radius: 6px; padding: 4px 12px; font-size: 11px; color: #334155; cursor: pointer; font-weight: 600;">
-                🔄 Refresh QR Code
+            </div>
+
+            <div>
+              <button type="button" id="refreshQrBtn" class="btn-refresh-qr">
+                <span>🔄</span> Refresh QR Code
               </button>
             </div>
           </div>
-
-          <!-- TAB 2: Push Mode Container (Manual password) -->
-          <div id="pushModeContainer" style="display: none;">
-            <!-- Compact This Computer Device Row -->
-            <div style="display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 3px 7px; margin-bottom: 5px; font-size: 10.5px;">
-              <span style="color: #475569; display: inline-flex; align-items: center; gap: 4px; min-width: 0;">
-                <span style="font-size: 11px;">💻</span>
-                <span style="color: #0F172A; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="desktopDeviceNameText">Windows PC (Chrome)</span>
-              </span>
-              <button type="button" id="editDesktopNameBtn" style="background: none; border: none; color: #FF6F00; font-size: 10px; font-weight: 700; cursor: pointer; padding: 0 3px; flex-shrink: 0;" title="Rename this device">✏️ Rename</button>
-            </div>
-
-            <!-- Master Password -->
-            <div class="form-group" style="margin-bottom: 5px;">
-              <label for="passwordInput" style="margin-bottom: 2px;">Vault Master Password</label>
-              <input type="password" id="passwordInput" placeholder="Enter your Master Password" autocomplete="off" />
-            </div>
-
-            <!-- Multi-Mobile Device Selector -->
-            <div id="deviceSelectorGroup" class="form-group" style="margin-bottom: 7px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-                <label for="targetDeviceSelect" style="margin-bottom: 0;">Target Mobile Phone:</label>
-                <span id="deviceCountBadge" style="color: #64748B; font-size: 10px; font-weight: 600;"></span>
-              </div>
-              <select id="targetDeviceSelect" class="device-select">
-                <option value="ALL">📡 All Mobile Devices (Broadcast)</option>
-              </select>
-            </div>
-
-            <div id="normalActionBox">
-              <button id="requestPushApprovalBtn" class="btn btn-primary">
-                <span class="btn-icon">📲</span> Send Confirmation Pop-up to Mobile
-              </button>
-            </div>
-          </div>
-
-          <!-- Active Waiting State for Mobile Confirmation -->
-          <div id="waitingForMobileCard" class="waiting-card" style="display: none;">
-            <div class="pulse-ring"></div>
-            <div class="waiting-title">🔔 Check Your Mobile Phone!</div>
-            <p class="waiting-desc">
-              A confirmation request was sent to TetherPass, or scan the QR code below:
-            </p>
-            <div id="pairingQrContainer" style="margin: 8px auto; background: white; padding: 6px; border-radius: 12px; display: inline-block; border: 2px solid #FF6F00; box-shadow: 0 4px 12px rgba(255, 111, 0, 0.15);">
-              <canvas id="pairingQrCanvas" width="130" height="130"></canvas>
-            </div>
-            <div style="font-size: 11px; color: #475569; font-weight: 700; margin-bottom: 6px;">📷 Point TetherPass app camera to pair instantly</div>
-            <div id="waitingTimer" class="waiting-timer">Waiting for approval (60s)...</div>
-            <button id="cancelApprovalRequestBtn" class="btn btn-sm btn-outline-danger" style="margin-top: 10px;">Cancel Request</button>
-          </div>
-
-          <div id="authError" class="error-banner" style="display: none;"></div>
-          <div id="authSuccess" class="success-banner" style="display: none;"></div>
         </div>
+
+        <!-- TAB 2: Push Mode Container (Manual password) -->
+        <div id="pushModeContainer" class="unlock-tab-pane" style="display: none;">
+          <!-- Compact PC Device Tag -->
+          <div class="pc-device-row">
+            <div class="pc-device-left">
+              <span class="pc-icon">💻</span>
+              <span id="desktopDeviceNameText" class="pc-name">Windows PC (Chrome)</span>
+            </div>
+            <button type="button" id="editDesktopNameBtn" class="btn-rename-pc">✏️ Rename</button>
+          </div>
+
+          <!-- Master Password Form -->
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label for="passwordInput" class="form-label">Vault Master Password</label>
+            <input type="password" id="passwordInput" class="form-input" placeholder="Enter your Master Password" autocomplete="off" />
+          </div>
+
+          <!-- Multi-Mobile Device Selector -->
+          <div id="deviceSelectorGroup" class="form-group" style="margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label for="targetDeviceSelect" class="form-label" style="margin-bottom: 0;">Target Mobile Phone:</label>
+              <span id="deviceCountBadge" style="color: #64748B; font-size: 10px; font-weight: 600;"></span>
+            </div>
+            <select id="targetDeviceSelect" class="device-select">
+              <option value="ALL">📡 All Mobile Devices (Broadcast)</option>
+            </select>
+          </div>
+
+          <div id="normalActionBox">
+            <button id="requestPushApprovalBtn" class="btn btn-primary btn-block">
+              <span>📲</span> Send Confirmation to Mobile
+            </button>
+          </div>
+        </div>
+
+        <!-- Active Waiting State for Mobile Confirmation -->
+        <div id="waitingForMobileCard" class="waiting-card" style="display: none;">
+          <div class="pulse-ring"></div>
+          <div class="waiting-title">🔔 Check Your Mobile Phone!</div>
+          <p class="waiting-desc">
+            A confirmation request was sent to TetherPass, or point your camera below:
+          </p>
+          <div id="pairingQrContainer" class="qr-code-frame" style="margin: 8px auto;">
+            <canvas id="pairingQrCanvas" width="130" height="130"></canvas>
+          </div>
+          <div style="font-size: 11px; color: #475569; font-weight: 700; margin-bottom: 6px;">📷 Point TetherPass app camera to pair instantly</div>
+          <div id="waitingTimer" class="waiting-timer">Waiting for approval (60s)...</div>
+          <button id="cancelApprovalRequestBtn" class="btn btn-sm btn-outline-danger" style="margin-top: 10px;">Cancel Request</button>
+        </div>
+
+        <div id="authError" class="error-banner" style="display: none;"></div>
+        <div id="authSuccess" class="success-banner" style="display: none;"></div>
       </div>
     </div>
 
     <!-- ── Screen 2: Unlocked & Vault Active ── -->
     <div id="unlockedView" class="view-panel">
-      <!-- Redesigned Sleek Session Bar -->
+      <!-- Session Bar -->
       <div class="session-bar">
         <div class="session-left">
           <div class="session-status-row">
@@ -194,7 +198,7 @@
 
       <!-- Search Bar -->
       <div class="search-box">
-        <input type="text" id="searchBar" placeholder="Search cards, bank accounts, IFSC..." />
+        <input type="text" id="searchBar" placeholder="Search cards, bank accounts, passwords..." />
       </div>
 
       <!-- Category Filter Tabs -->

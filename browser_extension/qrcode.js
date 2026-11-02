@@ -354,13 +354,26 @@
     this.dataCount = dataCount;
   }
   QRRSBlock.RS_BLOCK_TABLE = [
-    // 1-L,M,Q,H ...
+    // 1
     [1, 26, 19], [1, 26, 16], [1, 26, 13], [1, 26, 9],
+    // 2
     [1, 44, 34], [1, 44, 28], [1, 44, 22], [1, 44, 16],
+    // 3
     [1, 70, 55], [1, 70, 44], [2, 35, 17], [2, 35, 13],
+    // 4
     [1, 100, 80], [2, 50, 32], [2, 50, 24], [4, 25, 9],
+    // 5
     [1, 134, 108], [2, 67, 43], [2, 33, 15, 2, 34, 16], [2, 33, 11, 2, 34, 12],
-    [2, 86, 68], [4, 43, 27], [4, 43, 19], [4, 43, 15]
+    // 6
+    [2, 86, 68], [4, 43, 27], [4, 43, 19], [4, 43, 15],
+    // 7
+    [2, 98, 78], [4, 49, 31], [2, 32, 14, 4, 33, 15], [4, 39, 13, 1, 40, 14],
+    // 8
+    [2, 121, 97], [2, 60, 38, 2, 61, 39], [4, 40, 18, 2, 41, 19], [4, 40, 14, 2, 41, 15],
+    // 9
+    [2, 146, 116], [3, 58, 36, 2, 59, 37], [4, 36, 16, 4, 37, 17], [4, 36, 12, 4, 37, 13],
+    // 10
+    [2, 86, 68, 2, 87, 69], [4, 69, 43, 1, 70, 44], [6, 43, 19, 2, 44, 20], [6, 43, 15, 2, 44, 16]
   ];
   QRRSBlock.getRSBlocks = function(typeNumber, errorCorrectLevel) {
     var rsBlock = QRRSBlock.getRsBlockTable(typeNumber, errorCorrectLevel);
@@ -408,9 +421,16 @@
   global.renderQRCode = function(canvas, text, options) {
     options = options || {};
     var size = options.size || 140;
-    var type = 4;
-    if (text.length > 50) type = 6;
-    if (text.length > 80) type = 8;
+    
+    // Auto-detect smallest type number for 8-bit byte mode (Level L, ecc=1)
+    var capacities = [0, 17, 32, 53, 78, 106, 134, 154, 192, 230, 271];
+    var type = 10;
+    for (var t = 1; t <= 10; t++) {
+      if (text.length <= capacities[t]) {
+        type = t;
+        break;
+      }
+    }
     
     var qr = new QRCodeModel(type, 1); // 1 = L (Low error correction for high density capacity)
     qr.addData(text);
