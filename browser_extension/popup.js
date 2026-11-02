@@ -144,6 +144,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSavedGoogleAccount();
   await refreshStatus();
 
+  // If locked and QR tab is active, automatically generate pairing QR code
+  const lockedView = document.getElementById('lockedView');
+  if (lockedView && lockedView.classList.contains('active')) {
+    startDirectQrPairing();
+  }
+
   // Auto-refresh desktop status periodically
   setInterval(() => {
     refreshStatus();
@@ -159,6 +165,11 @@ function initUI() {
   // Push confirmation to mobile phone
   document.getElementById('requestPushApprovalBtn')?.addEventListener('click', handleRequestMobilePushApproval);
   document.getElementById('cancelApprovalRequestBtn')?.addEventListener('click', cancelApprovalPolling);
+
+  // Instant QR vs Push Unlock Tabs
+  document.getElementById('tabModeQrBtn')?.addEventListener('click', () => switchUnlockTab('qr'));
+  document.getElementById('tabModePushBtn')?.addEventListener('click', () => switchUnlockTab('push'));
+  document.getElementById('refreshQrBtn')?.addEventListener('click', () => startDirectQrPairing());
 
   // ── Device Manager Modal ──
   document.getElementById('openDeviceManagerBtn')?.addEventListener('click', openDeviceManagerModal);
@@ -302,6 +313,15 @@ function setConnectedGoogleAccount(email, picture = null, save = true) {
 
   // Check for registered mobile devices
   loadRegisteredDevices();
+
+  // If locked, kick off QR generation now that account is connected
+  const lockedView = document.getElementById('lockedView');
+  if (lockedView && lockedView.classList.contains('active')) {
+    const qrBtn = document.getElementById('tabModeQrBtn');
+    if (!qrBtn || qrBtn.classList.contains('active')) {
+      startDirectQrPairing();
+    }
+  }
 }
 
 async function fetchGoogleUserProfile(token) {
@@ -759,6 +779,176 @@ function cancelApprovalPolling() {
   if (waitingCard) waitingCard.style.display = 'none';
 }
 
+let activeDirectQrInterval = null;
+let activeDirectQrCountdown = null;
+let currentDirectQrRequestId = null;
+
+function switchUnlockTab(tab) {
+  const qrBtn = document.getElementById('tabModeQrBtn');
+  const pushBtn = document.getElementById('tabModePushBtn');
+  const qrContainer = document.getElementById('qrUnlockModeContainer');
+  const pushContainer = document.getElementById('pushModeContainer');
+
+  if (tab === 'qr') {
+    if (qrBtn) {
+      qrBtn.classList.add('active');
+      qrBtn.style.border = '1.5px solid #FF6F00';
+      qrBtn.style.background = '#FFF7ED';
+      qrBtn.style.color = '#C2410C';
+    }
+    if (pushBtn) {
+      pushBtn.classList.remove('active');
+      pushBtn.style.border = '1px solid #CBD5E1';
+      pushBtn.style.background = '#F8FAFC';
+      pushBtn.style.color = '#475569';
+    }
+    if (qrContainer) qrContainer.style.display = 'block';
+    if (pushContainer) pushContainer.style.display = 'none';
+
+    if (!currentDirectQrRequestId) {
+      startDirectQrPairing();
+    }
+  } else {
+    if (pushBtn) {
+      pushBtn.classList.add('active');
+      pushBtn.style.border = '1.5px solid #FF6F00';
+      pushBtn.style.background = '#FFF7ED';
+      pushBtn.style.color = '#C2410C';
+    }
+    if (qrBtn) {
+      qrBtn.classList.remove('active');
+      qrBtn.style.border = '1px solid #CBD5E1';
+      qrBtn.style.background = '#F8FAFC';
+      qrBtn.style.color = '#475569';
+    }
+    if (qrContainer) qrContainer.style.display = 'none';
+    if (pushContainer) pushContainer.style.display = 'block';
+
+    stopDirectQrPairing();
+  }
+}
+
+function stopDirectQrPairing() {
+  if (activeDirectQrInterval) clearInterval(activeDirectQrInterval);
+  if (activeDirectQrCountdown) clearInterval(activeDirectQrCountdown);
+  activeDirectQrInterval = null;
+  activeDirectQrCountdown = null;
+  currentDirectQrRequestId = null;
+}
+
+async function startDirectQrPairing() {
+  stopDirectQrPairing();
+
+  const loadingEl = document.getElementById('qrLoadingState');
+  const readyEl = document.getElementById('qrReadyState');
+  const timerEl = document.getElementById('qrWaitingTimer');
+  const canvas = document.getElementById('directPairingQrCanvas');
+
+  if (!currentOAuthToken) {
+    if (loadingEl) {
+      loadingEl.style.display = 'block';
+      loadingEl.innerHTML = `
+        <div style="font-size: 24px; margin-bottom: 6px;">🔗</div>
+        <div style="font-weight: 700; color: #0F172A; margin-bottom: 4px;">Sign in with Google First</div>
+        <div style="font-size: 11px; color: #64748B; line-height: 1.4;">
+          Click <strong>"Connect Google Drive"</strong> in Step 1 above so the desktop extension can securely sync with your phone.
+        </div>
+      `;
+    }
+    if (readyEl) readyEl.style.display = 'none';
+    return;
+  }
+
+  if (loadingEl) {
+    loadingEl.style.display = 'block';
+    loadingEl.innerHTML = `
+      <div style="display: inline-block; width: 22px; height: 22px; border: 3px solid #E2E8F0; border-top-color: #FF6F00; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 8px;"></div>
+      <div>Generating secure pairing QR code...</div>
+    `;
+  }
+  if (readyEl) readyEl.style.display = 'none';
+
+  try {
+    const myDevice = cachedDesktopDeviceName || 'Windows PC';
+    const startRes = await sendExtensionMessage({
+      action: 'START_MOBILE_APPROVAL_REQUEST',
+      payload: {
+        token: currentOAuthToken,
+        deviceName: myDevice,
+        targetDeviceId: 'ALL'
+      }
+    });
+
+    if (!startRes || !startRes.success) {
+      if (loadingEl) {
+        loadingEl.innerHTML = `
+          <div style="color: #EF4444; font-weight: 600; margin-bottom: 6px;">⚠️ Pairing Setup Error</div>
+          <div style="font-size: 11px; color: #64748B; margin-bottom: 8px;">${escapeHtml(startRes?.error || 'Could not connect to Google Drive')}</div>
+          <button type="button" id="retryDirectQrBtn" style="background: white; border: 1px solid #CBD5E1; border-radius: 6px; padding: 4px 12px; font-size: 11px; color: #334155; cursor: pointer; font-weight: 600;">🔄 Try Again</button>
+        `;
+        document.getElementById('retryDirectQrBtn')?.addEventListener('click', () => startDirectQrPairing());
+      }
+      return;
+    }
+
+    const requestId = startRes.requestId;
+    currentDirectQrRequestId = requestId;
+
+    // Render pairing QR for mobile scan
+    if (canvas && window.renderQRCode) {
+      const pairUri = `tetherpass://pair?req=${encodeURIComponent(requestId)}&dev=${encodeURIComponent(myDevice)}`;
+      window.renderQRCode(canvas, pairUri, { size: 136 });
+    }
+
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (readyEl) readyEl.style.display = 'block';
+
+    let secondsLeft = 60;
+    if (timerEl) timerEl.textContent = `Waiting for scan (${secondsLeft}s)...`;
+
+    activeDirectQrCountdown = setInterval(() => {
+      secondsLeft--;
+      if (timerEl) timerEl.textContent = `Waiting for scan (${secondsLeft}s)...`;
+      if (secondsLeft <= 0) {
+        stopDirectQrPairing();
+        if (timerEl) timerEl.textContent = `QR expired. Click "Refresh QR Code"`;
+      }
+    }, 1000);
+
+    // Poll for mobile biometric approval
+    activeDirectQrInterval = setInterval(async () => {
+      if (!currentDirectQrRequestId) return;
+      const pollRes = await sendExtensionMessage({
+        action: 'POLL_MOBILE_APPROVAL',
+        payload: {
+          token: currentOAuthToken,
+          requestId,
+          masterPassword: '' // Mobile phone provides request_sealed_key!
+        }
+      });
+
+      if (!pollRes) return;
+
+      if (pollRes.status === 'APPROVED' && pollRes.success) {
+        stopDirectQrPairing();
+        showSuccess('✓ Mobile QR Verified! Vault unlocked.');
+        setTimeout(() => refreshStatus(), 500);
+      } else if (pollRes.status === 'DENIED') {
+        stopDirectQrPairing();
+        showError('Pairing request was denied on mobile phone.');
+      } else if (pollRes.status === 'EXPIRED') {
+        stopDirectQrPairing();
+        if (timerEl) timerEl.textContent = `QR code expired. Click "Refresh QR Code"`;
+      }
+    }, 1500);
+
+  } catch (err) {
+    if (loadingEl) {
+      loadingEl.innerHTML = `<div style="color: #EF4444; font-size: 11px;">Error: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+}
+
 
 let cachedAuthExpiresAt = null;
 
@@ -863,6 +1053,8 @@ function normalizeRawVaultItems(rawItems) {
 
 function applyUnlockedUI(data) {
   if (!data) return;
+  stopDirectQrPairing();
+  cancelApprovalPolling();
   const statusBadge = document.getElementById('statusBadge');
   const statusText = document.getElementById('statusText');
   const lockedView = document.getElementById('lockedView');
@@ -905,6 +1097,11 @@ function applyLockedUI() {
   currentVaultItems = { cards: [], bankAccounts: [], passwords: [] };
   const vaultList = document.getElementById('vaultList');
   if (vaultList) vaultList.innerHTML = '';
+
+  const qrBtn = document.getElementById('tabModeQrBtn');
+  if ((!qrBtn || qrBtn.classList.contains('active')) && currentOAuthToken && !currentDirectQrRequestId) {
+    startDirectQrPairing();
+  }
 }
 
 function fillPageWithCard(card, btn) {
@@ -948,7 +1145,9 @@ async function refreshStatus() {
 }
 
 async function handleLock() {
-  currentVaultItems = { cards: [], bankAccounts: [] };
+  stopDirectQrPairing();
+  cancelApprovalPolling();
+  currentVaultItems = { cards: [], bankAccounts: [], passwords: [] };
   if (currentOAuthToken) {
     driveClient.setToken(currentOAuthToken);
     try {
