@@ -113,7 +113,10 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
   }
 
   Future<void> _scanDesktopQrCode() async {
-    final result = await TotpQrScannerDialog.scan(context);
+    final result = await TotpQrScannerDialog.scan(
+      context,
+      target: QrScannerTarget.desktopPairing,
+    );
     if (result == null || !mounted) return;
 
     final raw = result.raw.trim();

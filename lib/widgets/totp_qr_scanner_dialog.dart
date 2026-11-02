@@ -20,18 +20,33 @@ class TotpQrScanResult {
   });
 }
 
-/// A modal dialog that opens the camera to scan a 2FA setup QR code.
+/// Target of the QR code scanner
+enum QrScannerTarget {
+  totp2FA,
+  desktopPairing,
+  any,
+}
+
+/// A modal dialog that opens the camera to scan a 2FA setup or Desktop Pairing QR code.
 class TotpQrScannerDialog extends StatefulWidget {
-  const TotpQrScannerDialog({super.key});
+  final QrScannerTarget target;
+
+  const TotpQrScannerDialog({
+    super.key,
+    this.target = QrScannerTarget.totp2FA,
+  });
 
   /// Opens the scanner and returns the [TotpQrScanResult] if successful.
-  static Future<TotpQrScanResult?> scan(BuildContext context) {
+  static Future<TotpQrScanResult?> scan(
+    BuildContext context, {
+    QrScannerTarget target = QrScannerTarget.totp2FA,
+  }) {
     return showModalBottomSheet<TotpQrScanResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       enableDrag: false,
-      builder: (ctx) => const TotpQrScannerDialog(),
+      builder: (ctx) => TotpQrScannerDialog(target: target),
     );
   }
 
@@ -92,6 +107,32 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
   }
 
   void _processScannedRaw(String raw) {
+    final isDesktopPair = raw.startsWith('tetherpass://pair') ||
+        raw.startsWith('http://tetherpass.app/pair') ||
+        raw.contains('req=') ||
+        raw.contains('"action":"pair"') ||
+        raw.contains('"requestId"');
+
+    // Handle desktop pairing QR code
+    if (widget.target == QrScannerTarget.desktopPairing || isDesktopPair) {
+      if (isDesktopPair) {
+        HapticFeedback.heavyImpact();
+        Navigator.of(context).pop(TotpQrScanResult(secret: '', raw: raw));
+        return;
+      }
+      if (widget.target == QrScannerTarget.desktopPairing) {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Scanned QR is not a valid Desktop Pairing code';
+          });
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) setState(() => _errorMessage = null);
+          });
+        }
+        return;
+      }
+    }
+
     // 1. Try URI parsing
     final uriInfo = TotpService.parseTotpUri(raw);
     if (uriInfo != null && uriInfo.secret.isNotEmpty) {
@@ -118,10 +159,12 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
       return;
     }
 
-    // Invalid QR code for 2FA
+    // Invalid QR code
     if (mounted) {
       setState(() {
-        _errorMessage = 'Scanned QR is not a valid 2FA setup code';
+        _errorMessage = widget.target == QrScannerTarget.desktopPairing
+            ? 'Scanned QR is not a valid Desktop Pairing code'
+            : 'Scanned QR is not a valid 2FA setup code';
       });
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {
@@ -230,21 +273,25 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Scan 2FA Setup QR Code',
-                        style: TextStyle(
+                        widget.target == QrScannerTarget.desktopPairing
+                            ? 'Scan Desktop Extension QR'
+                            : 'Scan 2FA Setup QR Code',
+                        style: const TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                       ),
                       Text(
-                        'Point at the QR code on your computer screen',
-                        style: TextStyle(
+                        widget.target == QrScannerTarget.desktopPairing
+                            ? 'Point at the pairing QR code on your computer'
+                            : 'Point at the 2FA QR code on your computer screen',
+                        style: const TextStyle(
                           fontSize: 12,
                           color: Color(0xFF94A3B8),
                         ),
@@ -394,11 +441,13 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
             ),
 
             // Helper text
-            const Positioned(
+            Positioned(
               bottom: 24,
               child: Text(
-                'Align 2FA QR code inside frame',
-                style: TextStyle(
+                widget.target == QrScannerTarget.desktopPairing
+                    ? 'Align Desktop QR code inside frame'
+                    : 'Align 2FA QR code inside frame',
+                style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
