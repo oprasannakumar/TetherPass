@@ -117,8 +117,12 @@
             <div class="pulse-ring"></div>
             <div class="waiting-title">🔔 Check Your Mobile Phone!</div>
             <p class="waiting-desc">
-              A confirmation pop-up has been sent to TetherPass on your phone. Tap <strong>"Approve with Biometrics"</strong>.
+              A confirmation request was sent to TetherPass, or scan the QR code below:
             </p>
+            <div id="pairingQrContainer" style="margin: 8px auto; background: white; padding: 6px; border-radius: 12px; display: inline-block; border: 2px solid #FF6F00; box-shadow: 0 4px 12px rgba(255, 111, 0, 0.15);">
+              <canvas id="pairingQrCanvas" width="130" height="130"></canvas>
+            </div>
+            <div style="font-size: 11px; color: #475569; font-weight: 700; margin-bottom: 6px;">📷 Point TetherPass app camera to pair instantly</div>
             <div id="waitingTimer" class="waiting-timer">Waiting for approval (60s)...</div>
             <button id="cancelApprovalRequestBtn" class="btn btn-sm btn-outline-danger" style="margin-top: 10px;">Cancel Request</button>
           </div>
@@ -205,6 +209,7 @@
 
   <script src="crypto_utils.js"></script>
   <script src="drive_client.js"></script>
+  <script src="qrcode.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

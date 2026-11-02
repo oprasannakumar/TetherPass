@@ -10,6 +10,7 @@ import '../services/card_detector.dart';
 import '../services/database_service.dart';
 import '../services/totp_service.dart';
 import '../services/breach_watch_service.dart';
+import '../services/clipboard_service.dart';
 import '../widgets/card_input_formatter.dart';
 import '../widgets/spotlight_tour.dart';
 import 'add_edit_screen.dart';
@@ -29,6 +30,8 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   bool _isLoginPasswordRevealed = false;
   bool _isProfilePasswordRevealed = false;
   bool _isMpinRevealed = false;
+  bool _isHistoryExpanded = false;
+  final Set<int> _revealedHistoryIndexes = {};
 
   Timer? _totpTimer;
   BreachResult? _breachResult;
@@ -195,15 +198,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
 
   void _copyToClipboard(String label, String value) {
     if (value.isEmpty) return;
-    Clipboard.setData(ClipboardData(text: value));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$label copied to clipboard!'),
-        backgroundColor: const Color(0xFF1E293B),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    ClipboardService.copySecure(context, value, label: label);
   }
 
   String _formatCardNumber(String raw) {
@@ -849,6 +844,140 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
                         ],
                       ),
           ),
+
+          // ── Password Version History Timeline ──
+          if (_item.passwordHistory.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildPasswordHistoryTimeline(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPasswordHistoryTimeline() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => setState(() => _isHistoryExpanded = !_isHistoryExpanded),
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.history_rounded, color: Color(0xFF818CF8), size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'PASSWORD VERSION HISTORY (${_item.passwordHistory.length})',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    _isHistoryExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                    color: Colors.white70,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_isHistoryExpanded) ...[
+            const Divider(color: Colors.white12, height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+              child: Column(
+                children: List.generate(_item.passwordHistory.length, (idx) {
+                  final entry = _item.passwordHistory[idx];
+                  final isRevealed = _revealedHistoryIndexes.contains(idx);
+                  final dtStr = DateFormat('dd MMM yyyy, hh:mm a').format(entry.changedAt);
+
+                  return Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: idx == 0 ? const Color(0xFFFF6F00) : const Color(0xFF64748B),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                idx == 0 ? 'Previous Password ($dtStr)' : 'Version ${idx + 1} ($dtStr)',
+                                style: const TextStyle(
+                                  color: Color(0xFF94A3B8),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                isRevealed ? entry.password : '••••••••••••',
+                                style: TextStyle(
+                                  color: isRevealed ? const Color(0xFFFFB300) : Colors.white70,
+                                  fontFamily: isRevealed ? 'Courier' : null,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: isRevealed ? 1 : 2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            isRevealed ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                            size: 16,
+                            color: Colors.white70,
+                          ),
+                          tooltip: isRevealed ? 'Hide' : 'Reveal',
+                          onPressed: () {
+                            setState(() {
+                              if (isRevealed) {
+                                _revealedHistoryIndexes.remove(idx);
+                              } else {
+                                _revealedHistoryIndexes.add(idx);
+                              }
+                            });
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy_rounded, size: 16, color: Colors.white70),
+                          tooltip: 'Copy Previous Password',
+                          onPressed: () => _copyToClipboard('Previous Password', entry.password),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
         ],
       ),
     );

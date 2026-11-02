@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../services/device_identity_service.dart';
 import '../services/drive_service.dart';
+import '../services/vault_security_service.dart';
+import '../widgets/totp_qr_scanner_dialog.dart';
 
 class BrowserExtensionScreen extends StatefulWidget {
   const BrowserExtensionScreen({super.key});
@@ -105,6 +109,121 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _scanDesktopQrCode() async {
+    final result = await TotpQrScannerDialog.scan(context);
+    if (result == null || !mounted) return;
+
+    final raw = result.raw.trim();
+    String? requestId;
+    String? deviceName;
+
+    if (raw.startsWith('tetherpass://pair') || raw.startsWith('http://tetherpass.app/pair')) {
+      final uri = Uri.tryParse(raw);
+      if (uri != null) {
+        requestId = uri.queryParameters['req'] ?? uri.queryParameters['requestId'];
+        deviceName = uri.queryParameters['dev'] ?? uri.queryParameters['device'] ?? uri.queryParameters['deviceName'];
+      }
+    } else {
+      try {
+        final map = jsonDecode(raw) as Map<String, dynamic>;
+        if (map['action'] == 'pair' || map.containsKey('requestId') || map.containsKey('req')) {
+          requestId = (map['requestId'] ?? map['req']) as String?;
+          deviceName = (map['deviceName'] ?? map['device'] ?? map['dev']) as String?;
+        }
+      } catch (_) {}
+    }
+
+    if (requestId == null || requestId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invalid Desktop Pairing QR code.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+      return;
+    }
+
+    final targetDevice = deviceName ?? 'Desktop Browser Extension';
+
+    // Request confirmation
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.qr_code_scanner_rounded, color: Color(0xFFFF6F00)),
+            SizedBox(width: 10),
+            Text('Pair & Unlock Desktop?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+          ],
+        ),
+        content: Text(
+          'Allow "$targetDevice" to connect to your vault and unlock for 30 minutes?',
+          style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Deny')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF6F00),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Approve & Unlock'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final sec = context.read<VaultSecurityService>();
+    final drive = context.read<DriveService>();
+    final masterPwd = await sec.getMasterPassword();
+
+    final ok = await drive.respondToAccessRequest(
+      requestId: requestId,
+      approved: true,
+      deviceName: targetDevice,
+      masterPassword: masterPwd,
+    );
+
+    if (ok && mounted) {
+      await _fetchSessions();
+      HapticFeedback.heavyImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '✓ "$targetDevice" paired & unlocked successfully via QR!',
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to transmit authorization. Check Google Drive connection.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     }
   }
 
@@ -304,6 +423,77 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                       ],
                     ),
                   ],
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            // ── Instant QR Pairing Card ──
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFFF6F00).withValues(alpha: 0.3)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF6F00).withValues(alpha: 0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6F00).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFFFF6F00), size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Instant QR Desktop Pairing',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
+                            ),
+                            Text(
+                              'Scan the QR code on your PC screen to unlock immediately',
+                              style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _scanDesktopQrCode,
+                      icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 18),
+                      label: const Text(
+                        'Scan Desktop Extension QR',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF6F00),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

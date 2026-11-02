@@ -693,6 +693,17 @@ async function handleRequestMobilePushApproval() {
     const requestId = startRes.requestId;
     let secondsLeft = 60;
 
+    // Render Pairing QR Code for Instant Phone Scan
+    try {
+      const qrCanvas = document.getElementById('pairingQrCanvas');
+      if (qrCanvas && window.renderQRCode) {
+        const pairUri = `tetherpass://pair?req=${encodeURIComponent(requestId)}&dev=${encodeURIComponent(myDevice)}`;
+        window.renderQRCode(qrCanvas, pairUri, { size: 130 });
+      }
+    } catch (err) {
+      console.warn('QR code render warning:', err);
+    }
+
     // 2. Start Countdown Timer UI
     activeCountdownInterval = setInterval(() => {
       secondsLeft--;

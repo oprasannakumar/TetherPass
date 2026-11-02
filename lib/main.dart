@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'services/auth_service.dart';
+import 'services/auto_lock_service.dart';
 import 'services/bin_database_service.dart';
 import 'services/crypto_service.dart';
 import 'services/database_service.dart';
@@ -66,10 +67,43 @@ void main() async {
   );
 }
 
-class TetherPassApp extends StatelessWidget {
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
+class TetherPassApp extends StatefulWidget {
   final String initialRoute;
 
   const TetherPassApp({super.key, required this.initialRoute});
+
+  @override
+  State<TetherPassApp> createState() => _TetherPassAppState();
+}
+
+class _TetherPassAppState extends State<TetherPassApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      AutoLockService.markPaused();
+    } else if (state == AppLifecycleState.resumed) {
+      final shouldLock = await AutoLockService.shouldLock();
+      AutoLockService.clearPaused();
+      if (shouldLock) {
+        // Automatically lock and present UnlockScreen
+        appNavigatorKey.currentState?.pushNamedAndRemoveUntil('/unlock', (route) => false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +114,7 @@ class TetherPassApp extends StatelessWidget {
     const textSecondary = Color(0xFF64748B); // Muted slate
 
     return MaterialApp(
+      navigatorKey: appNavigatorKey,
       title: 'TetherPass',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.light,
@@ -154,7 +189,7 @@ class TetherPassApp extends StatelessWidget {
           ),
         ),
       ),
-      initialRoute: initialRoute,
+      initialRoute: widget.initialRoute,
       routes: {
         '/onboarding': (_) => const OnboardingScreen(),
         '/unlock': (_) => const UnlockScreen(),

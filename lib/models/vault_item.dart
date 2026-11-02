@@ -71,6 +71,27 @@ class BankAccount {
   );
 }
 
+/// Represents an archived previous password entry in the version history timeline
+class PasswordHistoryEntry {
+  final String password;
+  final DateTime changedAt;
+
+  const PasswordHistoryEntry({
+    required this.password,
+    required this.changedAt,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'password': password,
+    'changed_at': changedAt.toIso8601String(),
+  };
+
+  factory PasswordHistoryEntry.fromMap(Map<String, dynamic> map) => PasswordHistoryEntry(
+    password: map['password'] as String? ?? '',
+    changedAt: DateTime.tryParse(map['changed_at'] as String? ?? '') ?? DateTime.now(),
+  );
+}
+
 /// Base class / union for Vault Items (Cards & NetBanking)
 class VaultItem {
   final String id;
@@ -109,6 +130,7 @@ class VaultItem {
   final DateTime? profilePasswordExpiry;
   final DateTime? mpinExpiry;
   final String totpSecret; // Base32 2FA authenticator secret key (RFC 6238)
+  final List<PasswordHistoryEntry> passwordHistory; // Historical passwords timeline
 
   VaultItem({
     required this.id,
@@ -145,6 +167,7 @@ class VaultItem {
     this.profilePasswordExpiry,
     this.mpinExpiry,
     this.totpSecret = '',
+    this.passwordHistory = const [],
   });
 
   bool get isCard => type == VaultItemType.card;
@@ -378,6 +401,7 @@ class VaultItem {
     DateTime? profilePasswordExpiry,
     DateTime? mpinExpiry,
     String? totpSecret,
+    List<PasswordHistoryEntry>? passwordHistory,
   }) {
     return VaultItem(
       id: id ?? this.id,
@@ -412,6 +436,7 @@ class VaultItem {
       profilePasswordExpiry: profilePasswordExpiry ?? this.profilePasswordExpiry,
       mpinExpiry: mpinExpiry ?? this.mpinExpiry,
       totpSecret: totpSecret ?? this.totpSecret,
+      passwordHistory: passwordHistory ?? this.passwordHistory,
     );
   }
 
@@ -449,6 +474,7 @@ class VaultItem {
       'profile_password_expiry': profilePasswordExpiry?.toIso8601String(),
       'mpin_expiry': mpinExpiry?.toIso8601String(),
       'totp_secret': totpSecret,
+      'password_history': json.encode(passwordHistory.map((e) => e.toMap()).toList()),
     };
   }
 
@@ -513,6 +539,16 @@ class VaultItem {
           ? DateTime.tryParse(map['mpin_expiry'] as String)
           : null,
       totpSecret: map['totp_secret'] as String? ?? '',
+      passwordHistory: () {
+        if (map['password_history'] != null) {
+          try {
+            final raw = map['password_history'];
+            final list = raw is String ? (json.decode(raw) as List) : (raw as List);
+            return list.map((e) => PasswordHistoryEntry.fromMap(Map<String, dynamic>.from(e as Map))).toList();
+          } catch (_) {}
+        }
+        return <PasswordHistoryEntry>[];
+      }(),
     );
   }
 

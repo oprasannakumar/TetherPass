@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../services/autofill_bridge_service.dart';
+import '../services/auto_lock_service.dart';
+import '../services/clipboard_service.dart';
 import '../services/database_service.dart';
 import '../services/drive_service.dart';
 import '../services/secure_backup_export_service.dart';
@@ -25,6 +27,8 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObserver {
   bool _biometricEnabled = true;
   bool _isAutofillEnabled = false;
+  int _autoLockSeconds = 60;
+  int _clipboardPurgeSeconds = 30;
 
   // GlobalKeys for pointing directly to each setting in the spotlight tour
   final GlobalKey _accountKey = GlobalKey();
@@ -141,7 +145,15 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   Future<void> _loadSettings() async {
     final sec = context.read<VaultSecurityService>();
     final bio = await sec.isBiometricEnabled();
-    if (mounted) setState(() => _biometricEnabled = bio);
+    final lockSec = await AutoLockService.getAutoLockSeconds();
+    final purgeSec = await ClipboardService.getPurgeSeconds();
+    if (mounted) {
+      setState(() {
+        _biometricEnabled = bio;
+        _autoLockSeconds = lockSec;
+        _clipboardPurgeSeconds = purgeSec;
+      });
+    }
 
     // Refresh Google Drive sign-in state silently on opening settings
     if (mounted) {
@@ -149,6 +161,114 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       if (!drive.isSignedIn) {
         await drive.trySilentSignIn();
       }
+    }
+  }
+
+  String _getAutoLockLabel(int sec) {
+    if (sec == 0) return 'Immediately upon exiting';
+    if (sec == 30) return 'After 30 seconds';
+    if (sec == 60) return 'After 1 minute (Recommended)';
+    if (sec == 300) return 'After 5 minutes';
+    if (sec == 900) return 'After 15 minutes';
+    if (sec < 0) return 'Never (Stay unlocked)';
+    return 'After $sec seconds';
+  }
+
+  String _getClipboardPurgeLabel(int sec) {
+    if (sec == 15) return 'After 15 seconds';
+    if (sec == 30) return 'After 30 seconds (Recommended)';
+    if (sec == 60) return 'After 1 minute';
+    if (sec < 0) return 'Never (Disabled)';
+    return 'After $sec seconds';
+  }
+
+  Future<void> _showAutoLockDialog() async {
+    final options = <int, String>{
+      0: 'Immediately upon switching apps',
+      30: 'After 30 seconds',
+      60: 'After 1 minute (Recommended)',
+      300: 'After 5 minutes',
+      900: 'After 15 minutes',
+      -1: 'Never (Stay unlocked)',
+    };
+
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.timer_outlined, color: Color(0xFFFF6F00)),
+            SizedBox(width: 10),
+            Text('Auto-Lock Vault', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: options.entries.map((e) {
+            return RadioListTile<int>(
+              value: e.key,
+              groupValue: _autoLockSeconds,
+              activeColor: const Color(0xFFFF6F00),
+              title: Text(e.value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              onChanged: (val) => Navigator.pop(ctx, val),
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        ],
+      ),
+    );
+
+    if (selected != null) {
+      await AutoLockService.setAutoLockSeconds(selected);
+      setState(() => _autoLockSeconds = selected);
+    }
+  }
+
+  Future<void> _showClipboardPurgeDialog() async {
+    final options = <int, String>{
+      15: 'After 15 seconds',
+      30: 'After 30 seconds (Recommended)',
+      60: 'After 1 minute',
+      -1: 'Disabled (Do not clear)',
+    };
+
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.content_paste_go_rounded, color: Color(0xFFFF6F00)),
+            SizedBox(width: 10),
+            Text('Auto-Clear Clipboard', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: options.entries.map((e) {
+            return RadioListTile<int>(
+              value: e.key,
+              groupValue: _clipboardPurgeSeconds,
+              activeColor: const Color(0xFFFF6F00),
+              title: Text(e.value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              onChanged: (val) => Navigator.pop(ctx, val),
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        ],
+      ),
+    );
+
+    if (selected != null) {
+      await ClipboardService.setPurgeSeconds(selected);
+      setState(() => _clipboardPurgeSeconds = selected);
     }
   }
 
@@ -841,6 +961,20 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
               title: 'View Recovery Key',
               subtitle: '16-character backup key for emergency reset',
               onTap: _viewOrRegenerateRecoveryKey,
+            ),
+
+            _buildSettingTile(
+              icon: Icons.timer_outlined,
+              title: 'Auto-Lock Vault',
+              subtitle: _getAutoLockLabel(_autoLockSeconds),
+              onTap: _showAutoLockDialog,
+            ),
+
+            _buildSettingTile(
+              icon: Icons.content_paste_go_rounded,
+              title: 'Clipboard Auto-Clear',
+              subtitle: _getClipboardPurgeLabel(_clipboardPurgeSeconds),
+              onTap: _showClipboardPurgeDialog,
             ),
 
             const SizedBox(height: 24),

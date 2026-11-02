@@ -1302,6 +1302,26 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
         }
       } else {
         final rawWebsite = _pwdWebsiteCtrl.text.replaceAll(' ', '').trim();
+        final newPassword = _pwdPasswordCtrl.text.trim();
+
+        // Build password version history timeline
+        final history = List<PasswordHistoryEntry>.from(widget.initialItem?.passwordHistory ?? []);
+        if (widget.initialItem != null &&
+            widget.initialItem!.isPassword &&
+            widget.initialItem!.password.isNotEmpty &&
+            widget.initialItem!.password != newPassword) {
+          history.insert(
+            0,
+            PasswordHistoryEntry(
+              password: widget.initialItem!.password,
+              changedAt: now,
+            ),
+          );
+          if (history.length > 10) {
+            history.removeRange(10, history.length);
+          }
+        }
+
         final pwd = VaultItem(
           id: widget.initialItem?.id ?? const Uuid().v4(),
           type: VaultItemType.password,
@@ -1309,11 +1329,12 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           nickname: _pwdNicknameCtrl.text.trim(),
           website: rawWebsite,
           userId: _pwdUsernameCtrl.text.trim(),
-          loginPassword: _pwdPasswordCtrl.text.trim(),
+          loginPassword: newPassword,
           totpSecret: TotpService.cleanKey(_pwdTotpCtrl.text),
           notes: _pwdNotesCtrl.text.trim(),
           createdAt: widget.initialItem?.createdAt ?? now,
           updatedAt: now,
+          passwordHistory: history,
         );
 
         if (widget.initialItem == null) {

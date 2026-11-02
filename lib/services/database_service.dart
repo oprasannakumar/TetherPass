@@ -13,7 +13,7 @@ import 'secure_backup_export_service.dart';
 class DatabaseService {
   static const _dbName = 'card_vault_v2.db';
   static const _tableName = 'vault_items';
-  static const _dbVersion = 8;
+  static const _dbVersion = 9;
 
   final CryptoService cryptoService;
   Database? _db;
@@ -65,7 +65,8 @@ class DatabaseService {
         ifsc_code TEXT,
         accounts TEXT,
         website TEXT,
-        totp_secret TEXT
+        totp_secret TEXT,
+        password_history TEXT
       )
     ''');
   }
@@ -119,6 +120,11 @@ class DatabaseService {
     if (oldVersion < 8) {
       try {
         await db.execute('ALTER TABLE $_tableName ADD COLUMN totp_secret TEXT DEFAULT ""');
+      } catch (_) {}
+    }
+    if (oldVersion < 9) {
+      try {
+        await db.execute('ALTER TABLE $_tableName ADD COLUMN password_history TEXT DEFAULT ""');
       } catch (_) {}
     }
   }
@@ -275,6 +281,9 @@ class DatabaseService {
       'profile_password_expiry': item.profilePasswordExpiry?.toIso8601String(),
       'mpin_expiry': item.mpinExpiry?.toIso8601String(),
       'totp_secret': _safeEncrypt(item.totpSecret),
+      'password_history': item.passwordHistory.isEmpty
+          ? ''
+          : _safeEncrypt(json.encode(item.passwordHistory.map((e) => e.toMap()).toList())),
     };
   }
 
@@ -341,6 +350,16 @@ class DatabaseService {
           ? DateTime.tryParse(map['mpin_expiry'] as String)
           : null,
       totpSecret: _safeDecrypt(map['totp_secret'] as String?),
+      passwordHistory: () {
+        final raw = _safeDecrypt(map['password_history'] as String?);
+        if (raw.isNotEmpty) {
+          try {
+            final list = json.decode(raw) as List;
+            return list.map((e) => PasswordHistoryEntry.fromMap(Map<String, dynamic>.from(e as Map))).toList();
+          } catch (_) {}
+        }
+        return <PasswordHistoryEntry>[];
+      }(),
     );
   }
 
