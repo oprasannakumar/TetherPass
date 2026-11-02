@@ -345,16 +345,15 @@ class DriveClient {
             }
             // Check if terminated recently after session began
             const sStatus = (s.status || '').toUpperCase();
-            if (sStatus === 'TERMINATED' && s.terminatedAt && sessionStartTime && s.terminatedAt > (sessionStartTime + 1000)) {
-              if (!sessionId || s.sessionId === sessionId || s.authMode === authMode) {
+            if (sStatus === 'TERMINATED' && s.terminatedAt && sessionStartTime && s.terminatedAt > (sessionStartTime + 2000)) {
+              if (s.sessionId === sessionId || (!sessionId && s.authMode === authMode)) {
                 this._lastRevokeResult = true;
                 return true;
               }
             }
           }
-          // If sessionId was actively registered, but the sessions file was updated after session began
-          // and sessionId is now completely missing from the list, mobile has removed/terminated it!
-          if (sessionId && !foundSession && data.updatedAt && sessionStartTime && data.updatedAt > (sessionStartTime + 1000)) {
+          // If this session was previously registered, but is now missing from a freshly updated sessions list
+          if (sessionId && !foundSession && Array.isArray(sessions) && sessions.length > 0 && data.updatedAt && sessionStartTime && data.updatedAt > (sessionStartTime + 8000)) {
             console.log('[TetherPass] Session', sessionId, 'purged from active sessions on Drive; revoking.');
             this._lastRevokeResult = true;
             return true;
@@ -371,9 +370,11 @@ class DriveClient {
           const reqStatus = (req.status || '').toUpperCase();
           if (reqStatus === 'REVOKED' || reqStatus === 'LOCKED' || reqStatus === 'TERMINATED') {
             const reqTime = req.locked_at || req.revoked_at || req.terminated_at || 0;
-            if ((sessionId && req.requestId === sessionId) || (reqTime && sessionStartTime && reqTime > (sessionStartTime + 1000))) {
-              this._lastRevokeResult = true;
-              return true;
+            if (reqTime && sessionStartTime && reqTime > (sessionStartTime + 2000)) {
+              if (!sessionId || req.requestId === sessionId) {
+                this._lastRevokeResult = true;
+                return true;
+              }
             }
           }
         } catch (_) {}
