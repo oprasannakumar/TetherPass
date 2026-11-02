@@ -276,20 +276,20 @@ class _AppTourDialogState extends State<AppTourDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Top App Bar Preview
-                Row(
+                const Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const CircleAvatar(
+                    CircleAvatar(
                       radius: 14,
                       backgroundColor: Color(0xFFFFF7ED),
                       child: Icon(Icons.person_rounded, color: Color(0xFFFF6F00), size: 16),
                     ),
-                    const Text(
+                    Text(
                       'My Vault',
                       style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                     Row(
-                      children: const [
+                      children: [
                         Icon(Icons.cloud_sync_rounded, color: Color(0xFFFF6F00), size: 18),
                         SizedBox(width: 8),
                         Icon(Icons.lock_rounded, color: Color(0xFF64748B), size: 18),
@@ -299,8 +299,8 @@ class _AppTourDialogState extends State<AppTourDialog> {
                 ),
                 const Divider(height: 18, color: Color(0xFFF1F5F9)),
                 // Bank Header
-                Row(
-                  children: const [
+                const Row(
+                  children: [
                     Icon(Icons.account_balance_rounded, color: Color(0xFFFF6F00), size: 15),
                     SizedBox(width: 6),
                     Text('HDFC BANK (2)', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12)),
@@ -421,9 +421,9 @@ class _AppTourDialogState extends State<AppTourDialog> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
+                    const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text('CARD HOLDER', style: TextStyle(color: Colors.white54, fontSize: 8)),
                         Text('ALEX M MORGAN', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                       ],
@@ -435,12 +435,12 @@ class _AppTourDialogState extends State<AppTourDialog> {
                         Text(_randomFutureExpiry, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                       ],
                     ),
-                    Column(
+                    const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('CVV', style: TextStyle(color: Colors.white54, fontSize: 8)),
+                        Text('CVV', style: TextStyle(color: Colors.white54, fontSize: 8)),
                         Row(
-                          children: const [
+                          children: [
                             Icon(Icons.lock_rounded, color: Color(0xFFFFB300), size: 11),
                             SizedBox(width: 2),
                             Text('Protected', style: TextStyle(color: Color(0xFFFFB300), fontSize: 11, fontWeight: FontWeight.bold)),
@@ -605,9 +605,9 @@ class _AppTourDialogState extends State<AppTourDialog> {
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: const Color(0xFFCBD5E1)),
                         ),
-                        child: Row(
+                        child: const Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: const [
+                          children: [
                             Text('Visa', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12)),
                             Icon(Icons.arrow_drop_down, color: Color(0xFFFF6F00), size: 18),
                           ],
@@ -623,9 +623,9 @@ class _AppTourDialogState extends State<AppTourDialog> {
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: const Color(0xFFCBD5E1)),
                         ),
-                        child: Row(
+                        child: const Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: const [
+                          children: [
                             Text('Platinum', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12)),
                             Icon(Icons.arrow_drop_down, color: Color(0xFFFF6F00), size: 18),
                           ],
@@ -888,9 +888,9 @@ class _AppTourDialogState extends State<AppTourDialog> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           alignment: Alignment.center,
-                          child: Row(
+                          child: const Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: const [
+                            children: [
                               Icon(Icons.delete_sweep_rounded, color: Colors.white, size: 16),
                               SizedBox(width: 3),
                               Text('Delete', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
@@ -903,8 +903,8 @@ class _AppTourDialogState extends State<AppTourDialog> {
                 ),
                 const SizedBox(height: 4),
                 // Swipe hint tag
-                Row(
-                  children: const [
+                const Row(
+                  children: [
                     Icon(Icons.swipe_left_rounded, size: 13, color: Color(0xFF94A3B8)),
                     SizedBox(width: 4),
                     Text('Swipe left on any extra account row to delete it', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontStyle: FontStyle.italic)),
@@ -922,9 +922,9 @@ class _AppTourDialogState extends State<AppTourDialog> {
                         color: const Color(0xFFFF6F00).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
+                        children: [
                           Icon(Icons.copy_all_rounded, size: 13, color: Color(0xFFFF6F00)),
                           SizedBox(width: 4),
                           Text('Copy Both (A/C + IFSC)', style: TextStyle(color: Color(0xFFFF6F00), fontSize: 10, fontWeight: FontWeight.bold)),
@@ -937,9 +937,9 @@ class _AppTourDialogState extends State<AppTourDialog> {
                         color: const Color(0xFFF1F5F9),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
+                        children: [
                           Icon(Icons.add_rounded, size: 13, color: Color(0xFF0F172A)),
                           SizedBox(width: 4),
                           Text('Add Another A/C', style: TextStyle(color: Color(0xFF0F172A), fontSize: 10, fontWeight: FontWeight.bold)),
@@ -1018,8 +1018,8 @@ class _AppTourDialogState extends State<AppTourDialog> {
                     color: const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Row(
-                    children: const [
+                  child: const Row(
+                    children: [
                       Icon(Icons.lock_rounded, size: 12, color: Colors.green),
                       SizedBox(width: 6),
                       Text('checkout.merchant.com', style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold)),
@@ -1035,9 +1035,9 @@ class _AppTourDialogState extends State<AppTourDialog> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFFFF6F00), width: 1.5),
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: const [
+                    children: [
                       Row(
                         children: [
                           Icon(Icons.credit_card_rounded, size: 16, color: Color(0xFFFF6F00)),
@@ -1069,9 +1069,9 @@ class _AppTourDialogState extends State<AppTourDialog> {
                             color: const Color(0xFFFF6F00),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Row(
+                          child: const Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: const [
+                            children: [
                               Icon(Icons.credit_card, size: 12, color: Colors.white),
                               SizedBox(width: 4),
                               Expanded(
@@ -1095,9 +1095,9 @@ class _AppTourDialogState extends State<AppTourDialog> {
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: const Color(0xFF475569)),
                           ),
-                          child: Row(
+                          child: const Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: const [
+                            children: [
                               Icon(Icons.credit_card, size: 12, color: Colors.white70),
                               SizedBox(width: 4),
                               Expanded(

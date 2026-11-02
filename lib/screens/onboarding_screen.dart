@@ -292,8 +292,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: const [
+                const Row(
+                  children: [
                     Icon(Icons.key_rounded, color: Color(0xFFFF6F00), size: 20),
                     SizedBox(width: 8),
                     Text(

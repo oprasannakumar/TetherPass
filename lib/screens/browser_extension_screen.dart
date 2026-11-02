@@ -366,8 +366,8 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: const [
+                  const Row(
+                    children: [
                       Icon(Icons.devices_rounded, color: Color(0xFFFF6F00), size: 20),
                       SizedBox(width: 8),
                       Text(
@@ -508,8 +508,8 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: const Color(0xFFFDE68A)),
                       ),
-                      child: Row(
-                        children: const [
+                      child: const Row(
+                        children: [
                           Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 18),
                           SizedBox(width: 8),
                           Expanded(
@@ -585,8 +585,8 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: const Color(0xFFFDE68A)),
               ),
-              child: Row(
-                children: const [
+              child: const Row(
+                children: [
                   Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 18),
                   SizedBox(width: 8),
                   Expanded(
@@ -607,8 +607,8 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
-              child: Column(
-                children: const [
+              child: const Column(
+                children: [
                   Icon(Icons.phonelink_off_rounded, size: 32, color: Color(0xFF94A3B8)),
                   SizedBox(height: 8),
                   Text(

@@ -101,8 +101,8 @@ class _UnlockScreenState extends State<UnlockScreen> {
           return AlertDialog(
             backgroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            title: Row(
-              children: const [
+            title: const Row(
+              children: [
                 Icon(Icons.lock_reset_rounded, color: Color(0xFFFF6F00)),
                 SizedBox(width: 8),
                 Text('Reset Master Password', style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold)),
@@ -199,11 +199,13 @@ class _UnlockScreenState extends State<UnlockScreen> {
                       return;
                     }
                     await sec.resetMasterPassword(p1);
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(this.context).showSnackBar(
-                      const SnackBar(content: Text('Password reset successfully!')),
-                    );
-                    Navigator.of(this.context).pushReplacementNamed('/home');
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Password reset successfully!')),
+                      );
+                      Navigator.of(context).pushReplacementNamed('/home');
+                    }
                   }
                 },
               ),
@@ -317,9 +319,9 @@ class _UnlockScreenState extends State<UnlockScreen> {
                         BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
                       ],
                     ),
-                    child: Row(
+                    child: const Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
+                      children: [
                         Icon(Icons.fingerprint_rounded, color: Colors.blueAccent, size: 28),
                         SizedBox(width: 10),
                         Text('Unlock with Biometrics', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600, fontSize: 13)),

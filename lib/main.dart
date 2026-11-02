@@ -96,7 +96,6 @@ class TetherPassApp extends StatelessWidget {
           primary: primaryColor,
           surface: surfaceColor,
           onSurface: textPrimary,
-          background: backgroundColor,
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: surfaceColor,

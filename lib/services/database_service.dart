@@ -13,7 +13,7 @@ import 'secure_backup_export_service.dart';
 class DatabaseService {
   static const _dbName = 'card_vault_v2.db';
   static const _tableName = 'vault_items';
-  static const _dbVersion = 8;
+  static const _dbVersion = 9;
 
   final CryptoService cryptoService;
   Database? _db;
@@ -68,6 +68,8 @@ class DatabaseService {
         totp_secret TEXT
       )
     ''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_vault_type ON $_tableName (type);');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_vault_bank_nick ON $_tableName (bank_name, nickname);');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -119,6 +121,12 @@ class DatabaseService {
     if (oldVersion < 8) {
       try {
         await db.execute('ALTER TABLE $_tableName ADD COLUMN totp_secret TEXT DEFAULT ""');
+      } catch (_) {}
+    }
+    if (oldVersion < 9) {
+      try {
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_vault_type ON $_tableName (type);');
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_vault_bank_nick ON $_tableName (bank_name, nickname);');
       } catch (_) {}
     }
   }
