@@ -317,24 +317,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     border: Border.all(color: const Color(0xFFFFEDD5)),
                   ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        _generatedRecoveryKey,
-                        style: const TextStyle(
-                          color: Color(0xFFC2410C),
-                          fontFamily: 'Courier',
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2,
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _generatedRecoveryKey,
+                            style: const TextStyle(
+                              color: Color(0xFFC2410C),
+                              fontFamily: 'Courier',
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 8),
                       IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        visualDensity: VisualDensity.compact,
                         icon: Icon(
                           _copiedRecoveryKey ? Icons.check_circle_rounded : Icons.copy_rounded,
                           color: _copiedRecoveryKey ? Colors.green : const Color(0xFFC2410C),
                           size: 20,
                         ),
+                        tooltip: 'Copy Recovery Key',
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: _generatedRecoveryKey));
                           setState(() => _copiedRecoveryKey = true);

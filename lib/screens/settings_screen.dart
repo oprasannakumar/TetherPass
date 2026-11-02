@@ -288,20 +288,30 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                     border: Border.all(color: const Color(0xFFFFEDD5)),
                   ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        currentKey,
-                        style: const TextStyle(
-                          color: Color(0xFFC2410C),
-                          fontFamily: 'Courier',
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2,
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            currentKey,
+                            style: const TextStyle(
+                              color: Color(0xFFC2410C),
+                              fontFamily: 'Courier',
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 8),
                       IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        visualDensity: VisualDensity.compact,
                         icon: const Icon(Icons.copy_rounded, color: Color(0xFFC2410C), size: 20),
+                        tooltip: 'Copy Recovery Key',
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: currentKey));
                           ScaffoldMessenger.of(context).showSnackBar(
