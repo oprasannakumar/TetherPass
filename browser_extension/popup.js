@@ -955,8 +955,6 @@ async function startDirectQrPairing(force = false) {
     }
   }
 }
-}
-
 
 let cachedAuthExpiresAt = null;
 
