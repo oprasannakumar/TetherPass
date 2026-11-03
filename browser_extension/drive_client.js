@@ -565,6 +565,71 @@ class DriveClient {
   }
 
   /**
+   * Updates session expiration on Google Drive registry so mobile reflects it
+   */
+  async extendRemoteSession(sessionId, newExpiresAt, authMode) {
+    if (!this.token) return;
+    try {
+      const now = Date.now();
+      // 1. Update card_vault_active_sessions.json
+      const file = await this.findFile(DRIVE_SESSIONS_FILENAME);
+      let sessions = [];
+      if (file) {
+        try {
+          const content = await this.downloadFileContent(file.id);
+          const data = JSON.parse(content);
+          sessions = data.sessions || [];
+        } catch (_) {}
+      }
+
+      let found = false;
+      for (const s of sessions) {
+        if (s && s.sessionId === sessionId) {
+          s.expiresAt = newExpiresAt;
+          s.status = 'ACTIVE';
+          s.extendedAt = now;
+          found = true;
+        }
+      }
+      if (!found && sessionId) {
+        sessions.unshift({
+          sessionId,
+          deviceName: 'Windows PC (Chrome)',
+          authMode: authMode || 'PUSH',
+          createdAt: now,
+          expiresAt: newExpiresAt,
+          status: 'ACTIVE',
+          extendedAt: now
+        });
+      }
+
+      const sessionsTask = file
+        ? this.updateFileContent(file.id, JSON.stringify({ version: 1, updatedAt: now, sessions }))
+        : this.createFile(DRIVE_SESSIONS_FILENAME, JSON.stringify({ version: 1, updatedAt: now, sessions }));
+
+      // 2. Also update access request file if push/qr approval
+      let reqTask = Promise.resolve();
+      const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
+      if (reqFile) {
+        try {
+          const reqContent = await this.downloadFileContent(reqFile.id);
+          const req = JSON.parse(reqContent);
+          if (req.status === 'APPROVED' || req.requestId === sessionId) {
+            req.expiresAt = newExpiresAt;
+            req.status = 'APPROVED';
+            req.extendedAt = now;
+            reqTask = this.updateFileContent(reqFile.id, JSON.stringify(req));
+          }
+        } catch (_) {}
+      }
+
+      await Promise.allSettled([sessionsTask, reqTask]);
+    } catch (e) {
+      console.warn('[TetherPass] extendRemoteSession error:', e.message);
+    }
+  }
+
+  /**
    * Checks if session expiration was extended remotely from mobile app
    */
   async getRemoteSessionExpiresAt(sessionId, authMode) {

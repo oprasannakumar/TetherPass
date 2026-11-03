@@ -618,7 +618,8 @@ class DriveService extends ChangeNotifier {
 
         s['isCurrentlyActive'] = true;
         s['status'] = 'ACTIVE';
-        s['minutesRemaining'] = ((expiresAt - now) / 60000).ceil().clamp(0, 30);
+        final remaining = ((expiresAt - now) / 60000).ceil();
+        s['minutesRemaining'] = remaining > 0 ? remaining : 0;
         results.add(s);
       }
 
@@ -778,9 +779,15 @@ class DriveService extends ChangeNotifier {
       final now = DateTime.now().millisecondsSinceEpoch;
       final addMs = additionalMinutes * 60 * 1000;
 
-      // 1. Update card_vault_active_sessions.json
+      // 1. Fetch both active sessions and access request files concurrently
+      final downloads = await Future.wait([
+        downloadTextFile(activeSessionsFileName),
+        downloadTextFile(accessRequestFileName),
+      ]);
+      final text = downloads[0];
+      final reqText = downloads[1];
+
       List<dynamic> sessionList = [];
-      final text = await downloadTextFile(activeSessionsFileName);
       if (text != null && text.trim().isNotEmpty) {
         try {
           final data = jsonDecode(text) as Map<String, dynamic>;
@@ -788,41 +795,69 @@ class DriveService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      int newExpiresAt = now + addMs;
-      String? authMode;
+      Map<String, dynamic>? reqData;
+      if (reqText != null && reqText.trim().isNotEmpty) {
+        try {
+          reqData = jsonDecode(reqText) as Map<String, dynamic>;
+        } catch (_) {}
+      }
+
+      // Determine current base expiry from sessionList or reqData
+      int currentMaxExp = now;
       for (final s in sessionList) {
         if (s is Map && s['sessionId'] == sessionId) {
-          final currentExp = (s['expiresAt'] as num?)?.toInt() ?? now;
-          final base = currentExp > now ? currentExp : now;
-          newExpiresAt = base + addMs;
+          final exp = (s['expiresAt'] as num?)?.toInt() ?? 0;
+          if (exp > currentMaxExp) currentMaxExp = exp;
+        }
+      }
+      if (reqData != null && (reqData['requestId'] == sessionId || reqData['status'] == 'APPROVED')) {
+        final exp = (reqData['expiresAt'] as num?)?.toInt() ?? 0;
+        if (exp > currentMaxExp) currentMaxExp = exp;
+      }
+
+      final newExpiresAt = currentMaxExp + addMs;
+
+      // Update sessionList
+      bool foundInList = false;
+      for (final s in sessionList) {
+        if (s is Map && s['sessionId'] == sessionId) {
+          foundInList = true;
           s['expiresAt'] = newExpiresAt;
           s['status'] = 'ACTIVE';
           s['extendedAt'] = now;
-          authMode = s['authMode'] as String?;
         }
       }
-
-      await uploadTextFile(activeSessionsFileName, jsonEncode({
-        'version': 1,
-        'updatedAt': now,
-        'sessions': sessionList,
-      }));
-
-      // 2. Also update corresponding access request file if PUSH
-      if (authMode == 'PUSH' || sessionId.startsWith('req_')) {
-        final reqText = await downloadTextFile(accessRequestFileName);
-        if (reqText != null && reqText.trim().isNotEmpty) {
-          try {
-            final req = jsonDecode(reqText) as Map<String, dynamic>;
-            if (req['requestId'] == sessionId || req['status'] == 'APPROVED') {
-              req['expiresAt'] = newExpiresAt;
-              req['status'] = 'APPROVED';
-              req['extendedAt'] = now;
-              await uploadTextFile(accessRequestFileName, jsonEncode(req));
-            }
-          } catch (_) {}
-        }
+      if (!foundInList) {
+        sessionList.add({
+          'sessionId': sessionId,
+          'deviceName': reqData?['device'] ?? 'Windows PC (TetherPass Extension)',
+          'authMode': 'PUSH',
+          'createdAt': reqData?['approvedAt'] ?? reqData?['timestamp'] ?? now,
+          'expiresAt': newExpiresAt,
+          'status': 'ACTIVE',
+          'extendedAt': now,
+        });
       }
+
+      // Update access request if active
+      if (reqData != null && (reqData['requestId'] == sessionId || reqData['status'] == 'APPROVED')) {
+        reqData['expiresAt'] = newExpiresAt;
+        reqData['status'] = 'APPROVED';
+        reqData['extendedAt'] = now;
+      }
+
+      // Save both in parallel
+      final uploads = <Future<dynamic>>[
+        uploadTextFile(activeSessionsFileName, jsonEncode({
+          'version': 1,
+          'updatedAt': now,
+          'sessions': sessionList,
+        }))
+      ];
+      if (reqData != null) {
+        uploads.add(uploadTextFile(accessRequestFileName, jsonEncode(reqData)));
+      }
+      await Future.wait(uploads);
 
       notifyListeners();
       return true;

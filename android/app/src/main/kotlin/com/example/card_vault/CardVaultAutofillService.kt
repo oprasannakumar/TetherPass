@@ -28,19 +28,6 @@ class CardVaultAutofillService : AutofillService() {
         cancellationSignal: CancellationSignal,
         callback: FillCallback
     ) {
-        // CATCH: Only work when CardVault is unlocked and active in RAM
-        if (!AutofillBridge.isUnlocked) {
-            callback.onSuccess(null)
-            return
-        }
-
-        val cards = AutofillBridge.getCards()
-        val passwords = AutofillBridge.getPasswords()
-        if (cards.isEmpty() && passwords.isEmpty()) {
-            callback.onSuccess(null)
-            return
-        }
-
         val fillContext = request.fillContexts.lastOrNull()
         val structure = fillContext?.structure
         if (structure == null) {
@@ -65,6 +52,49 @@ class CardVaultAutofillService : AutofillService() {
             return
         }
 
+        // If vault is locked in RAM, offer an Unlock prompt so the user can authenticate TetherPass and autofill!
+        if (!AutofillBridge.isUnlocked) {
+            val targetField = detector.focusedField
+                ?: detector.cardNumber
+                ?: detector.username
+                ?: detector.password
+                ?: detector.expiry
+                ?: detector.cvv
+
+            if (targetField != null) {
+                try {
+                    val unlockIntent = Intent(applicationContext, MainActivity::class.java).apply {
+                        action = Intent.ACTION_VIEW
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    }
+                    val pendingIntent = PendingIntent.getActivity(
+                        applicationContext,
+                        1001,
+                        unlockIntent,
+                        PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    val unlockViews = RemoteViews(packageName, R.layout.autofill_dropdown_item).apply {
+                        setTextViewText(R.id.autofill_title, "🔒 Unlock TetherPass")
+                        setTextViewText(R.id.autofill_subtitle, "Tap to authenticate & autofill")
+                    }
+                    val resp = FillResponse.Builder()
+                        .setAuthentication(arrayOf(targetField.id), pendingIntent.intentSender, unlockViews)
+                        .build()
+                    callback.onSuccess(resp)
+                    return
+                } catch (_: Exception) {}
+            }
+            callback.onSuccess(null)
+            return
+        }
+
+        val cards = AutofillBridge.getCards()
+        val passwords = AutofillBridge.getPasswords()
+        if (cards.isEmpty() && passwords.isEmpty()) {
+            callback.onSuccess(null)
+            return
+        }
+
         val responseBuilder = FillResponse.Builder()
         val inlineRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             request.inlineSuggestionsRequest
@@ -81,9 +111,14 @@ class CardVaultAutofillService : AutofillService() {
                 val domainRoot = extractDomainRoot(pwd.website)
                 val nick = pwd.nickname.lowercase().trim()
 
-                // Check webDomain (if inside browser like Chrome or WebView)
+                // Check webDomain (if inside browser like Chrome, Firefox, or WebView)
                 val webMatch = detector.webDomains.any { dom ->
-                    cleanWeb.isNotEmpty() && (dom == cleanWeb || dom.endsWith(".$cleanWeb") || cleanWeb.endsWith(".$dom"))
+                    cleanWeb.isNotEmpty() && (
+                        dom == cleanWeb ||
+                        dom.endsWith(".$cleanWeb") ||
+                        cleanWeb.endsWith(".$dom") ||
+                        (domainRoot.length >= 3 && dom.contains(domainRoot))
+                    )
                 }
 
                 // Check package name (e.g. in.amazon.mShop.android.shopping contains "amazon")
@@ -97,17 +132,10 @@ class CardVaultAutofillService : AutofillService() {
                 if (filtered.isEmpty()) passwords else filtered
             }
 
-            val primaryLoginField = detector.username ?: detector.password
-
             for (pwd in matchingPasswords) {
                 val datasetBuilder = Dataset.Builder()
                 val displayTitle = if (pwd.nickname.isNotEmpty()) pwd.nickname else pwd.website.ifEmpty { "Login" }
                 val displaySub = if (pwd.username.isNotEmpty()) pwd.username else "Password"
-
-                val remoteViews = RemoteViews(packageName, R.layout.autofill_dropdown_item).apply {
-                    setTextViewText(R.id.autofill_title, displayTitle)
-                    setTextViewText(R.id.autofill_subtitle, "👤 $displaySub")
-                }
 
                 var inlinePresentation: InlinePresentation? = null
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && specs != null && specs.isNotEmpty()) {
@@ -132,14 +160,14 @@ class CardVaultAutofillService : AutofillService() {
                 fun applyLoginField(field: FieldInfo?, value: String) {
                     if (field == null || value.isEmpty()) return
                     val afVal = AutofillValue.forText(value)
-                    if (field.id == primaryLoginField?.id) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
-                            datasetBuilder.setValue(field.id, afVal, remoteViews, inlinePresentation)
-                        } else {
-                            datasetBuilder.setValue(field.id, afVal, remoteViews)
-                        }
+                    val fieldRemoteViews = RemoteViews(packageName, R.layout.autofill_dropdown_item).apply {
+                        setTextViewText(R.id.autofill_title, displayTitle)
+                        setTextViewText(R.id.autofill_subtitle, "👤 $displaySub")
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
+                        datasetBuilder.setValue(field.id, afVal, fieldRemoteViews, inlinePresentation)
                     } else {
-                        datasetBuilder.setValue(field.id, afVal)
+                        datasetBuilder.setValue(field.id, afVal, fieldRemoteViews)
                     }
                 }
 
@@ -152,22 +180,10 @@ class CardVaultAutofillService : AutofillService() {
 
         // ── 2. PAYMENT CARDS AUTOFILL ──
         if (hasCardFields && cards.isNotEmpty()) {
-            val primaryCardField = detector.cardNumber
-                ?: detector.holder
-                ?: detector.expiry
-                ?: detector.cvv
-                ?: detector.expiryMonth
-                ?: detector.expiryYear
-
             for (card in cards) {
                 val datasetBuilder = Dataset.Builder()
                 val last4 = if (card.cardNumber.length >= 4) card.cardNumber.takeLast(4) else card.cardNumber
                 val sub = if (card.expiry.isNotEmpty()) "•••• $last4  |  Exp: ${card.expiry}" else "•••• $last4"
-
-                val remoteViews = RemoteViews(packageName, R.layout.autofill_dropdown_item).apply {
-                    setTextViewText(R.id.autofill_title, card.nickname)
-                    setTextViewText(R.id.autofill_subtitle, sub)
-                }
 
                 var inlinePresentation: InlinePresentation? = null
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && specs != null && specs.isNotEmpty()) {
@@ -196,14 +212,14 @@ class CardVaultAutofillService : AutofillService() {
                 fun applyField(field: FieldInfo?, value: String, isM: Boolean = false, isY: Boolean = false) {
                     if (field == null || value.isEmpty()) return
                     val afVal = getAutofillValue(field, value, isM, isY) ?: return
-                    if (field.id == primaryCardField?.id) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
-                            datasetBuilder.setValue(field.id, afVal, remoteViews, inlinePresentation)
-                        } else {
-                            datasetBuilder.setValue(field.id, afVal, remoteViews)
-                        }
+                    val fieldRemoteViews = RemoteViews(packageName, R.layout.autofill_dropdown_item).apply {
+                        setTextViewText(R.id.autofill_title, card.nickname)
+                        setTextViewText(R.id.autofill_subtitle, sub)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
+                        datasetBuilder.setValue(field.id, afVal, fieldRemoteViews, inlinePresentation)
                     } else {
-                        datasetBuilder.setValue(field.id, afVal)
+                        datasetBuilder.setValue(field.id, afVal, fieldRemoteViews)
                     }
                 }
 
@@ -294,12 +310,14 @@ class CardVaultAutofillService : AutofillService() {
 
         var username: FieldInfo? = null
         var password: FieldInfo? = null
+        var focusedField: FieldInfo? = null
         val webDomains = mutableSetOf<String>()
 
         fun traverse(node: AssistStructure.ViewNode) {
             val domain = node.webDomain?.lowercase()?.trim()
             if (!domain.isNullOrBlank()) {
-                webDomains.add(domain.removePrefix("www."))
+                val clean = domain.replace(Regex("^[a-zA-Z]+://"), "").split("/")[0].split(":")[0].removePrefix("www.")
+                webDomains.add(clean)
             }
 
             val hints = node.autofillHints?.map { it.lowercase() } ?: emptyList()
@@ -309,18 +327,23 @@ class CardVaultAutofillService : AutofillService() {
             val contentDesc = node.contentDescription?.toString()?.lowercase() ?: ""
             val className = node.className?.lowercase() ?: ""
 
+            val htmlTag = try { node.htmlInfo?.tag?.lowercase() ?: "" } catch (_: Throwable) { "" }
             val htmlAttrs = try {
                 node.htmlInfo?.attributes?.joinToString(" ") { "${it.first}=${it.second}" }?.lowercase() ?: ""
-            } catch (e: Throwable) {
+            } catch (_: Throwable) {
                 ""
             }
 
-            val raw = "$hintText $idEntry $text $contentDesc $className $htmlAttrs".lowercase()
+            val raw = "$hintText $idEntry $text $contentDesc $className $htmlTag $htmlAttrs".lowercase()
             val norm = raw.replace('_', ' ').replace('-', ' ').replace('/', ' ').replace('.', ' ')
             val afId = node.autofillId
             val fieldInfo = if (afId != null) FieldInfo(afId, node.autofillType, node.autofillOptions) else null
 
             if (fieldInfo != null) {
+                if (node.isFocused) {
+                    focusedField = fieldInfo
+                }
+
                 // 1. Password detection
                 val isPassword = hints.any { it.contains("password") } ||
                         (node.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_TEXT &&
@@ -392,7 +415,9 @@ class CardVaultAutofillService : AutofillService() {
                      raw.contains("card_no") || raw.contains("card-no") || raw.contains("cardno") ||
                      raw.contains("cc_num") || raw.contains("cc-num") || raw.contains("ccnum") ||
                      raw.contains("cc_number") || raw.contains("cc-number") ||
+                     raw.contains("card_num") || raw.contains("card-num") ||
                      norm.contains("credit card") || norm.contains("debit card") ||
+                     (raw.contains("card") && (norm.contains("number") || norm.contains("digit") || norm.contains("no"))) ||
                      (raw.contains("pan") && (norm.contains("card") || norm.contains("credit") || norm.contains("payment"))) ||
                      norm.contains("16 digit")
                 ) {

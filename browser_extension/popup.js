@@ -181,6 +181,33 @@ function initUI() {
     if (e.target.id === 'deviceManagerModal') closeDeviceManagerModal();
   });
 
+  // Extend session button (+15m)
+  document.getElementById('extendSessionBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('extendSessionBtn');
+    if (btn) {
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+    }
+    try {
+      const res = await sendExtensionMessage({
+        action: 'EXTEND_SESSION',
+        payload: {
+          token: currentOAuthToken,
+          minutes: 15
+        }
+      });
+      if (res && res.success && res.authExpiresAt) {
+        cachedAuthExpiresAt = res.authExpiresAt;
+        updateCountdownDisplay();
+        showStatusBanner('Session extended by +15 minutes', false);
+      }
+    } catch (_) {}
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
+  });
+
   // Lock button
   document.getElementById('lockNowBtn')?.addEventListener('click', handleLock);
 

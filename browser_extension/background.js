@@ -444,6 +444,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       return;
     }
+
+    if (action === 'EXTEND_SESSION') {
+      try {
+        if (!memoryVault.isAuthorized && !memoryVault.isUnlocked) {
+          sendResponse({ success: false, error: 'Vault is not unlocked' });
+          return;
+        }
+        const additionalMinutes = payload?.minutes || 15;
+        const addMs = additionalMinutes * 60 * 1000;
+        const base = (memoryVault.authExpiresAt && memoryVault.authExpiresAt > Date.now())
+          ? memoryVault.authExpiresAt
+          : Date.now();
+        memoryVault.authExpiresAt = base + addMs;
+        await persistSession();
+
+        // Also extend remotely on Google Drive so mobile app receives it immediately!
+        if (payload?.token && memoryVault.sessionId) {
+          try {
+            driveClient.setToken(payload.token);
+            await driveClient.extendRemoteSession(memoryVault.sessionId, memoryVault.authExpiresAt, memoryVault.authMode);
+          } catch (_) {}
+        }
+
+        notifyAllTabsStatusChange();
+        chrome.runtime.sendMessage({
+          action: 'VAULT_STATUS_CHANGED',
+          isAuthorized: true,
+          isUnlocked: true,
+          authExpiresAt: memoryVault.authExpiresAt
+        }).catch(() => {});
+
+        sendResponse({ success: true, authExpiresAt: memoryVault.authExpiresAt });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
   })();
 
   return true; // Asynchronous sendResponse channel
