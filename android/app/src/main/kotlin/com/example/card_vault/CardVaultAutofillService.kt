@@ -56,9 +56,9 @@ class CardVaultAutofillService : AutofillService() {
             detector.traverse(window.rootViewNode)
         }
 
-        val hasCardFields = detector.cardNumberId != null || detector.expiryId != null ||
-                detector.expiryMonthId != null || detector.expiryYearId != null || detector.cvvId != null
-        val hasLoginFields = detector.usernameId != null || detector.passwordId != null
+        val hasCardFields = detector.cardNumber != null || detector.expiry != null ||
+                detector.expiryMonth != null || detector.expiryYear != null || detector.cvv != null
+        val hasLoginFields = detector.username != null || detector.password != null
 
         if (!hasCardFields && !hasLoginFields) {
             callback.onSuccess(null)
@@ -94,9 +94,10 @@ class CardVaultAutofillService : AutofillService() {
 
                 webMatch || pkgMatch
             }.let { filtered ->
-                // If strict match didn't find anything, show all saved credentials
                 if (filtered.isEmpty()) passwords else filtered
             }
+
+            val primaryLoginField = detector.username ?: detector.password
 
             for (pwd in matchingPasswords) {
                 val datasetBuilder = Dataset.Builder()
@@ -125,20 +126,25 @@ class CardVaultAutofillService : AutofillService() {
 
                         val slice = contentBuilder.build().slice
                         inlinePresentation = InlinePresentation(slice, spec, false)
-                        datasetBuilder.setInlinePresentation(inlinePresentation)
                     } catch (_: Exception) {}
                 }
 
-                detector.usernameId?.let { uId ->
-                    if (pwd.username.isNotEmpty()) {
-                        addFieldValue(datasetBuilder, uId, pwd.username, remoteViews, inlinePresentation)
+                fun applyLoginField(field: FieldInfo?, value: String) {
+                    if (field == null || value.isEmpty()) return
+                    val afVal = AutofillValue.forText(value)
+                    if (field.id == primaryLoginField?.id) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
+                            datasetBuilder.setValue(field.id, afVal, remoteViews, inlinePresentation)
+                        } else {
+                            datasetBuilder.setValue(field.id, afVal, remoteViews)
+                        }
+                    } else {
+                        datasetBuilder.setValue(field.id, afVal)
                     }
                 }
-                detector.passwordId?.let { pId ->
-                    if (pwd.password.isNotEmpty()) {
-                        addFieldValue(datasetBuilder, pId, pwd.password, remoteViews, inlinePresentation)
-                    }
-                }
+
+                applyLoginField(detector.username, pwd.username)
+                applyLoginField(detector.password, pwd.password)
 
                 responseBuilder.addDataset(datasetBuilder.build())
             }
@@ -146,6 +152,13 @@ class CardVaultAutofillService : AutofillService() {
 
         // ── 2. PAYMENT CARDS AUTOFILL ──
         if (hasCardFields && cards.isNotEmpty()) {
+            val primaryCardField = detector.cardNumber
+                ?: detector.holder
+                ?: detector.expiry
+                ?: detector.cvv
+                ?: detector.expiryMonth
+                ?: detector.expiryYear
+
             for (card in cards) {
                 val datasetBuilder = Dataset.Builder()
                 val last4 = if (card.cardNumber.length >= 4) card.cardNumber.takeLast(4) else card.cardNumber
@@ -173,7 +186,6 @@ class CardVaultAutofillService : AutofillService() {
 
                         val slice = contentBuilder.build().slice
                         inlinePresentation = InlinePresentation(slice, spec, false)
-                        datasetBuilder.setInlinePresentation(inlinePresentation)
                     } catch (_: Exception) {}
                 }
 
@@ -181,30 +193,26 @@ class CardVaultAutofillService : AutofillService() {
                 val expiryMonth = if (expiryParts.isNotEmpty()) expiryParts[0].trim() else ""
                 val expiryYear = if (expiryParts.size > 1) expiryParts[1].trim() else ""
 
-                detector.cardNumberId?.let { id ->
-                    addFieldValue(datasetBuilder, id, card.cardNumber, remoteViews, inlinePresentation)
-                }
-                detector.expiryId?.let { id ->
-                    addFieldValue(datasetBuilder, id, card.expiry, remoteViews, inlinePresentation)
-                }
-                detector.expiryMonthId?.let { id ->
-                    if (expiryMonth.isNotEmpty()) {
-                        addFieldValue(datasetBuilder, id, expiryMonth, remoteViews, inlinePresentation)
+                fun applyField(field: FieldInfo?, value: String, isM: Boolean = false, isY: Boolean = false) {
+                    if (field == null || value.isEmpty()) return
+                    val afVal = getAutofillValue(field, value, isM, isY) ?: return
+                    if (field.id == primaryCardField?.id) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
+                            datasetBuilder.setValue(field.id, afVal, remoteViews, inlinePresentation)
+                        } else {
+                            datasetBuilder.setValue(field.id, afVal, remoteViews)
+                        }
+                    } else {
+                        datasetBuilder.setValue(field.id, afVal)
                     }
                 }
-                detector.expiryYearId?.let { id ->
-                    if (expiryYear.isNotEmpty()) {
-                        addFieldValue(datasetBuilder, id, expiryYear, remoteViews, inlinePresentation)
-                    }
-                }
-                detector.cvvId?.let { id ->
-                    addFieldValue(datasetBuilder, id, card.cvv, remoteViews, inlinePresentation)
-                }
-                detector.holderId?.let { id ->
-                    if (card.cardHolder.isNotEmpty()) {
-                        addFieldValue(datasetBuilder, id, card.cardHolder, remoteViews, inlinePresentation)
-                    }
-                }
+
+                applyField(detector.cardNumber, card.cardNumber)
+                applyField(detector.holder, card.cardHolder)
+                applyField(detector.expiry, card.expiry)
+                applyField(detector.expiryMonth, expiryMonth, isM = true)
+                applyField(detector.expiryYear, expiryYear, isY = true)
+                applyField(detector.cvv, card.cvv)
 
                 responseBuilder.addDataset(datasetBuilder.build())
             }
@@ -213,17 +221,43 @@ class CardVaultAutofillService : AutofillService() {
         callback.onSuccess(responseBuilder.build())
     }
 
-    private fun addFieldValue(
-        datasetBuilder: Dataset.Builder,
-        id: AutofillId,
-        value: String,
-        remoteViews: RemoteViews,
-        inlinePresentation: InlinePresentation?
-    ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
-            datasetBuilder.setValue(id, AutofillValue.forText(value), remoteViews, inlinePresentation)
+    private fun getAutofillValue(
+        field: FieldInfo,
+        textVal: String,
+        isMonth: Boolean = false,
+        isYear: Boolean = false
+    ): AutofillValue? {
+        if (field.type == 3 /* AUTOFILL_TYPE_LIST */ && field.options != null && field.options.isNotEmpty()) {
+            val cleanText = textVal.trim()
+            val numVal = cleanText.toIntOrNull()
+
+            for (i in field.options.indices) {
+                val opt = field.options[i].toString().trim().lowercase()
+                if (opt.equals(cleanText, ignoreCase = true)) {
+                    return AutofillValue.forList(i)
+                }
+                if (isMonth && numVal != null && numVal in 1..12) {
+                    val sNames = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+                    val fNames = listOf("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
+                    val s = sNames[numVal - 1]
+                    val f = fNames[numVal - 1]
+                    val num2 = String.format("%02d", numVal)
+                    val num1 = numVal.toString()
+                    if (opt.contains(s) || opt.contains(f) || opt == num1 || opt == num2 || opt.startsWith(num2) || opt.startsWith(num1)) {
+                        return AutofillValue.forList(i)
+                    }
+                }
+                if (isYear && cleanText.isNotEmpty()) {
+                    val y2 = if (cleanText.length >= 2) cleanText.takeLast(2) else cleanText
+                    val y4 = if (cleanText.length == 2) "20$cleanText" else cleanText
+                    if (opt == y4 || opt == y2 || opt.contains(y4) || opt.contains(y2)) {
+                        return AutofillValue.forList(i)
+                    }
+                }
+            }
+            return null
         } else {
-            datasetBuilder.setValue(id, AutofillValue.forText(value), remoteViews)
+            return AutofillValue.forText(textVal)
         }
     }
 
@@ -244,16 +278,22 @@ class CardVaultAutofillService : AutofillService() {
         return if (parts.isNotEmpty()) parts[0] else clean
     }
 
-    private class AutofillFieldDetector {
-        var cardNumberId: AutofillId? = null
-        var expiryId: AutofillId? = null
-        var expiryMonthId: AutofillId? = null
-        var expiryYearId: AutofillId? = null
-        var cvvId: AutofillId? = null
-        var holderId: AutofillId? = null
+    private class FieldInfo(
+        val id: AutofillId,
+        val type: Int,
+        val options: Array<CharSequence>? = null
+    )
 
-        var usernameId: AutofillId? = null
-        var passwordId: AutofillId? = null
+    private class AutofillFieldDetector {
+        var cardNumber: FieldInfo? = null
+        var expiry: FieldInfo? = null
+        var expiryMonth: FieldInfo? = null
+        var expiryYear: FieldInfo? = null
+        var cvv: FieldInfo? = null
+        var holder: FieldInfo? = null
+
+        var username: FieldInfo? = null
+        var password: FieldInfo? = null
         val webDomains = mutableSetOf<String>()
 
         fun traverse(node: AssistStructure.ViewNode) {
@@ -277,106 +317,110 @@ class CardVaultAutofillService : AutofillService() {
 
             val raw = "$hintText $idEntry $text $contentDesc $className $htmlAttrs".lowercase()
             val norm = raw.replace('_', ' ').replace('-', ' ').replace('/', ' ').replace('.', ' ')
+            val afId = node.autofillId
+            val fieldInfo = if (afId != null) FieldInfo(afId, node.autofillType, node.autofillOptions) else null
 
-            // 1. Password detection
-            val isPassword = hints.any { it.contains("password") } ||
-                    (node.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_TEXT &&
-                            (node.inputType and InputType.TYPE_MASK_VARIATION == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
-                             node.inputType and InputType.TYPE_MASK_VARIATION == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
-                             node.inputType and InputType.TYPE_MASK_VARIATION == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD)) ||
-                    idEntry.contains("password") || idEntry.contains("pwd") || idEntry.contains("pass") ||
-                    raw.contains("password") || raw.contains("passwd")
+            if (fieldInfo != null) {
+                // 1. Password detection
+                val isPassword = hints.any { it.contains("password") } ||
+                        (node.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_TEXT &&
+                                (node.inputType and InputType.TYPE_MASK_VARIATION == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+                                 node.inputType and InputType.TYPE_MASK_VARIATION == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
+                                 node.inputType and InputType.TYPE_MASK_VARIATION == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD)) ||
+                        idEntry.contains("password") || idEntry.contains("pwd") || idEntry.contains("pass") ||
+                        raw.contains("password") || raw.contains("passwd")
 
-            // 2. CVV detection
-            val isCvv = hints.any {
-                it.contains("securitycode") || it.contains("csc") || it.contains("cvv") || it.contains("cvc")
-            } || raw.contains("cvv") || raw.contains("cvc") || raw.contains("cvn") ||
-                 raw.contains("cid") || raw.contains("csc") || raw.contains("security_code") ||
-                 raw.contains("security-code") || norm.contains("security code") ||
-                 norm.contains("sec code") || norm.contains("card verification") ||
-                 norm.contains("verification code")
+                // 2. CVV detection
+                val isCvv = hints.any {
+                    it.contains("securitycode") || it.contains("csc") || it.contains("cvv") || it.contains("cvc")
+                } || raw.contains("cvv") || raw.contains("cvc") || raw.contains("cvn") ||
+                     raw.contains("cid") || raw.contains("csc") || raw.contains("security_code") ||
+                     raw.contains("security-code") || norm.contains("security code") ||
+                     norm.contains("sec code") || norm.contains("card verification") ||
+                     norm.contains("verification code")
 
-            if (isCvv) {
-                if (cvvId == null || node.isFocused) cvvId = node.autofillId
-            } else if (isPassword) {
-                if (passwordId == null || node.isFocused) passwordId = node.autofillId
-            }
-            // 3. Expiry Month
-            else if (hints.any { it.contains("expirationmonth") || it.contains("exp-month") || it.contains("exp_month") } ||
-                raw.contains("exp_month") || raw.contains("exp-month") || raw.contains("expmonth") ||
-                raw.contains("expiry_month") || raw.contains("expiry-month") || raw.contains("expirymonth") ||
-                norm.contains("exp month") || norm.contains("expiry month") || norm.contains("expiration month") ||
-                (hintText.trim() == "mm" && (norm.contains("exp") || norm.contains("card") || norm.contains("valid"))) ||
-                (idEntry == "month" && (norm.contains("exp") || norm.contains("card") || norm.contains("valid")))
-            ) {
-                if (expiryMonthId == null || node.isFocused) expiryMonthId = node.autofillId
-            }
-            // 4. Expiry Year
-            else if (hints.any { it.contains("expirationyear") || it.contains("exp-year") || it.contains("exp_year") } ||
-                raw.contains("exp_year") || raw.contains("exp-year") || raw.contains("expyear") ||
-                raw.contains("expiry_year") || raw.contains("expiry-year") || raw.contains("expiryyear") ||
-                norm.contains("exp year") || norm.contains("expiry year") || norm.contains("expiration year") ||
-                ((hintText.trim() == "yy" || hintText.trim() == "yyyy") && (norm.contains("exp") || norm.contains("card") || norm.contains("valid"))) ||
-                (idEntry == "year" && (norm.contains("exp") || norm.contains("card") || norm.contains("valid")))
-            ) {
-                if (expiryYearId == null || node.isFocused) expiryYearId = node.autofillId
-            }
-            // 5. Expiry Date
-            else if (hints.any {
-                it.contains("expirationdate") || it.contains("expiration") ||
-                it.contains("expiry") || it.contains("cc-exp") || it.contains("cc_exp")
-            } || raw.contains("expiry") || raw.contains("expire") || raw.contains("expiration") ||
-                 raw.contains("ccexp") || raw.contains("cc_exp") || raw.contains("cc-exp") ||
-                 raw.contains("card_exp") || raw.contains("card-exp") || raw.contains("cardexp") ||
-                 raw.contains("exp_date") || raw.contains("exp-date") || raw.contains("expdate") ||
-                 norm.contains("exp date") || norm.contains("expiry date") || norm.contains("expiration date") ||
-                 norm.contains("valid thru") || norm.contains("validthru") || norm.contains("valid till") ||
-                 norm.contains("valid until") || norm.contains("validity") ||
-                 raw.contains("mm/yy") || raw.contains("mm / yy") || raw.contains("mm-yy") ||
-                 raw.contains("mm/yyyy") || raw.contains("mm / yyyy") || raw.contains("mmyy") ||
-                 norm.contains("mm yy") || norm.contains("mm yyyy") ||
-                 norm.contains("card exp") ||
-                 (hintText.trim().startsWith("exp") && !hintText.contains("cvv"))
-            ) {
-                if (expiryId == null || node.isFocused) expiryId = node.autofillId
-            }
-            // 6. Card Number
-            else if (hints.any {
-                it.contains("creditcardnumber") || it.contains("cardnumber") ||
-                it.contains("cc-number") || it.contains("cc_number")
-            } || raw.contains("card_number") || raw.contains("card-number") || raw.contains("cardnumber") ||
-                 norm.contains("card number") || norm.contains("card no") ||
-                 raw.contains("card_no") || raw.contains("card-no") || raw.contains("cardno") ||
-                 raw.contains("cc_num") || raw.contains("cc-num") || raw.contains("ccnum") ||
-                 raw.contains("cc_number") || raw.contains("cc-number") ||
-                 norm.contains("credit card") || norm.contains("debit card") ||
-                 (raw.contains("pan") && (norm.contains("card") || norm.contains("credit") || norm.contains("payment"))) ||
-                 norm.contains("16 digit")
-            ) {
-                if (cardNumberId == null || node.isFocused) cardNumberId = node.autofillId
-            }
-            // 7. Cardholder Name
-            else if (hints.any {
-                it.contains("creditcardholdername") || it.contains("holdername") || it.contains("cc-name")
-            } || raw.contains("card_holder") || raw.contains("card-holder") || raw.contains("cardholder") ||
-                 norm.contains("card holder") || norm.contains("holder name") ||
-                 norm.contains("name on card")
-            ) {
-                if (holderId == null || node.isFocused) holderId = node.autofillId
-            }
-            // 8. Username / Email / Login ID
-            else if (hints.any {
-                it.contains("username") || it.contains("emailaddress") || it.contains("phone") || it.contains("email")
-            } || (node.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_TEXT &&
-                  node.inputType and InputType.TYPE_MASK_VARIATION == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS) ||
-                idEntry.contains("username") || idEntry.contains("email") || idEntry.contains("login") ||
-                idEntry.contains("user_id") || idEntry.contains("userid") || idEntry.contains("account") ||
-                raw.contains("username") || raw.contains("email") || raw.contains("user_name") ||
-                raw.contains("login_id") || raw.contains("userid") || raw.contains("user_id") ||
-                raw.contains("customer_id") || raw.contains("cust_id") ||
-                (hintText.contains("email") || hintText.contains("mobile") || hintText.contains("phone"))
-            ) {
-                if (usernameId == null || node.isFocused) usernameId = node.autofillId
+                if (isCvv) {
+                    if (cvv == null || node.isFocused) cvv = fieldInfo
+                } else if (isPassword) {
+                    if (password == null || node.isFocused) password = fieldInfo
+                }
+                // 3. Expiry Month
+                else if (hints.any { it.contains("expirationmonth") || it.contains("exp-month") || it.contains("exp_month") } ||
+                    raw.contains("exp_month") || raw.contains("exp-month") || raw.contains("expmonth") ||
+                    raw.contains("expiry_month") || raw.contains("expiry-month") || raw.contains("expirymonth") ||
+                    norm.contains("exp month") || norm.contains("expiry month") || norm.contains("expiration month") ||
+                    (hintText.trim() == "mm" && (norm.contains("exp") || norm.contains("card") || norm.contains("valid"))) ||
+                    (idEntry == "month" && (norm.contains("exp") || norm.contains("card") || norm.contains("valid")))
+                ) {
+                    if (expiryMonth == null || node.isFocused) expiryMonth = fieldInfo
+                }
+                // 4. Expiry Year
+                else if (hints.any { it.contains("expirationyear") || it.contains("exp-year") || it.contains("exp_year") } ||
+                    raw.contains("exp_year") || raw.contains("exp-year") || raw.contains("expyear") ||
+                    raw.contains("expiry_year") || raw.contains("expiry-year") || raw.contains("expiryyear") ||
+                    norm.contains("exp year") || norm.contains("expiry year") || norm.contains("expiration year") ||
+                    ((hintText.trim() == "yy" || hintText.trim() == "yyyy") && (norm.contains("exp") || norm.contains("card") || norm.contains("valid"))) ||
+                    (idEntry == "year" && (norm.contains("exp") || norm.contains("card") || norm.contains("valid")))
+                ) {
+                    if (expiryYear == null || node.isFocused) expiryYear = fieldInfo
+                }
+                // 5. Expiry Date
+                else if (hints.any {
+                    it.contains("expirationdate") || it.contains("expiration") ||
+                    it.contains("expiry") || it.contains("cc-exp") || it.contains("cc_exp")
+                } || raw.contains("expiry") || raw.contains("expire") || raw.contains("expiration") ||
+                     raw.contains("ccexp") || raw.contains("cc_exp") || raw.contains("cc-exp") ||
+                     raw.contains("card_exp") || raw.contains("card-exp") || raw.contains("cardexp") ||
+                     raw.contains("exp_date") || raw.contains("exp-date") || raw.contains("expdate") ||
+                     norm.contains("exp date") || norm.contains("expiry date") || norm.contains("expiration date") ||
+                     norm.contains("valid thru") || norm.contains("validthru") || norm.contains("valid till") ||
+                     norm.contains("valid until") || norm.contains("validity") ||
+                     raw.contains("mm/yy") || raw.contains("mm / yy") || raw.contains("mm-yy") ||
+                     raw.contains("mm/yyyy") || raw.contains("mm / yyyy") || raw.contains("mmyy") ||
+                     norm.contains("mm yy") || norm.contains("mm yyyy") ||
+                     norm.contains("card exp") ||
+                     (hintText.trim().startsWith("exp") && !hintText.contains("cvv"))
+                ) {
+                    if (expiry == null || node.isFocused) expiry = fieldInfo
+                }
+                // 6. Card Number
+                else if (hints.any {
+                    it.contains("creditcardnumber") || it.contains("cardnumber") ||
+                    it.contains("cc-number") || it.contains("cc_number")
+                } || raw.contains("card_number") || raw.contains("card-number") || raw.contains("cardnumber") ||
+                     norm.contains("card number") || norm.contains("card no") ||
+                     raw.contains("card_no") || raw.contains("card-no") || raw.contains("cardno") ||
+                     raw.contains("cc_num") || raw.contains("cc-num") || raw.contains("ccnum") ||
+                     raw.contains("cc_number") || raw.contains("cc-number") ||
+                     norm.contains("credit card") || norm.contains("debit card") ||
+                     (raw.contains("pan") && (norm.contains("card") || norm.contains("credit") || norm.contains("payment"))) ||
+                     norm.contains("16 digit")
+                ) {
+                    if (cardNumber == null || node.isFocused) cardNumber = fieldInfo
+                }
+                // 7. Cardholder Name
+                else if (hints.any {
+                    it.contains("creditcardholdername") || it.contains("holdername") || it.contains("cc-name")
+                } || raw.contains("card_holder") || raw.contains("card-holder") || raw.contains("cardholder") ||
+                     norm.contains("card holder") || norm.contains("holder name") ||
+                     norm.contains("name on card")
+                ) {
+                    if (holder == null || node.isFocused) holder = fieldInfo
+                }
+                // 8. Username / Email / Login ID
+                else if (hints.any {
+                    it.contains("username") || it.contains("emailaddress") || it.contains("phone") || it.contains("email")
+                } || (node.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_TEXT &&
+                      node.inputType and InputType.TYPE_MASK_VARIATION == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS) ||
+                    idEntry.contains("username") || idEntry.contains("email") || idEntry.contains("login") ||
+                    idEntry.contains("user_id") || idEntry.contains("userid") || idEntry.contains("account") ||
+                    raw.contains("username") || raw.contains("email") || raw.contains("user_name") ||
+                    raw.contains("login_id") || raw.contains("userid") || raw.contains("user_id") ||
+                    raw.contains("customer_id") || raw.contains("cust_id") ||
+                    (hintText.contains("email") || hintText.contains("mobile") || hintText.contains("phone"))
+                ) {
+                    if (username == null || node.isFocused) username = fieldInfo
+                }
             }
 
             for (i in 0 until node.childCount) {

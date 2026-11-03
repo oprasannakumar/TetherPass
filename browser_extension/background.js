@@ -664,6 +664,17 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
     if (isPassword) {
       if (isCardField || isBankField) continue; // Don't include passwords when filling card or bank number
 
+      const website = item.website || '';
+      const nickname = item.nickname || item.bank_name || 'Website Password';
+
+      // Fast synchronous domain matching BEFORE generating TOTP codes:
+      // Only compute crypto for items actually matching the current website!
+      if (domain && fieldType !== 'ALL') {
+        if (!doesDomainMatch(website, domain, nickname)) {
+          continue;
+        }
+      }
+
       const totpKey = item.totp_secret || item.totpSecret || '';
       let totpCode = '';
       let totpSeconds = 0;
@@ -676,8 +687,8 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
 
       const pwdItem = {
         id: item.id || String(Math.random()),
-        nickname: item.nickname || item.bank_name || 'Website Password',
-        website: item.website || '',
+        nickname: nickname,
+        website: website,
         username: item.user_id || item.userId || item.username || '',
         password: item.login_password || item.loginPassword || item.password || '',
         totpSecret: totpKey,
@@ -686,15 +697,7 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
         notes: item.notes || ''
       };
 
-      // Strict domain matching for website logins:
-      // Only suggest passwords matching the current website!
-      if (domain && fieldType !== 'ALL') {
-        if (doesDomainMatch(pwdItem.website, domain, pwdItem.nickname)) {
-          passwords.push(pwdItem);
-        }
-      } else {
-        passwords.push(pwdItem);
-      }
+      passwords.push(pwdItem);
     } else if (isCard) {
       if (isCredentialField || isBankField) continue; // Don't include cards for login or bank fields
       cards.push({

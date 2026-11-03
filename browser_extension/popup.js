@@ -144,10 +144,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSavedGoogleAccount();
   await refreshStatus();
 
-  // If locked and QR tab is active, automatically generate pairing QR code
+  // If locked, QR tab is active, and directQrState is IDLE, generate pairing QR once
   const lockedView = document.getElementById('lockedView');
-  if (lockedView && lockedView.classList.contains('active')) {
-    startDirectQrPairing();
+  if (lockedView && lockedView.classList.contains('active') && directQrState === 'IDLE' && currentOAuthToken) {
+    startDirectQrPairing(false);
   }
 
   // Auto-refresh desktop status periodically
@@ -317,12 +317,12 @@ function setConnectedGoogleAccount(email, picture = null, save = true) {
   // Check for registered mobile devices
   loadRegisteredDevices();
 
-  // If locked, kick off QR generation now that account is connected
+  // If locked, kick off QR generation only if IDLE
   const lockedView = document.getElementById('lockedView');
   if (lockedView && lockedView.classList.contains('active')) {
     const qrBtn = document.getElementById('tabModeQrBtn');
-    if (!qrBtn || qrBtn.classList.contains('active')) {
-      startDirectQrPairing();
+    if ((!qrBtn || qrBtn.classList.contains('active')) && directQrState === 'IDLE') {
+      startDirectQrPairing(false);
     }
   }
 }
@@ -787,8 +787,8 @@ let activeDirectQrInterval = null;
 let activeDirectQrCountdown = null;
 let currentDirectQrRequestId = null;
 let qrSessionExpiresAt = 0;
-let isQrPairingInProgress = false;
 let isQrExpired = false;
+let directQrState = 'IDLE'; // 'IDLE' | 'GENERATING' | 'ACTIVE' | 'EXPIRED'
 
 function switchUnlockTab(tab) {
   const qrBtn = document.getElementById('tabModeQrBtn');
@@ -803,7 +803,9 @@ function switchUnlockTab(tab) {
     if (pushContainer) pushContainer.style.display = 'none';
 
     // Start direct QR pairing (only if not already running a valid session)
-    startDirectQrPairing(false);
+    if (directQrState === 'IDLE') {
+      startDirectQrPairing(false);
+    }
   } else {
     pushBtn?.classList.add('active');
     qrBtn?.classList.remove('active');
@@ -819,11 +821,11 @@ function stopDirectQrPairing(clearSession = true) {
   if (activeDirectQrCountdown) clearInterval(activeDirectQrCountdown);
   activeDirectQrInterval = null;
   activeDirectQrCountdown = null;
-  isQrPairingInProgress = false;
   if (clearSession) {
     currentDirectQrRequestId = null;
     qrSessionExpiresAt = 0;
     isQrExpired = false;
+    directQrState = 'IDLE';
   }
 }
 
@@ -833,6 +835,7 @@ function markQrCodeExpired() {
   activeDirectQrInterval = null;
   activeDirectQrCountdown = null;
   isQrExpired = true;
+  directQrState = 'EXPIRED';
 
   const timerEl = document.getElementById('qrWaitingTimer');
   const canvas = document.getElementById('directPairingQrCanvas');
@@ -851,14 +854,25 @@ function markQrCodeExpired() {
 }
 
 async function startDirectQrPairing(force = false) {
-  const now = Date.now();
-  // Strictly prevent automatic regeneration: only generate if first time, or if user explicitly clicked refresh
-  if (!force && (currentDirectQrRequestId || isQrExpired || isQrPairingInProgress)) {
+  // Guard: do NOT generate if already generating, already active, or expired waiting for refresh
+  if (!force && directQrState !== 'IDLE') {
     return;
   }
 
-  isQrPairingInProgress = true;
-  stopDirectQrPairing(true);
+  // Clear existing intervals if forcing
+  if (activeDirectQrInterval) {
+    clearInterval(activeDirectQrInterval);
+    activeDirectQrInterval = null;
+  }
+  if (activeDirectQrCountdown) {
+    clearInterval(activeDirectQrCountdown);
+    activeDirectQrCountdown = null;
+  }
+
+  directQrState = 'GENERATING';
+  currentDirectQrRequestId = null;
+  qrSessionExpiresAt = 0;
+  isQrExpired = false;
 
   const loadingEl = document.getElementById('qrLoadingState');
   const readyEl = document.getElementById('qrReadyState');
@@ -877,7 +891,7 @@ async function startDirectQrPairing(force = false) {
   }
 
   if (!currentOAuthToken) {
-    isQrPairingInProgress = false;
+    directQrState = 'IDLE';
     if (loadingEl) {
       loadingEl.style.display = 'block';
       loadingEl.innerHTML = `
@@ -909,12 +923,16 @@ async function startDirectQrPairing(force = false) {
         token: currentOAuthToken,
         deviceName: myDevice,
         targetDeviceId: 'ALL',
-        authMode: 'QR' // Specifically QR mode: mobile app won't pop up unsolicited push dialog
+        authMode: 'QR'
       }
     });
 
+    if (directQrState !== 'GENERATING') {
+      return;
+    }
+
     if (!startRes || !startRes.success) {
-      isQrPairingInProgress = false;
+      directQrState = 'IDLE';
       if (loadingEl) {
         loadingEl.innerHTML = `
           <div style="color: #EF4444; font-weight: 600; margin-bottom: 6px;">⚠️ Pairing Setup Error</div>
@@ -928,10 +946,10 @@ async function startDirectQrPairing(force = false) {
 
     const requestId = startRes.requestId;
     currentDirectQrRequestId = requestId;
-    qrSessionExpiresAt = Date.now() + 60000; // Stable 60-second validity window
+    qrSessionExpiresAt = Date.now() + 60000; // Stable 60-second window
     isQrExpired = false;
+    directQrState = 'ACTIVE';
 
-    // Render pairing QR for mobile scan
     if (canvas && window.renderQRCode) {
       const pairUri = `tetherpass://pair?req=${encodeURIComponent(requestId)}&dev=${encodeURIComponent(myDevice)}`;
       window.renderQRCode(canvas, pairUri, { size: 140 });
@@ -939,7 +957,6 @@ async function startDirectQrPairing(force = false) {
 
     if (loadingEl) loadingEl.style.display = 'none';
     if (readyEl) readyEl.style.display = 'block';
-    isQrPairingInProgress = false;
 
     const updateCountdown = () => {
       const remainingSecs = Math.max(0, Math.ceil((qrSessionExpiresAt - Date.now()) / 1000));
@@ -954,20 +971,19 @@ async function startDirectQrPairing(force = false) {
     activeDirectQrCountdown = setInterval(() => {
       const remaining = updateCountdown();
       if (remaining <= 0) {
-        // Stop timer and mark expired — strictly NEVER regenerate automatically!
         markQrCodeExpired();
       }
     }, 1000);
 
-    // Poll for mobile biometric approval (fast 800ms interval)
+    // Poll for mobile scan approval (fast 800ms)
     activeDirectQrInterval = setInterval(async () => {
-      if (!currentDirectQrRequestId || isQrExpired) return;
+      if (!currentDirectQrRequestId || directQrState !== 'ACTIVE') return;
       const pollRes = await sendExtensionMessage({
         action: 'POLL_MOBILE_APPROVAL',
         payload: {
           token: currentOAuthToken,
           requestId,
-          masterPassword: '' // Mobile phone provides request_sealed_key upon scan!
+          masterPassword: ''
         }
       });
 
@@ -986,7 +1002,7 @@ async function startDirectQrPairing(force = false) {
     }, 800);
 
   } catch (err) {
-    isQrPairingInProgress = false;
+    directQrState = 'IDLE';
     if (loadingEl) {
       loadingEl.style.display = 'block';
       if (readyEl) readyEl.style.display = 'none';
@@ -1149,8 +1165,8 @@ function applyLockedUI(autoStartQr = true) {
   if (vaultList) vaultList.innerHTML = '';
 
   const qrBtn = document.getElementById('tabModeQrBtn');
-  if (autoStartQr && (!qrBtn || qrBtn.classList.contains('active')) && currentOAuthToken && !currentDirectQrRequestId) {
-    startDirectQrPairing();
+  if (autoStartQr && (!qrBtn || qrBtn.classList.contains('active')) && currentOAuthToken && directQrState === 'IDLE') {
+    startDirectQrPairing(false);
   }
 }
 
@@ -1181,7 +1197,11 @@ async function refreshStatus() {
   if (status && status.isAuthorized && status.isUnlocked) {
     applyUnlockedUI(status);
   } else if (status && !status.isUnlocked) {
-    applyLockedUI();
+    const lockedView = document.getElementById('lockedView');
+    const isCurrentlyLocked = lockedView && lockedView.classList.contains('active');
+    if (!isCurrentlyLocked) {
+      applyLockedUI(true);
+    }
   }
 }
 

@@ -22,6 +22,22 @@
     if (input.getAttribute('data-testid')) pieces.push(input.getAttribute('data-testid'));
     if (input.getAttribute('data-field')) pieces.push(input.getAttribute('data-field'));
 
+    // Check aria-labelledby & aria-describedby
+    const labelledBy = input.getAttribute('aria-labelledby');
+    if (labelledBy) {
+      labelledBy.split(/\s+/).forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.textContent) pieces.push(el.textContent.trim());
+      });
+    }
+    const describedBy = input.getAttribute('aria-describedby');
+    if (describedBy) {
+      describedBy.split(/\s+/).forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.textContent) pieces.push(el.textContent.trim());
+      });
+    }
+
     // Check associated HTML <label> elements
     if (input.labels && input.labels.length > 0) {
       for (const lbl of input.labels) {
@@ -33,28 +49,40 @@
     const parentLabel = input.closest('label');
     if (parentLabel && parentLabel.textContent) pieces.push(parentLabel.textContent.trim());
 
-    // Check previous sibling or parent container label (e.g. Blinkit/Material floating labels)
-    const prevSib = input.previousElementSibling;
-    if (prevSib && (prevSib.tagName === 'LABEL' || prevSib.tagName === 'SPAN' || prevSib.tagName === 'DIV')) {
-      const txt = prevSib.textContent ? prevSib.textContent.trim() : '';
-      if (txt && txt.length < 60) pieces.push(txt);
+    // Check previous & next siblings
+    let sib = input.previousElementSibling;
+    let sibCount = 0;
+    while (sib && sibCount < 3) {
+      const txt = sib.textContent ? sib.textContent.trim() : '';
+      if (txt && txt.length < 80) pieces.push(txt);
+      sib = sib.previousElementSibling;
+      sibCount++;
     }
-    const nextSib = input.nextElementSibling;
-    if (nextSib && (nextSib.tagName === 'LABEL' || nextSib.tagName === 'SPAN' || nextSib.tagName === 'DIV')) {
-      const txt = nextSib.textContent ? nextSib.textContent.trim() : '';
-      if (txt && txt.length < 60) pieces.push(txt);
+    sib = input.nextElementSibling;
+    sibCount = 0;
+    while (sib && sibCount < 3) {
+      const txt = sib.textContent ? sib.textContent.trim() : '';
+      if (txt && txt.length < 80) pieces.push(txt);
+      sib = sib.nextElementSibling;
+      sibCount++;
     }
 
-    // Check parent's label/span
-    const parent = input.parentElement;
-    if (parent) {
-      const lbls = parent.querySelectorAll('label, span[class*="label"], p[class*="label"], div[class*="label"], span[class*="placeholder"], div[class*="placeholder"]');
-      lbls.forEach(lbl => {
-        if (lbl !== input && lbl.textContent) {
-          const txt = lbl.textContent.trim();
-          if (txt && txt.length < 60) pieces.push(txt);
+    // Inspect up to 3 parent containers (grandparent, great-grandparent) for floating labels / headers
+    let cur = input.parentElement;
+    for (let depth = 0; depth < 3 && cur && cur !== document.body; depth++) {
+      if (cur.className && typeof cur.className === 'string') pieces.push(cur.className);
+      if (cur.id) pieces.push(cur.id);
+
+      const textEls = cur.querySelectorAll('label, span, div, p, strong, b, small, h1, h2, h3, h4, h5, h6');
+      textEls.forEach(el => {
+        if (el !== input && !el.contains(input)) {
+          const txt = el.textContent ? el.textContent.trim() : '';
+          if (txt && txt.length > 0 && txt.length < 60) {
+            pieces.push(txt);
+          }
         }
       });
+      cur = cur.parentElement;
     }
 
     return pieces.join(' ').toLowerCase();
@@ -92,33 +120,35 @@
 
     // 2. Expiry Date
     if (
-      autocomplete.includes('cc-exp') || raw.includes('expiry') || raw.includes('expire') ||
-      raw.includes('expiration') || norm.includes('exp date') || norm.includes('valid thru') ||
-      norm.includes('valid till') || norm.includes('valid upto') || raw.includes('mm/yy') || raw.includes('mm / yy') ||
+      autocomplete.includes('cc-exp') || norm.includes('expiry') || norm.includes('expire') ||
+      norm.includes('expiration') || norm.includes('exp date') || norm.includes('expiry date') ||
+      norm.includes('valid thru') || norm.includes('valid till') || norm.includes('valid upto') ||
+      raw.includes('mm/yy') || raw.includes('mm / yy') || raw.includes('mm-yy') || raw.includes('mmyy') ||
       raw.includes('ccexp') || raw.includes('card_exp')
     ) {
       return 'EXPIRY';
     }
 
-    // 3. Card Number
-    if (
-      autocomplete.includes('cc-number') || raw.includes('cardnumber') || raw.includes('card_number') ||
-      raw.includes('card_no') || raw.includes('cardno') || norm.includes('card number') ||
-      norm.includes('card no') || raw.includes('cc_num') || raw.includes('cc-num') ||
-      ph.includes('xxxx') || ph.includes('••••') ||
-      (raw.includes('card') && !raw.includes('holder') && !raw.includes('name') && !raw.includes('exp') && !raw.includes('cvv')) ||
-      (type === 'tel' && (norm.includes('credit') || norm.includes('debit') || norm.includes('card')))
-    ) {
-      return 'CARD_NUMBER';
-    }
-
-    // 4. Cardholder Name
+    // 3. Cardholder Name (Check BEFORE Card Number so "Name on Card" matches Cardholder Name!)
     if (
       autocomplete.includes('cc-name') || raw.includes('cardholder') || raw.includes('card_holder') ||
       norm.includes('name on card') || norm.includes('card holder') || norm.includes('cardholder') ||
-      raw.includes('card_name') || raw.includes('cardname')
+      raw.includes('card_name') || raw.includes('cardname') ||
+      ((norm.includes('name') || norm.includes('holder')) && norm.includes('card') && !norm.includes('nickname'))
     ) {
       return 'CARD_HOLDER';
+    }
+
+    // 4. Card Number
+    if (
+      autocomplete.includes('cc-number') || raw.includes('cardnumber') || raw.includes('card_number') ||
+      raw.includes('card_no') || raw.includes('cardno') || norm.includes('card number') ||
+      norm.includes('card no') || raw.includes('cc_num') || raw.includes('cc-num') || raw.includes('ccnum') ||
+      ph.includes('xxxx') || ph.includes('••••') ||
+      (norm.includes('card') && !norm.includes('holder') && !norm.includes('name') && !norm.includes('exp') && !norm.includes('cvv') && !norm.includes('nickname')) ||
+      (type === 'tel' && (norm.includes('credit') || norm.includes('debit') || norm.includes('card')))
+    ) {
+      return 'CARD_NUMBER';
     }
 
     // 5. Bank IFSC Code
@@ -180,8 +210,8 @@
     chrome.runtime.sendMessage(
       { action: 'GET_AUTOFILL_SUGGESTIONS', payload: { fieldType, domain: window.location.hostname } },
       (response) => {
-        // Double check target is still active element and still completely empty before rendering
-        if (!response || document.activeElement !== target) return;
+        // Double check target is still active/focused element and still completely empty before rendering
+        if (!response || (document.activeElement !== target && !target.matches(':focus'))) return;
         if (isInputFilled(target)) {
           removeDropdown();
           return;
@@ -191,12 +221,8 @@
     );
   }
 
-  // Handle focus on fields: Only suggest if field is completely empty
-  document.addEventListener('focusin', async (e) => {
-    const target = e.target;
+  function handleInputInteraction(target) {
     if (!target || target.tagName !== 'INPUT') return;
-
-    // Do NOT suggest if credentials are already present in the box
     if (isInputFilled(target)) {
       removeDropdown();
       return;
@@ -208,15 +234,27 @@
       return;
     }
 
+    // Immediately suppress browser native autofill so browser password manager does not hijack
+    suppressBrowserAutofill(target);
+
     activeInput = target;
     requestSuggestionsForInput(target, fieldType);
+  }
+
+  // Handle focus on fields
+  document.addEventListener('focusin', (e) => {
+    handleInputInteraction(e.target);
   });
 
-  // Handle click on fields: If clicked an already filled field, dismiss suggestions
+  // Handle click on fields (triggers suggestions even if field was already focused)
   document.addEventListener('click', (e) => {
     const target = e.target;
-    if (target && target.tagName === 'INPUT' && isInputFilled(target)) {
-      removeDropdown();
+    if (target && target.tagName === 'INPUT') {
+      if (isInputFilled(target)) {
+        removeDropdown();
+      } else {
+        handleInputInteraction(target);
+      }
     }
   });
 
@@ -234,13 +272,7 @@
     // If text box is cleared (empty), and user is actively focused on it, re-trigger suggestions
     clearInputFilledState(target);
     if (document.activeElement === target && (!target.value || target.value.trim().length === 0)) {
-      const fieldType = classifyInput(target);
-      if (fieldType) {
-        activeInput = target;
-        requestSuggestionsForInput(target, fieldType);
-      } else {
-        removeDropdown();
-      }
+      handleInputInteraction(target);
     }
   });
 
@@ -257,14 +289,15 @@
     clearInputFilledState(target);
     if (document.activeElement === target && (!target.value || target.value.trim().length === 0)) {
       if (!activeDropdown) {
-        const fieldType = classifyInput(target);
-        if (fieldType) {
-          activeInput = target;
-          requestSuggestionsForInput(target, fieldType);
-        }
+        handleInputInteraction(target);
       }
     }
   });
+
+  // If a field is autofocused on page load (e.g. GitHub username or 2FA):
+  if (document.activeElement && document.activeElement.tagName === 'INPUT' && !isInputFilled(document.activeElement)) {
+    handleInputInteraction(document.activeElement);
+  }
 
   // Close dropdown on outside click
   document.addEventListener('mousedown', (e) => {
@@ -786,7 +819,7 @@
 
       if (message && message.action === 'FILL_CARD_NOW' && message.card) {
         const count = fillAllCardInputsOnPage(message.card);
-        showFillToast(count > 0 ? 'Card details autofilled!' : 'No payment inputs found on page');
+        showFillToast(count > 0 ? 'Card details autofilled!' : 'No payment inputs found on page', count > 0);
         sendResponse({ success: true, count });
       }
     });
@@ -820,7 +853,13 @@
     return filledCount;
   }
 
-  function showFillToast(text) {
+  function showFillToast(text, isSuccess = true) {
+    // If this frame found 0 inputs, but it is top frame with iframes,
+    // suppress negative toast since an iframe contains the payment gateway!
+    if (!isSuccess && window.self === window.top && document.querySelectorAll('iframe').length > 0) {
+      return;
+    }
+
     const toast = document.createElement('div');
     toast.style.cssText = `
       position: fixed;

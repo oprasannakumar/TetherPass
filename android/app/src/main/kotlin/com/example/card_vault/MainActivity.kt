@@ -86,6 +86,8 @@ class MainActivity: FlutterFragmentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        AutofillBridge.clear()
+        // Do NOT clear AutofillBridge on Activity destroy!
+        // The background AutofillService needs to provide credentials while the user uses other apps (like Amazon).
+        // AutofillBridge is cleared only on explicit lock or session expiry from Flutter.
     }
 }
