@@ -14,13 +14,21 @@
   function suppressBrowserAutofill(input) {
     if (!input) return;
     managedInput = input;
-    originalAutocomplete = input.getAttribute('autocomplete');
+    if (input.getAttribute('autocomplete') !== 'off' && (!input.dataset || !input.dataset.tpOrigAc)) {
+      originalAutocomplete = input.getAttribute('autocomplete');
+      if (input.dataset) {
+        input.dataset.tpOrigAc = originalAutocomplete !== null ? originalAutocomplete : '__none__';
+      }
+    }
     input.setAttribute('autocomplete', 'off');
   }
 
   function restoreBrowserAutofill() {
     if (managedInput) {
-      if (originalAutocomplete !== null) {
+      const orig = managedInput.dataset?.tpOrigAc;
+      if (orig && orig !== '__none__') {
+        managedInput.setAttribute('autocomplete', orig);
+      } else if (originalAutocomplete !== null) {
         managedInput.setAttribute('autocomplete', originalAutocomplete);
       } else {
         managedInput.removeAttribute('autocomplete');
@@ -135,7 +143,9 @@
     const raw = getElementTextContext(input);
     const norm = raw.replace(/[-_./]/g, ' ');
     const type = (input.type || '').toLowerCase();
-    const autocomplete = (input.getAttribute('autocomplete') || '').toLowerCase();
+    const origAc = input.dataset?.tpOrigAc;
+    const rawAc = input.getAttribute('autocomplete') || '';
+    const autocomplete = ((origAc && origAc !== '__none__') ? origAc : rawAc).toLowerCase();
     const ph = (input.placeholder || '').toLowerCase();
 
     // 0. Explicit Password Input Type
@@ -252,14 +262,14 @@
 
   function isInputFilled(input) {
     if (!input) return false;
-    if (typeof input.value === 'string' && input.value.trim().length > 0) return true;
-    if (input.dataset && input.dataset.tpFilled === 'true') return true;
-    try {
-      if (input.matches && (input.matches(':-webkit-autofill') || input.matches(':autofill'))) {
-        return true;
+    const val = typeof input.value === 'string' ? input.value.trim() : '';
+    if (val.length === 0) {
+      if (input.dataset) {
+        delete input.dataset.tpFilled;
       }
-    } catch (_) {}
-    return false;
+      return false;
+    }
+    return true;
   }
 
   function clearInputFilledState(input) {
@@ -277,8 +287,11 @@
     chrome.runtime.sendMessage(
       { action: 'GET_AUTOFILL_SUGGESTIONS', payload: { fieldType, domain: window.location.hostname } },
       (response) => {
-        // Double check target is still active/focused element and still completely empty before rendering
-        if (!response || (document.activeElement !== target && !target.matches(':focus'))) return;
+        if (!response) return;
+        const isStillTarget = (target === activeInput) ||
+                              (document.activeElement === target) ||
+                              (target.matches && target.matches(':focus'));
+        if (!isStillTarget) return;
         if (isInputFilled(target)) {
           removeDropdown();
           return;
@@ -290,6 +303,7 @@
 
   function handleInputInteraction(target) {
     if (!target || target.tagName !== 'INPUT') return;
+    clearInputFilledState(target);
     if (isInputFilled(target)) {
       removeDropdown();
       return;
@@ -317,6 +331,7 @@
   document.addEventListener('click', (e) => {
     const target = e.target;
     if (target && target.tagName === 'INPUT') {
+      clearInputFilledState(target);
       if (isInputFilled(target)) {
         removeDropdown();
       } else {
@@ -325,22 +340,26 @@
     }
   });
 
-  // Handle typing, clearing, and pasting in fields
-  document.addEventListener('input', (e) => {
-    const target = e.target;
-    if (!target || target.tagName !== 'INPUT') return;
+  // Handle typing, clearing, cut, change, and pasting in fields
+  ['input', 'change', 'cut', 'paste'].forEach(evtName => {
+    document.addEventListener(evtName, (e) => {
+      const target = e.target;
+      if (!target || target.tagName !== 'INPUT') return;
 
-    // If text box now contains text/credentials, dismiss suggestions immediately
-    if (isInputFilled(target)) {
-      removeDropdown();
-      return;
-    }
+      clearInputFilledState(target);
 
-    // If text box is cleared (empty), and user is actively focused on it, re-trigger suggestions
-    clearInputFilledState(target);
-    if (document.activeElement === target && (!target.value || target.value.trim().length === 0)) {
-      handleInputInteraction(target);
-    }
+      // If text box now contains text/credentials, dismiss suggestions immediately
+      if (isInputFilled(target)) {
+        removeDropdown();
+        return;
+      }
+
+      // If text box is empty, and user is focused on it, re-trigger suggestions immediately!
+      const isFocused = (document.activeElement === target) || (target.matches && target.matches(':focus'));
+      if (isFocused && (!target.value || target.value.trim().length === 0)) {
+        handleInputInteraction(target);
+      }
+    });
   });
 
   // Listen for Backspace/Delete clearing
@@ -348,13 +367,15 @@
     const target = e.target;
     if (!target || target.tagName !== 'INPUT') return;
 
+    clearInputFilledState(target);
+
     if (isInputFilled(target)) {
       removeDropdown();
       return;
     }
 
-    clearInputFilledState(target);
-    if (document.activeElement === target && (!target.value || target.value.trim().length === 0)) {
+    const isFocused = (document.activeElement === target) || (target.matches && target.matches(':focus'));
+    if (isFocused && (!target.value || target.value.trim().length === 0)) {
       if (!activeDropdown) {
         handleInputInteraction(target);
       }
