@@ -768,7 +768,7 @@ async function handleRequestMobilePushApproval() {
     }
 
     const requestId = startRes.requestId;
-    let secondsLeft = 60;
+    let secondsLeft = 30;
 
     // Render Pairing QR Code for Instant Phone Scan
     try {
@@ -1051,7 +1051,7 @@ async function startDirectQrPairing(force = false) {
 
     const requestId = startRes.requestId;
     currentDirectQrRequestId = requestId;
-    qrSessionExpiresAt = Date.now() + 60000; // Strictly 60 seconds
+    qrSessionExpiresAt = Date.now() + 30000; // Strictly 30 seconds
     isQrExpired = false;
     directQrState = 'ACTIVE';
 

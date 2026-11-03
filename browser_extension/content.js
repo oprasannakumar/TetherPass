@@ -5,11 +5,11 @@
  */
 
 (function () {
-  let activeDropdown = null;
-  let activeInput = null;
-  let selectedItemIndex = -1;
-  let managedInput = null;
-  let originalAutocomplete = null;
+  var activeDropdown = null;
+  var activeInput = null;
+  var selectedItemIndex = -1;
+  var managedInput = null;
+  var originalAutocomplete = null;
 
   function suppressBrowserAutofill(input) {
     if (!input) return;
