@@ -8,6 +8,7 @@ import '../services/device_identity_service.dart';
 import '../services/drive_service.dart';
 import '../services/vault_security_service.dart';
 import '../widgets/totp_qr_scanner_dialog.dart';
+import '../widgets/tether_sync_dialog.dart';
 
 class BrowserExtensionScreen extends StatefulWidget {
   const BrowserExtensionScreen({super.key});
@@ -80,17 +81,14 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
 
     if (confirmed == true && mounted) {
       final drive = context.read<DriveService>();
-      final ok = await drive.terminateDesktopSession(sessionId);
-      if (ok && mounted) {
+      final ok = await TetherSyncDialog.run<bool>(
+        context: context,
+        mode: TetherSyncMode.disconnecting,
+        deviceName: deviceName,
+        task: () => drive.terminateDesktopSession(sessionId),
+      );
+      if (ok == true && mounted) {
         await _fetchSessions();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Session on "$deviceName" terminated and locked.'),
-              backgroundColor: Colors.red.shade700,
-            ),
-          );
-        }
       }
     }
   }
@@ -190,42 +188,20 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
     final drive = context.read<DriveService>();
     final masterPwd = await sec.getMasterPassword();
 
-    final ok = await drive.respondToAccessRequest(
-      requestId: requestId,
-      approved: true,
+    final ok = await TetherSyncDialog.run<bool>(
+      context: context,
+      mode: TetherSyncMode.connecting,
       deviceName: targetDevice,
-      masterPassword: masterPwd,
+      task: () => drive.respondToAccessRequest(
+        requestId: requestId!,
+        approved: true,
+        deviceName: targetDevice,
+        masterPassword: masterPwd,
+      ),
     );
 
-    if (ok && mounted) {
+    if (ok == true && mounted) {
       await _fetchSessions();
-      HapticFeedback.heavyImpact();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '✓ "$targetDevice" paired & unlocked successfully via QR!',
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to transmit authorization. Check Google Drive connection.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
     }
   }
 

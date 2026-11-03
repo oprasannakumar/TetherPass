@@ -207,8 +207,21 @@ function initUI() {
 
   // Listen for instant lock / status notifications from background service worker
   if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-    chrome.runtime.onMessage.addListener((message) => {
+    chrome.runtime.onMessage.addListener(async (message) => {
       if (message && message.action === 'VAULT_STATUS_CHANGED') {
+        const unlockedView = document.getElementById('unlockedView');
+        if (unlockedView && unlockedView.classList.contains('active') && !message.isUnlocked) {
+          const anim = showTransitionAnimation({
+            mode: 'disconnect',
+            title: 'Securing Vault...',
+            subtitle: message.reason || 'Session was terminated remotely from phone.'
+          });
+          await new Promise(r => setTimeout(r, 600));
+          await anim.finish({
+            title: 'Session Locked',
+            subtitle: 'Sensitive data cleared from memory.'
+          });
+        }
         refreshStatus();
       }
     });
@@ -565,7 +578,42 @@ async function handleGoogleSignIn() {
   }
 }
 
+function showTransitionAnimation({ mode = 'connect', title = 'Connecting...', subtitle = 'Please wait...' }) {
+  const overlay = document.getElementById('transitionOverlay');
+  const titleEl = document.getElementById('transitionTitle');
+  const subEl = document.getElementById('transitionSub');
+  const iconEl = document.getElementById('transitionMainIcon');
+  if (!overlay) return { finish: async () => {} };
+
+  overlay.className = `transition-overlay show ${mode === 'disconnect' ? 'mode-disconnect' : ''}`;
+  if (titleEl) titleEl.textContent = title;
+  if (subEl) subEl.textContent = subtitle;
+  if (iconEl) iconEl.textContent = mode === 'disconnect' ? '🔒' : '⚡';
+
+  overlay.style.display = 'flex';
+
+  return {
+    finish: async ({ title: endTitle, subtitle: endSub, isSuccess = true } = {}) => {
+      if (titleEl && endTitle) titleEl.textContent = endTitle;
+      if (subEl && endSub) subEl.textContent = endSub;
+      if (iconEl) iconEl.textContent = isSuccess ? (mode === 'disconnect' ? '🔒' : '✓') : '⚠️';
+      overlay.classList.add('state-complete');
+
+      await new Promise(r => setTimeout(r, 650));
+      overlay.classList.remove('show');
+      await new Promise(r => setTimeout(r, 220));
+      overlay.style.display = 'none';
+      overlay.className = 'transition-overlay';
+    }
+  };
+}
+
 async function handleDisconnectOAuth() {
+  const anim = showTransitionAnimation({
+    mode: 'disconnect',
+    title: 'Disconnecting Account...',
+    subtitle: 'Unlinking Google Drive and securing local cache...'
+  });
   stopDirectQrPairing();
   currentOAuthToken = null;
   currentGoogleAccount = null;
@@ -578,6 +626,11 @@ async function handleDisconnectOAuth() {
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     await chrome.storage.local.remove(['googleAccountEmail', 'googleAccountPicture', 'googleOAuthToken']);
   }
+
+  await anim.finish({
+    title: 'Account Unlinked',
+    subtitle: 'Local authorization wiped.'
+  });
 
   const unlinkedBox = document.getElementById('oauthUnlinkedBox');
   const linkedBox = document.getElementById('oauthLinkedBox');
@@ -753,9 +806,18 @@ async function handleRequestMobilePushApproval() {
 
       if (pollRes.status === 'APPROVED' && pollRes.success) {
         cancelApprovalPolling();
+        const anim = showTransitionAnimation({
+          mode: 'connect',
+          title: 'Connecting to Phone...',
+          subtitle: 'Push approved with Biometrics! Decrypting vault...'
+        });
+        await new Promise(r => setTimeout(r, 600));
         applyUnlockedUI(pollRes);
-        showSuccess('✓ Mobile approved with Biometrics! Vault unlocked.');
         if (passwordInput) passwordInput.value = '';
+        await anim.finish({
+          title: 'Connected & Unlocked!',
+          subtitle: 'Welcome to your secure vault.'
+        });
       } else if (pollRes.status === 'DENIED') {
         cancelApprovalPolling();
         showError('Access request was denied on your mobile phone.');
@@ -992,7 +1054,17 @@ async function startDirectQrPairing(force = false) {
       if (pollRes.status === 'APPROVED' && pollRes.success) {
         stopDirectQrPairing(true);
         hideMessages();
+        const anim = showTransitionAnimation({
+          mode: 'connect',
+          title: 'Connecting to Phone...',
+          subtitle: 'Mobile QR Verified! Decrypting vault...'
+        });
+        await new Promise(r => setTimeout(r, 650));
         applyUnlockedUI(pollRes);
+        await anim.finish({
+          title: 'Connected & Unlocked!',
+          subtitle: 'Vault is active for 30 minutes.'
+        });
       } else if (pollRes.status === 'DENIED') {
         stopDirectQrPairing(true);
         showError('Pairing request was denied on mobile phone.');
@@ -1207,21 +1279,33 @@ async function refreshStatus() {
 }
 
 function handleLock() {
-  // Instantly lock the UI with ZERO latency
+  const anim = showTransitionAnimation({
+    mode: 'disconnect',
+    title: 'Securing Vault...',
+    subtitle: 'Locking session and clearing sensitive data from memory...'
+  });
+
   stopDirectQrPairing(true);
   cancelApprovalPolling();
   currentVaultItems = { cards: [], bankAccounts: [], passwords: [] };
-  applyLockedUI(false); // DO NOT auto-generate QR before lock completes on Drive!
-  showSuccess('Vault locked.');
 
   // Notify background script to clear in-memory credentials and update Drive
   sendExtensionMessage({
     action: 'LOCK_VAULT',
     payload: { token: currentOAuthToken }
-  }).then(() => {
-    // Lock is complete on Drive, now generate a clean fresh QR code
+  }).then(async () => {
+    await anim.finish({
+      title: 'Vault Locked & Protected',
+      subtitle: 'Session terminated. Point your phone camera to reconnect.'
+    });
+    applyLockedUI(false);
     startDirectQrPairing(true);
-  }).catch(() => {
+  }).catch(async () => {
+    await anim.finish({
+      title: 'Vault Locked',
+      subtitle: 'Local cache cleared.'
+    });
+    applyLockedUI(false);
     startDirectQrPairing(true);
   });
 }

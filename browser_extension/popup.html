@@ -245,6 +245,28 @@
         </div>
       </div>
     </div>
+
+    <!-- ── Smooth Animated Transition Overlay (Connection & Disconnection) ── -->
+    <div id="transitionOverlay" class="transition-overlay" style="display: none;">
+      <div class="transition-backdrop"></div>
+      <div class="transition-card">
+        <div class="transition-animation-wrap">
+          <div id="transitionRadarRings" class="radar-rings">
+            <div class="radar-ring r1"></div>
+            <div class="radar-ring r2"></div>
+            <div class="radar-ring r3"></div>
+          </div>
+          <div id="transitionIconBox" class="transition-icon-box">
+            <span id="transitionMainIcon" class="transition-icon">⚡</span>
+          </div>
+        </div>
+        <div id="transitionTitle" class="transition-title">Connecting...</div>
+        <div id="transitionSub" class="transition-sub">Establishing biometric tether...</div>
+        <div class="transition-bar-wrap">
+          <div id="transitionBarFill" class="transition-bar-fill"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="crypto_utils.js"></script>

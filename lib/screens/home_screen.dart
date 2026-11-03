@@ -12,6 +12,7 @@ import '../services/drive_service.dart';
 import '../services/vault_security_service.dart';
 import '../widgets/app_tour_dialog.dart';
 import '../widgets/spotlight_tour.dart';
+import '../widgets/tether_sync_dialog.dart';
 import 'add_edit_screen.dart';
 import 'item_detail_screen.dart';
 import 'settings_screen.dart';
@@ -349,36 +350,17 @@ class _HomeScreenState extends State<HomeScreen> {
             masterPwd = await sec.getMasterPassword();
           }
         }
-        await drive.respondToAccessRequest(
-          requestId: requestId,
-          approved: true,
+        await TetherSyncDialog.run<bool>(
+          context: context,
+          mode: TetherSyncMode.connecting,
           deviceName: deviceName,
-          masterPassword: masterPwd,
+          task: () => drive.respondToAccessRequest(
+            requestId: requestId,
+            approved: true,
+            deviceName: deviceName,
+            masterPassword: masterPwd,
+          ),
         );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      'Browser extension approved for 30 mins',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.green.shade700,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          );
-        }
       } else if (mounted) {
         await drive.respondToAccessRequest(requestId: requestId, approved: false);
       }
