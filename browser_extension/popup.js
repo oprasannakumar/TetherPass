@@ -1133,7 +1133,7 @@ function applyUnlockedUI(data) {
   }
 }
 
-function applyLockedUI() {
+function applyLockedUI(autoStartQr = true) {
   cachedAuthExpiresAt = null;
   const statusBadge = document.getElementById('statusBadge');
   const statusText = document.getElementById('statusText');
@@ -1149,7 +1149,7 @@ function applyLockedUI() {
   if (vaultList) vaultList.innerHTML = '';
 
   const qrBtn = document.getElementById('tabModeQrBtn');
-  if ((!qrBtn || qrBtn.classList.contains('active')) && currentOAuthToken && !currentDirectQrRequestId) {
+  if (autoStartQr && (!qrBtn || qrBtn.classList.contains('active')) && currentOAuthToken && !currentDirectQrRequestId) {
     startDirectQrPairing();
   }
 }
@@ -1180,15 +1180,6 @@ async function refreshStatus() {
   const status = await sendExtensionMessage({ action: 'GET_STATUS' });
   if (status && status.isAuthorized && status.isUnlocked) {
     applyUnlockedUI(status);
-
-    // Fetch fresh dynamic TOTPs and suggestions if needed
-    const res = await sendExtensionMessage({
-      action: 'GET_AUTOFILL_SUGGESTIONS',
-      payload: { fieldType: 'ALL' }
-    });
-    if (res && res.authorized) {
-      applyUnlockedUI(res);
-    }
   } else if (status && !status.isUnlocked) {
     applyLockedUI();
   }
@@ -1196,17 +1187,22 @@ async function refreshStatus() {
 
 function handleLock() {
   // Instantly lock the UI with ZERO latency
-  stopDirectQrPairing();
+  stopDirectQrPairing(true);
   cancelApprovalPolling();
   currentVaultItems = { cards: [], bankAccounts: [], passwords: [] };
-  applyLockedUI();
+  applyLockedUI(false); // DO NOT auto-generate QR before lock completes on Drive!
   showSuccess('Vault locked.');
 
   // Notify background script to clear in-memory credentials and update Drive
   sendExtensionMessage({
     action: 'LOCK_VAULT',
     payload: { token: currentOAuthToken }
-  }).catch(() => {});
+  }).then(() => {
+    // Lock is complete on Drive, now generate a clean fresh QR code
+    startDirectQrPairing(true);
+  }).catch(() => {
+    startDirectQrPairing(true);
+  });
 }
 
 function showError(msg) {

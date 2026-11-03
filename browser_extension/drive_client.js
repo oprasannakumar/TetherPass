@@ -22,8 +22,8 @@ class DriveClient {
   }
 
   /**
-   * Performs real Google OAuth 2.0 Sign-In via chrome.identity.launchWebAuthFlow
-   * or chrome.identity.getAuthToken.
+   * Performs real Google OAuth 2.0 Sign-In via chrome.identity.getAuthToken
+   * or chrome.identity.launchWebAuthFlow when interactive is explicitly requested.
    */
   async signInWithGoogle() {
     return new Promise((resolve, reject) => {
@@ -31,43 +31,49 @@ class DriveClient {
         return reject(new Error('chrome.identity API unavailable'));
       }
 
-      const redirectUri = chrome.identity.getRedirectURL();
-      const scopes = [
-        'https://www.googleapis.com/auth/drive.appdata',
-        'https://www.googleapis.com/auth/drive.file',
-        'https://www.googleapis.com/auth/userinfo.email',
-        'https://www.googleapis.com/auth/userinfo.profile'
-      ].join(' ');
-
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
-        `?client_id=${encodeURIComponent(this.clientId)}` +
-        `&response_type=token` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&scope=${encodeURIComponent(scopes)}` +
-        `&prompt=consent`;
-
-      // 1. Try launchWebAuthFlow (supports custom redirect URI / standard OAuth)
-      chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (responseUrl) => {
-        if (!chrome.runtime.lastError && responseUrl) {
-          try {
-            const url = new URL(responseUrl);
-            const hash = url.hash.substring(1);
-            const params = new URLSearchParams(hash);
-            const token = params.get('access_token');
-            if (token) {
-              this.token = token;
-              return resolve(token);
-            }
-          } catch (_) {}
+      // 1. Try getAuthToken first (seamless if account already authorized)
+      chrome.identity.getAuthToken({ interactive: true }, (token) => {
+        if (!chrome.runtime.lastError && token) {
+          this.token = token;
+          if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+            chrome.storage.local.set({ googleOAuthToken: token });
+          }
+          return resolve(token);
         }
 
-        // 2. Fallback to getAuthToken
-        chrome.identity.getAuthToken({ interactive: true }, (token) => {
-          if (chrome.runtime.lastError || !token) {
-            return reject(new Error(chrome.runtime.lastError ? chrome.runtime.lastError.message : 'Google Sign-In was cancelled'));
+        // 2. Fallback to launchWebAuthFlow with select_account
+        const redirectUri = chrome.identity.getRedirectURL();
+        const scopes = [
+          'https://www.googleapis.com/auth/drive.appdata',
+          'https://www.googleapis.com/auth/drive.file',
+          'https://www.googleapis.com/auth/userinfo.email',
+          'https://www.googleapis.com/auth/userinfo.profile'
+        ].join(' ');
+
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
+          `?client_id=${encodeURIComponent(this.clientId)}` +
+          `&response_type=token` +
+          `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+          `&scope=${encodeURIComponent(scopes)}` +
+          `&prompt=select_account`;
+
+        chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (responseUrl) => {
+          if (!chrome.runtime.lastError && responseUrl) {
+            try {
+              const url = new URL(responseUrl);
+              const hash = url.hash.substring(1);
+              const params = new URLSearchParams(hash);
+              const accessToken = params.get('access_token');
+              if (accessToken) {
+                this.token = accessToken;
+                if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                  chrome.storage.local.set({ googleOAuthToken: accessToken });
+                }
+                return resolve(accessToken);
+              }
+            } catch (_) {}
           }
-          this.token = token;
-          resolve(token);
+          reject(new Error(chrome.runtime.lastError ? chrome.runtime.lastError.message : 'Google Sign-In was cancelled'));
         });
       });
     });
@@ -75,6 +81,41 @@ class DriveClient {
 
   async getAuthToken(interactive = false) {
     if (this.token) return this.token;
+
+    // Check storage for persisted token
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      try {
+        const stored = await chrome.storage.local.get('googleOAuthToken');
+        if (stored?.googleOAuthToken) {
+          this.token = stored.googleOAuthToken;
+          return this.token;
+        }
+      } catch (_) {}
+    }
+
+    if (!interactive) {
+      // Strictly non-interactive: try silent retrieval without opening any window
+      if (typeof chrome !== 'undefined' && chrome.identity?.getAuthToken) {
+        try {
+          const silentToken = await new Promise((resolve) => {
+            chrome.identity.getAuthToken({ interactive: false }, (t) => {
+              if (chrome.runtime.lastError || !t) resolve(null);
+              else resolve(t);
+            });
+          });
+          if (silentToken) {
+            this.token = silentToken;
+            if (chrome.storage?.local) {
+              chrome.storage.local.set({ googleOAuthToken: silentToken });
+            }
+            return silentToken;
+          }
+        } catch (_) {}
+      }
+      return null; // Return null safely — NEVER pop up interactive prompt on startup!
+    }
+
+    // Only launch interactive sign-in flow if explicitly requested by user click
     return await this.signInWithGoogle();
   }
 
@@ -92,11 +133,16 @@ class DriveClient {
       return { id: this._fileIdCache.get(filename), name: filename };
     }
     const token = await this.getAuthToken(false);
+    if (!token) return null;
     const query = encodeURIComponent(`name = '${filename}' and trashed = false`);
     const url = `https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive,appDataFolder&fields=files(id,name,modifiedTime)`;
 
     const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` }
+      cache: 'no-store',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Cache-Control': 'no-cache, no-store'
+      }
     });
 
     if (!res.ok) {
@@ -114,10 +160,16 @@ class DriveClient {
 
   async downloadFileContent(fileId) {
     const token = await this.getAuthToken(false);
-    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+    if (!token) throw new Error('Not connected to Google Drive');
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&_t=${Date.now()}`;
 
     const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` }
+      cache: 'no-store',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      }
     });
 
     if (!res.ok) {
@@ -137,6 +189,7 @@ class DriveClient {
    */
   async uploadOrUpdateFile(filename, textContent) {
     const token = await this.getAuthToken(false);
+    if (!token) throw new Error('Not connected to Google Drive');
     const existing = await this.findFile(filename);
 
     const boundary = '-------314159265358979323846';
@@ -471,25 +524,31 @@ class DriveClient {
       // Execute both Drive updates in parallel for fast lock execution
       const taskRequest = (async () => {
         try {
-          let existingReqId = sessionId || '';
-          if (!existingReqId) {
-            const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
-            if (reqFile) {
-              try {
-                const reqContent = await this.downloadFileContent(reqFile.id);
-                const req = JSON.parse(reqContent);
-                if (req?.requestId) existingReqId = req.requestId;
-              } catch (_) {}
-            }
+          const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
+          if (reqFile) {
+            try {
+              const reqContent = await this.downloadFileContent(reqFile.id);
+              const req = JSON.parse(reqContent);
+              // CRITICAL: Protect fresh QR pairing requests.
+              // If a new pairing session is already PENDING with a different requestId,
+              // DO NOT overwrite it with LOCKED!
+              if (req?.status === 'PENDING' && req?.requestId && req.requestId !== sessionId) {
+                console.log('[TetherPass] Newer pending request active on Drive, skipping lock overwrite:', req.requestId);
+                return;
+              }
+              if (sessionId && req?.requestId && req.requestId !== sessionId && req.status !== 'APPROVED') {
+                return;
+              }
+            } catch (_) {}
           }
 
           const reqClear = JSON.stringify({
-            requestId: existingReqId,
+            requestId: sessionId || '',
             status: 'LOCKED',
             locked_at: Date.now()
           });
           await this.uploadOrUpdateFile(DRIVE_REQUEST_FILENAME, reqClear);
-          console.log('[TetherPass] Access request overwritten with LOCKED on Drive, reqId:', existingReqId);
+          console.log('[TetherPass] Access request overwritten with LOCKED on Drive, reqId:', sessionId || 'all');
         } catch (e) {
           console.warn('[TetherPass] Could not overwrite access request:', e.message);
         }

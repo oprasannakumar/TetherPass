@@ -7,6 +7,15 @@ importScripts('crypto_utils.js', 'drive_client.js');
 
 const driveClient = new DriveClient();
 
+// Automatically restore OAuth token on startup without popping up any interactive window
+if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+  chrome.storage.local.get('googleOAuthToken', (data) => {
+    if (data?.googleOAuthToken) {
+      driveClient.setToken(data.googleOAuthToken);
+    }
+  });
+}
+
 // Restrict session storage access strictly to trusted extension contexts (background & popup)
 if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
   if (chrome.storage.session.setAccessLevel) {
@@ -213,6 +222,15 @@ async function verifyMobileAuth() {
   await restoreSessionIfNeeded();
   if (!memoryVault.isAuthorized || !memoryVault.isUnlocked) return;
 
+  if (!driveClient.token) {
+    const stored = await chrome.storage.local.get('googleOAuthToken');
+    if (stored?.googleOAuthToken) {
+      driveClient.setToken(stored.googleOAuthToken);
+    } else {
+      return; // Do not check Drive without token; strictly avoid triggering interactive OAuth
+    }
+  }
+
   // Poll Google Drive for intentional remote revocation or termination from mobile
   try {
     const isRevoked = await driveClient.isAuthorizationRevoked(
@@ -401,9 +419,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (action === 'GET_AUTOFILL_SUGGESTIONS') {
       try {
-        if (memoryVault.isAuthorized && memoryVault.isUnlocked) {
-          await verifyMobileAuth();
-        }
         const res = await handleGetAutofillSuggestions(payload);
         sendResponse(res);
       } catch (_) {
