@@ -165,14 +165,24 @@
       return 'CVV';
     }
 
-    // 3. Expiry Date
-    if (
+    // 3. Expiry Date (Full, Month, Year)
+    const isExpiryRelated = !raw.includes('dob') && !raw.includes('birth') && !autocomplete.includes('bday') && (
       autocomplete.includes('cc-exp') || norm.includes('expiry') || norm.includes('expire') ||
       norm.includes('expiration') || norm.includes('exp date') || norm.includes('expiry date') ||
       norm.includes('valid thru') || norm.includes('valid till') || norm.includes('valid upto') ||
       raw.includes('mm/yy') || raw.includes('mm / yy') || raw.includes('mm-yy') || raw.includes('mmyy') ||
-      raw.includes('ccexp') || raw.includes('card_exp')
-    ) {
+      raw.includes('ccexp') || raw.includes('card_exp') || ph === 'mm' || ph === 'yy' || ph === 'yyyy' ||
+      ph === 'mm/yy' || ph === 'mm / yy'
+    );
+
+    if (isExpiryRelated) {
+      const isMonth = autocomplete.includes('cc-exp-month') || raw.includes('month') || raw.includes('exp_m') ||
+        raw.includes('ccexpm') || ph === 'mm' || (input.maxLength === 2 && (norm.includes('month') || ph.includes('m')));
+      const isYear = autocomplete.includes('cc-exp-year') || raw.includes('year') || raw.includes('exp_y') ||
+        raw.includes('ccexpy') || ph === 'yy' || ph === 'yyyy' || (input.maxLength <= 4 && (norm.includes('year') || ph.includes('y')));
+
+      if (isMonth && !isYear) return 'EXPIRY_MONTH';
+      if (isYear && !isMonth) return 'EXPIRY_YEAR';
       return 'EXPIRY';
     }
 
@@ -471,7 +481,7 @@
       itemsList.className = 'cv-items-list';
 
       // 1. CARDS (If card field or general payment)
-      if (['CARD_NUMBER', 'EXPIRY', 'CVV', 'CARD_HOLDER'].includes(fieldType) && data.cards && data.cards.length > 0) {
+      if (['CARD_NUMBER', 'EXPIRY', 'EXPIRY_MONTH', 'EXPIRY_YEAR', 'CVV', 'CARD_HOLDER'].includes(fieldType) && data.cards && data.cards.length > 0) {
         data.cards.forEach(card => {
           const itemRow = document.createElement('div');
           itemRow.className = 'cv-item-row';
@@ -682,13 +692,260 @@
     return inputs;
   }
 
+  function parseCardExpiry(expiryStr) {
+    if (!expiryStr) return null;
+    const clean = String(expiryStr).trim();
+    let m = null;
+    let y = null;
+
+    if (clean.includes('/')) {
+      const parts = clean.split('/');
+      m = parts[0].trim();
+      y = parts[1].trim();
+    } else if (clean.includes('-')) {
+      const parts = clean.split('-');
+      m = parts[0].trim();
+      y = parts[1].trim();
+    } else if (/^\d{4}$/.test(clean)) {
+      m = clean.slice(0, 2);
+      y = clean.slice(2, 4);
+    } else if (/^\d{6}$/.test(clean)) {
+      m = clean.slice(0, 2);
+      y = clean.slice(2, 6);
+    }
+
+    if (!m || !y) return null;
+
+    let monthNum = parseInt(m, 10);
+    let yearNum = parseInt(y, 10);
+    if (isNaN(monthNum) || isNaN(yearNum)) return null;
+
+    if (monthNum > 12 && yearNum <= 12) {
+      const tmp = monthNum;
+      monthNum = yearNum;
+      yearNum = tmp;
+    }
+    if (monthNum < 1 || monthNum > 12) return null;
+
+    const month2 = String(monthNum).padStart(2, '0');
+    const month1 = String(monthNum);
+    const shortMonths = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const fullMonths = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthShort = shortMonths[monthNum] || '';
+    const monthFull = fullMonths[monthNum] || '';
+
+    const year4 = yearNum < 100 ? String(2000 + yearNum) : String(yearNum);
+    const year2 = year4.slice(-2);
+
+    return {
+      monthNum,
+      month2,
+      month1,
+      monthShort,
+      monthFull,
+      year4,
+      year2
+    };
+  }
+
+  function setSelectValue(selectEl, candidateValues) {
+    if (!selectEl || !selectEl.options || selectEl.options.length === 0) return false;
+
+    const candidates = candidateValues.map(v => String(v).trim().toLowerCase()).filter(Boolean);
+    if (candidates.length === 0) return false;
+
+    let bestIndex = -1;
+    let bestScore = 0;
+
+    for (let i = 0; i < selectEl.options.length; i++) {
+      const opt = selectEl.options[i];
+      const optVal = (opt.value || '').trim().toLowerCase();
+      const optText = (opt.text || opt.textContent || '').trim().toLowerCase();
+
+      for (const cand of candidates) {
+        // 1. Exact value match (score 100)
+        if (optVal === cand) {
+          bestIndex = i;
+          bestScore = 100;
+          break;
+        }
+        // 2. Exact text match (score 95)
+        if (optText === cand && bestScore < 95) {
+          bestIndex = i;
+          bestScore = 95;
+        }
+        // 3. Numeric match (e.g. "5" matches "05")
+        const candNum = parseInt(cand, 10);
+        if (!isNaN(candNum) && (optVal === String(candNum) || optVal === String(candNum).padStart(2, '0')) && bestScore < 90) {
+          bestIndex = i;
+          bestScore = 90;
+        }
+        // 4. Token match in text (e.g. "05 - May", "May (05)", "2028")
+        const tokens = optText.split(/[\s\-/,()]+/);
+        if (tokens.includes(cand) && bestScore < 85) {
+          bestIndex = i;
+          bestScore = 85;
+        }
+        // 5. Text starts with or contains candidate
+        if (optText.startsWith(cand) && bestScore < 80) {
+          bestIndex = i;
+          bestScore = 80;
+        } else if (optText.includes(cand) && bestScore < 70) {
+          bestIndex = i;
+          bestScore = 70;
+        }
+      }
+      if (bestScore === 100) break;
+    }
+
+    if (bestIndex >= 0) {
+      selectEl.selectedIndex = bestIndex;
+      selectEl.value = selectEl.options[bestIndex].value;
+
+      try {
+        const tracker = selectEl._valueTracker;
+        if (tracker) tracker.setValue(selectEl.value);
+      } catch (_) {}
+
+      try {
+        selectEl.dispatchEvent(new Event('focus', { bubbles: true }));
+        selectEl.dispatchEvent(new Event('input', { bubbles: true }));
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+        selectEl.dispatchEvent(new Event('blur', { bubbles: true }));
+      } catch (_) {}
+
+      // Synchronize custom dropdown UI display (Amazon a-dropdown, select2, bootstrap, etc.)
+      try {
+        const parentDropdown = selectEl.closest('.a-dropdown-container, .dropdown, .custom-select, [class*="select"]');
+        if (parentDropdown) {
+          const promptSpan = parentDropdown.querySelector('.a-dropdown-prompt, [class*="prompt"], [class*="selected-text"], .select2-selection__rendered');
+          if (promptSpan) {
+            promptSpan.textContent = selectEl.options[bestIndex].text || selectEl.options[bestIndex].textContent || selectEl.options[bestIndex].value;
+          }
+        }
+      } catch (_) {}
+
+      return true;
+    }
+    return false;
+  }
+
+  function fillCardExpirySelects(container, cardExpiry) {
+    const parsed = parseCardExpiry(cardExpiry);
+    if (!parsed) return 0;
+
+    let selects = Array.from((container || document).querySelectorAll('select'));
+    if (selects.length === 0 && container && container !== document) {
+      selects = Array.from(document.querySelectorAll('select'));
+    }
+    if (selects.length === 0) return 0;
+
+    let filledCount = 0;
+    let monthSelect = null;
+    let yearSelect = null;
+    let combinedSelect = null;
+
+    selects.forEach(sel => {
+      if (sel.disabled) return;
+
+      const raw = getElementTextContext(sel);
+      const norm = raw.replace(/[-_./]/g, ' ');
+      const autocomplete = (sel.getAttribute('autocomplete') || '').toLowerCase();
+      const name = (sel.name || '').toLowerCase();
+      const id = (sel.id || '').toLowerCase();
+
+      const options = Array.from(sel.options || []);
+      const optTexts = options.map(o => (o.text || o.textContent || '').trim().toLowerCase());
+      const optVals = options.map(o => (o.value || '').trim().toLowerCase());
+      const allStrings = optTexts.concat(optVals).filter(Boolean);
+
+      const monthMatches = allStrings.filter(s => /^(0?[1-9]|1[0-2])$/.test(s) || ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].includes(s.slice(0, 3)));
+      const hasStrongMonthOptions = monthMatches.length >= 6;
+
+      const yearMatches = allStrings.filter(s => /^(20[2-4][0-9]|[2-4][0-9])$/.test(s));
+      const hasStrongYearOptions = yearMatches.length >= 3;
+
+      const hasCombinedOptions = allStrings.some(s => /^(0?[1-9]|1[0-2])\s*[\/\-]\s*(20[2-4][0-9]|[2-4][0-9])$/.test(s));
+
+      const isMonthByAttr = autocomplete.includes('cc-exp-month') ||
+                            name.includes('expmonth') || name.includes('exp-month') || name.includes('exp_month') ||
+                            id.includes('expmonth') || id.includes('exp-month') || id.includes('exp_month') ||
+                            name.includes('expirationmonth') || id.includes('expirationmonth') ||
+                            name.includes('ccexpmonth') || id.includes('ccexpmonth') ||
+                            name.includes('ppw-expirationdate_month') || id.includes('ppw-expirationdate_month') ||
+                            ((name.includes('month') || id.includes('month') || norm.includes('month')) && (norm.includes('card') || norm.includes('exp') || norm.includes('valid')));
+
+      const isYearByAttr = autocomplete.includes('cc-exp-year') ||
+                           name.includes('expyear') || name.includes('exp-year') || name.includes('exp_year') ||
+                           id.includes('expyear') || id.includes('exp-year') || id.includes('exp_year') ||
+                           name.includes('expirationyear') || id.includes('expirationyear') ||
+                           name.includes('ccexpyear') || id.includes('ccexpyear') ||
+                           name.includes('ppw-expirationdate_year') || id.includes('ppw-expirationdate_year') ||
+                           ((name.includes('year') || id.includes('year') || norm.includes('year')) && (norm.includes('card') || norm.includes('exp') || norm.includes('valid')));
+
+      if (isMonthByAttr || (!isYearByAttr && hasStrongMonthOptions && !hasStrongYearOptions)) {
+        if (!monthSelect) monthSelect = sel;
+      } else if (isYearByAttr || (!isMonthByAttr && hasStrongYearOptions && !hasStrongMonthOptions)) {
+        if (!yearSelect) yearSelect = sel;
+      } else if (hasCombinedOptions || autocomplete === 'cc-exp' || norm.includes('expiry') || norm.includes('expiration')) {
+        if (!combinedSelect) combinedSelect = sel;
+      }
+    });
+
+    if (monthSelect) {
+      const monthCandidates = [
+        parsed.month2,
+        parsed.month1,
+        `${parsed.month2} - ${parsed.monthShort}`,
+        `${parsed.month1} - ${parsed.monthShort}`,
+        `${parsed.month2} - ${parsed.monthFull}`,
+        `${parsed.month1} - ${parsed.monthFull}`,
+        `${parsed.month2}/${parsed.monthShort}`,
+        `${parsed.monthShort} (${parsed.month2})`,
+        `${parsed.month2} (${parsed.monthShort})`,
+        parsed.monthShort,
+        parsed.monthFull
+      ];
+      if (setSelectValue(monthSelect, monthCandidates)) filledCount++;
+    }
+
+    if (yearSelect) {
+      const yearCandidates = [
+        parsed.year4,
+        parsed.year2,
+        `'${parsed.year2}`
+      ];
+      if (setSelectValue(yearSelect, yearCandidates)) filledCount++;
+    }
+
+    if (!monthSelect && !yearSelect && combinedSelect) {
+      const combinedCandidates = [
+        `${parsed.month2}/${parsed.year2}`,
+        `${parsed.month2} / ${parsed.year2}`,
+        `${parsed.month2}/${parsed.year4}`,
+        `${parsed.month2} / ${parsed.year4}`,
+        `${parsed.monthShort} ${parsed.year4}`,
+        `${parsed.monthFull} ${parsed.year4}`
+      ];
+      if (setSelectValue(combinedSelect, combinedCandidates)) filledCount++;
+    }
+
+    return filledCount;
+  }
+
   function fillCardDetails(focusedInput, card, currentFieldType) {
+    const parsedExpiry = parseCardExpiry(card.expiry);
     const cardNumFormatted = getCardNumberFormattedForInput(focusedInput, card.cardNumber);
     const expiryFormatted = getExpiryFormattedForInput(focusedInput, card.expiry);
 
     // Fill current focused field first
     if (currentFieldType === 'CARD_NUMBER') setInputValue(focusedInput, cardNumFormatted);
     if (currentFieldType === 'EXPIRY') setInputValue(focusedInput, expiryFormatted);
+    if (currentFieldType === 'EXPIRY_MONTH') setInputValue(focusedInput, parsedExpiry ? parsedExpiry.month2 : '');
+    if (currentFieldType === 'EXPIRY_YEAR') {
+      const yr = parsedExpiry ? (focusedInput.maxLength === 4 ? parsedExpiry.year4 : parsedExpiry.year2) : '';
+      setInputValue(focusedInput, yr);
+    }
     if (currentFieldType === 'CVV') setInputValue(focusedInput, card.cvv);
     if (currentFieldType === 'CARD_HOLDER') setInputValue(focusedInput, card.cardHolder);
 
@@ -703,6 +960,12 @@
       if (t === 'EXPIRY' && card.expiry) {
         setInputValue(inp, getExpiryFormattedForInput(inp, card.expiry));
       }
+      if (t === 'EXPIRY_MONTH' && parsedExpiry) {
+        setInputValue(inp, parsedExpiry.month2);
+      }
+      if (t === 'EXPIRY_YEAR' && parsedExpiry) {
+        setInputValue(inp, inp.maxLength === 4 ? parsedExpiry.year4 : parsedExpiry.year2);
+      }
       if (t === 'CVV' && card.cvv) {
         setInputValue(inp, card.cvv);
       }
@@ -710,6 +973,10 @@
         setInputValue(inp, card.cardHolder);
       }
     });
+
+    // Also auto-fill any <select> dropdowns for Expiry Month & Year!
+    const parentContainer = focusedInput ? (focusedInput.closest('form, div[class*="payment"], div[class*="checkout"], div[class*="card"], fieldset') || document) : document;
+    fillCardExpirySelects(parentContainer, card.expiry);
   }
 
   function fillBankAccountDetails(focusedInput, account, bank, currentFieldType) {
@@ -854,6 +1121,7 @@
       return inp.type !== 'hidden' && inp.type !== 'submit' && inp.type !== 'button';
     });
 
+    const parsedExpiry = parseCardExpiry(card.expiry);
     let filledCount = 0;
     inputs.forEach(inp => {
       const type = classifyInput(inp);
@@ -865,6 +1133,12 @@
         const formatted = getExpiryFormattedForInput(inp, card.expiry);
         setInputValue(inp, formatted);
         filledCount++;
+      } else if (type === 'EXPIRY_MONTH' && parsedExpiry) {
+        setInputValue(inp, parsedExpiry.month2);
+        filledCount++;
+      } else if (type === 'EXPIRY_YEAR' && parsedExpiry) {
+        setInputValue(inp, inp.maxLength === 4 ? parsedExpiry.year4 : parsedExpiry.year2);
+        filledCount++;
       } else if (type === 'CVV' && card.cvv) {
         setInputValue(inp, card.cvv);
         filledCount++;
@@ -873,6 +1147,10 @@
         filledCount++;
       }
     });
+
+    // Auto-fill <select> dropdowns across page / forms
+    const selectCount = fillCardExpirySelects(document, card.expiry);
+    filledCount += selectCount;
 
     return filledCount;
   }
