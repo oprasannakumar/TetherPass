@@ -94,25 +94,9 @@ class DriveClient {
     }
 
     if (!interactive) {
-      // Strictly non-interactive: try silent retrieval without opening any window
-      if (typeof chrome !== 'undefined' && chrome.identity?.getAuthToken) {
-        try {
-          const silentToken = await new Promise((resolve) => {
-            chrome.identity.getAuthToken({ interactive: false }, (t) => {
-              if (chrome.runtime.lastError || !t) resolve(null);
-              else resolve(t);
-            });
-          });
-          if (silentToken) {
-            this.token = silentToken;
-            if (chrome.storage?.local) {
-              chrome.storage.local.set({ googleOAuthToken: silentToken });
-            }
-            return silentToken;
-          }
-        } catch (_) {}
-      }
-      return null; // Return null safely — NEVER pop up interactive prompt on startup!
+      // Strictly non-interactive: return null safely if no token cached in memory or storage.
+      // NEVER trigger chrome.identity in background or on browser startup without user action!
+      return null;
     }
 
     // Only launch interactive sign-in flow if explicitly requested by user click
@@ -392,6 +376,11 @@ class DriveClient {
    */
   async isAuthorizationRevoked(authMode, sessionStartTime, sessionId) {
     const now = Date.now();
+    // Grace period: during the first 10 seconds after unlocking, NEVER falsely revoke
+    if (sessionStartTime && (now - sessionStartTime < 10000)) {
+      return false;
+    }
+
     // Cache revocation check results for 2.5 seconds to prevent spamming Google Drive while remaining responsive
     if (this._lastRevokeCheckTime && (now - this._lastRevokeCheckTime < 2500)) {
       return this._lastRevokeResult || false;
@@ -406,33 +395,19 @@ class DriveClient {
           const content = await this.downloadFileContent(sessionsFile.id);
           const data = JSON.parse(content);
           const sessions = data.sessions || [];
-          let foundSession = false;
           for (const s of sessions) {
             if (!s) continue;
-            // Check matching sessionId
+            // Only check explicitly matching sessionId
             if (sessionId && s.sessionId === sessionId) {
-              foundSession = true;
               const sStatus = (s.status || '').toUpperCase();
               if (sStatus === 'TERMINATED' || sStatus === 'REVOKED' || sStatus === 'LOCKED') {
-                this._lastRevokeResult = true;
-                return true;
+                const termTime = s.terminatedAt || s.lockedAt || 0;
+                if (!termTime || !sessionStartTime || termTime > sessionStartTime) {
+                  this._lastRevokeResult = true;
+                  return true;
+                }
               }
             }
-            // Check if terminated recently after session began
-            const sStatus = (s.status || '').toUpperCase();
-            if (sStatus === 'TERMINATED' && s.terminatedAt && sessionStartTime && s.terminatedAt > (sessionStartTime + 1000)) {
-              if (!sessionId || s.sessionId === sessionId || s.authMode === authMode) {
-                this._lastRevokeResult = true;
-                return true;
-              }
-            }
-          }
-          // If sessionId was actively registered, but the sessions file was updated after session began
-          // and sessionId is now completely missing from the list, mobile has removed/terminated it!
-          if (sessionId && !foundSession && data.updatedAt && sessionStartTime && data.updatedAt > (sessionStartTime + 1000)) {
-            console.log('[TetherPass] Session', sessionId, 'purged from active sessions on Drive; revoking.');
-            this._lastRevokeResult = true;
-            return true;
           }
         } catch (_) {}
       }
@@ -446,7 +421,8 @@ class DriveClient {
           const reqStatus = (req.status || '').toUpperCase();
           if (reqStatus === 'REVOKED' || reqStatus === 'LOCKED' || reqStatus === 'TERMINATED') {
             const reqTime = req.locked_at || req.revoked_at || req.terminated_at || 0;
-            if ((sessionId && req.requestId === sessionId) || (reqTime && sessionStartTime && reqTime > (sessionStartTime + 1000))) {
+            // Strictly match THIS session's requestId AND ensure revocation timestamp was after session start
+            if (sessionId && req.requestId === sessionId && (!reqTime || !sessionStartTime || reqTime > sessionStartTime)) {
               this._lastRevokeResult = true;
               return true;
             }
@@ -530,13 +506,10 @@ class DriveClient {
               const reqContent = await this.downloadFileContent(reqFile.id);
               const req = JSON.parse(reqContent);
               // CRITICAL: Protect fresh QR pairing requests.
-              // If a new pairing session is already PENDING with a different requestId,
+              // If a newer session exists on Drive with a different requestId,
               // DO NOT overwrite it with LOCKED!
-              if (req?.status === 'PENDING' && req?.requestId && req.requestId !== sessionId) {
-                console.log('[TetherPass] Newer pending request active on Drive, skipping lock overwrite:', req.requestId);
-                return;
-              }
-              if (sessionId && req?.requestId && req.requestId !== sessionId && req.status !== 'APPROVED') {
+              if (sessionId && req?.requestId && req.requestId !== sessionId) {
+                console.log('[TetherPass] Newer request active on Drive (' + req.requestId + '), skipping overwrite of ' + sessionId);
                 return;
               }
             } catch (_) {}

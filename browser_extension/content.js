@@ -7,6 +7,41 @@
 (function () {
   let activeDropdown = null;
   let activeInput = null;
+  let selectedItemIndex = -1;
+  let managedInput = null;
+  let originalAutocomplete = null;
+
+  function suppressBrowserAutofill(input) {
+    if (!input) return;
+    managedInput = input;
+    originalAutocomplete = input.getAttribute('autocomplete');
+    input.setAttribute('autocomplete', 'off');
+  }
+
+  function restoreBrowserAutofill() {
+    if (managedInput) {
+      if (originalAutocomplete !== null) {
+        managedInput.setAttribute('autocomplete', originalAutocomplete);
+      } else {
+        managedInput.removeAttribute('autocomplete');
+      }
+      managedInput = null;
+      originalAutocomplete = null;
+    }
+  }
+
+  function updateRowHighlight(rows) {
+    if (!rows) return;
+    rows.forEach((r, idx) => {
+      if (idx === selectedItemIndex) {
+        r.classList.add('cv-selected');
+        r.scrollIntoView({ block: 'nearest' });
+      } else {
+        r.classList.remove('cv-selected');
+      }
+    });
+  }
+
 
   function getElementTextContext(input) {
     if (!input) return '';
@@ -306,40 +341,7 @@
     }
   });
 
-  let selectedItemIndex = -1;
-  let managedInput = null;
-  let originalAutocomplete = null;
 
-  function suppressBrowserAutofill(input) {
-    if (!input) return;
-    managedInput = input;
-    originalAutocomplete = input.getAttribute('autocomplete');
-    input.setAttribute('autocomplete', 'off');
-  }
-
-  function restoreBrowserAutofill() {
-    if (managedInput) {
-      if (originalAutocomplete !== null) {
-        managedInput.setAttribute('autocomplete', originalAutocomplete);
-      } else {
-        managedInput.removeAttribute('autocomplete');
-      }
-      managedInput = null;
-      originalAutocomplete = null;
-    }
-  }
-
-  function updateRowHighlight(rows) {
-    if (!rows) return;
-    rows.forEach((r, idx) => {
-      if (idx === selectedItemIndex) {
-        r.classList.add('cv-selected');
-        r.scrollIntoView({ block: 'nearest' });
-      } else {
-        r.classList.remove('cv-selected');
-      }
-    });
-  }
 
   // Intercept ArrowDown, ArrowUp, Enter, and Escape in capture phase
   // so browser native password manager (Google Password Manager) DOES NOT hijack!

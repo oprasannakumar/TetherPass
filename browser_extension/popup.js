@@ -991,8 +991,8 @@ async function startDirectQrPairing(force = false) {
 
       if (pollRes.status === 'APPROVED' && pollRes.success) {
         stopDirectQrPairing(true);
+        hideMessages();
         applyUnlockedUI(pollRes);
-        showSuccess('✓ Mobile QR Verified! Vault unlocked.');
       } else if (pollRes.status === 'DENIED') {
         stopDirectQrPairing(true);
         showError('Pairing request was denied on mobile phone.');
@@ -1119,6 +1119,7 @@ function normalizeRawVaultItems(rawItems) {
 
 function applyUnlockedUI(data) {
   if (!data) return;
+  hideMessages();
   stopDirectQrPairing();
   cancelApprovalPolling();
   const statusBadge = document.getElementById('statusBadge');

@@ -298,25 +298,23 @@ async function lockVault(reason = 'Vault locked') {
     reason
   }).catch(() => {});
 
-  // Mark session as LOCKED in Google Drive asynchronously so mobile updates immediately
-  (async () => {
-    try {
-      if (!driveClient.token) {
-        const stored = await chrome.storage.local.get('googleOAuthToken');
-        if (stored?.googleOAuthToken) {
-          driveClient.setToken(stored.googleOAuthToken);
-        }
+  // Mark session as LOCKED in Google Drive so mobile updates and subsequent requests don't race
+  try {
+    if (!driveClient.token) {
+      const stored = await chrome.storage.local.get('googleOAuthToken');
+      if (stored?.googleOAuthToken) {
+        driveClient.setToken(stored.googleOAuthToken);
       }
-      if (driveClient.token) {
-        await driveClient.markSessionLocked(sessionIdToLock);
-        console.log('[TetherPass] Session marked LOCKED on Drive:', sessionIdToLock);
-      } else {
-        console.warn('[TetherPass] No token available — cannot mark session LOCKED on Drive');
-      }
-    } catch (e) {
-      console.warn('[TetherPass] Could not mark session locked on Drive:', e.message);
     }
-  })();
+    if (driveClient.token) {
+      await driveClient.markSessionLocked(sessionIdToLock);
+      console.log('[TetherPass] Session marked LOCKED on Drive:', sessionIdToLock);
+    } else {
+      console.warn('[TetherPass] No token available — cannot mark session LOCKED on Drive');
+    }
+  } catch (e) {
+    console.warn('[TetherPass] Could not mark session locked on Drive:', e.message);
+  }
 }
 
 function notifyAllTabsStatusChange() {
