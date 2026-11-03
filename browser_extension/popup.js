@@ -181,33 +181,6 @@ function initUI() {
     if (e.target.id === 'deviceManagerModal') closeDeviceManagerModal();
   });
 
-  // Extend session button (+15m)
-  document.getElementById('extendSessionBtn')?.addEventListener('click', async () => {
-    const btn = document.getElementById('extendSessionBtn');
-    if (btn) {
-      btn.disabled = true;
-      btn.style.opacity = '0.6';
-    }
-    try {
-      const res = await sendExtensionMessage({
-        action: 'EXTEND_SESSION',
-        payload: {
-          token: currentOAuthToken,
-          minutes: 15
-        }
-      });
-      if (res && res.success && res.authExpiresAt) {
-        cachedAuthExpiresAt = res.authExpiresAt;
-        updateCountdownDisplay();
-        showStatusBanner('Session extended by +15 minutes', false);
-      }
-    } catch (_) {}
-    if (btn) {
-      btn.disabled = false;
-      btn.style.opacity = '1';
-    }
-  });
-
   // Lock button
   document.getElementById('lockNowBtn')?.addEventListener('click', handleLock);
 
@@ -918,11 +891,54 @@ function stopDirectQrPairing(clearSession = true) {
   }
 }
 
-function markQrCodeExpired() {
+async function markQrCodeExpired() {
   if (activeDirectQrInterval) clearInterval(activeDirectQrInterval);
   if (activeDirectQrCountdown) clearInterval(activeDirectQrCountdown);
   activeDirectQrInterval = null;
   activeDirectQrCountdown = null;
+
+  // Before giving up, do a quick final check if mobile approved right at the finish line
+  if (currentDirectQrRequestId && currentOAuthToken) {
+    try {
+      const pollRes = await sendExtensionMessage({
+        action: 'POLL_MOBILE_APPROVAL',
+        payload: {
+          token: currentOAuthToken,
+          requestId: currentDirectQrRequestId,
+          masterPassword: ''
+        }
+      });
+      if (pollRes && pollRes.status === 'APPROVED' && pollRes.success) {
+        stopDirectQrPairing(true);
+        hideMessages();
+        const anim = showTransitionAnimation({
+          mode: 'connect',
+          title: 'Connecting to Phone...',
+          subtitle: 'Mobile QR Verified! Decrypting vault...'
+        });
+        await new Promise(r => setTimeout(r, 650));
+        applyUnlockedUI(pollRes);
+        await anim.finish({
+          title: 'Connected & Unlocked!',
+          subtitle: 'Vault is active for 30 minutes.'
+        });
+        return;
+      }
+    } catch (_) {}
+
+    // Explicitly notify Google Drive that this pairing request is now expired
+    try {
+      sendExtensionMessage({
+        action: 'CANCEL_MOBILE_APPROVAL_REQUEST',
+        payload: {
+          token: currentOAuthToken,
+          requestId: currentDirectQrRequestId,
+          reason: 'EXPIRED'
+        }
+      });
+    } catch (_) {}
+  }
+
   isQrExpired = true;
   directQrState = 'EXPIRED';
 
@@ -1035,7 +1051,7 @@ async function startDirectQrPairing(force = false) {
 
     const requestId = startRes.requestId;
     currentDirectQrRequestId = requestId;
-    qrSessionExpiresAt = Date.now() + 60000; // Stable 60-second window
+    qrSessionExpiresAt = Date.now() + 120000; // Generous 120-second (2 minute) pairing window
     isQrExpired = false;
     directQrState = 'ACTIVE';
 

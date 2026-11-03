@@ -254,7 +254,7 @@ class DriveClient {
    */
   async sendAccessRequestToMobile(deviceName = 'Windows PC (TetherPass Extension)', targetDeviceId = 'ALL', authMode = 'PUSH') {
     const requestId = 'req_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-    const durationMs = 60000; // 60s timeout for desktop pairing
+    const durationMs = 120000; // 120s (2 min) generous timeout for desktop pairing
     const expiresAt = Date.now() + durationMs;
 
     const payload = JSON.stringify({
@@ -291,17 +291,38 @@ class DriveClient {
     }
 
     const now = Date.now();
-    if (req.expiresAt && now > req.expiresAt) {
+    if (req.status === 'EXPIRED') {
+      return { status: 'EXPIRED', message: 'Pairing request expired.' };
+    }
+    if (req.status === 'PENDING' && req.expiresAt && now > req.expiresAt) {
       return { status: 'EXPIRED', message: 'Request timed out without response.' };
     }
 
     return {
-      status: req.status, // 'PENDING', 'APPROVED', 'DENIED', 'LOCKED'
+      status: req.status, // 'PENDING', 'APPROVED', 'DENIED', 'LOCKED', 'EXPIRED'
       approvedAt: req.approvedAt,
       expiresAt: req.expiresAt,
       message: req.message,
       request_sealed_key: req.request_sealed_key
     };
+  }
+
+  /**
+   * Explicitly marks a pending pairing access request as EXPIRED on Drive.
+   */
+  async expireAccessRequest(requestId) {
+    if (!this.token) return;
+    try {
+      const file = await this.findFile(DRIVE_REQUEST_FILENAME);
+      if (!file) return;
+      const content = await this.downloadFileContent(file.id);
+      const req = JSON.parse(content);
+      if (req.requestId === requestId && req.status === 'PENDING') {
+        req.status = 'EXPIRED';
+        req.expiredAt = Date.now();
+        await this.updateFileContent(file.id, JSON.stringify(req, null, 2));
+      }
+    } catch (_) {}
   }
 
   /**

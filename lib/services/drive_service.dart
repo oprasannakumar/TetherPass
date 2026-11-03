@@ -454,18 +454,24 @@ class DriveService extends ChangeNotifier {
     return null;
   }
 
-  /// Checks status of a specific access request (useful for multi-device sync)
-  Future<String?> getAccessRequestStatus(String requestId) async {
+  /// Checks status and full details of a specific access request
+  Future<Map<String, dynamic>?> getAccessRequestDetails(String requestId) async {
     if (!isSignedIn) return null;
     try {
       final text = await downloadTextFile(accessRequestFileName);
       if (text == null || text.trim().isEmpty) return null;
       final data = jsonDecode(text) as Map<String, dynamic>;
       if (data['requestId'] == requestId) {
-        return data['status'] as String?;
+        return data;
       }
     } catch (_) {}
     return null;
+  }
+
+  /// Checks status of a specific access request (useful for multi-device sync)
+  Future<String?> getAccessRequestStatus(String requestId) async {
+    final details = await getAccessRequestDetails(requestId);
+    return details?['status'] as String?;
   }
 
   /// Responds to the pending desktop extension access request.
@@ -478,13 +484,25 @@ class DriveService extends ChangeNotifier {
   }) async {
     if (!isSignedIn) return false;
     try {
-      // Check if already approved or denied by another phone
-      final currentStatus = await getAccessRequestStatus(requestId);
+      // Validate that the request on Drive is still PENDING and NOT expired
+      final reqDetails = await getAccessRequestDetails(requestId);
+      if (reqDetails == null) return false;
+      final currentStatus = reqDetails['status'] as String?;
+      final reqExpiresAt = (reqDetails['expiresAt'] as num?)?.toInt();
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+
+      if (currentStatus == 'EXPIRED' ||
+          (reqExpiresAt != null && nowMs > reqExpiresAt && currentStatus != 'APPROVED')) {
+        return false; // Code expired on desktop! Refuse to approve or create zombie session
+      }
       if (currentStatus != null && currentStatus != 'PENDING') {
         return true; // Already processed by another linked mobile device
       }
 
       final now = DateTime.now();
+      final approvedAt = now.millisecondsSinceEpoch;
+      final sessionExpiresAt = approvedAt + (30 * 60 * 1000); // Strict 30-minute session
+
       Map<String, dynamic>? requestSealedKey;
       if (approved && masterPassword != null && masterPassword.isNotEmpty) {
         final salt = enc.SecureRandom(16).bytes;
@@ -503,8 +521,8 @@ class DriveService extends ChangeNotifier {
       final payloadMap = <String, dynamic>{
         'requestId': requestId,
         'status': approved ? 'APPROVED' : 'DENIED',
-        'approvedAt': now.millisecondsSinceEpoch,
-        'expiresAt': now.add(const Duration(minutes: 30)).millisecondsSinceEpoch,
+        'approvedAt': approvedAt,
+        'expiresAt': sessionExpiresAt,
         'device': deviceName ?? 'Windows PC (TetherPass Extension)',
         'approvedByDevice': 'TetherPass Mobile Client',
       };
@@ -519,8 +537,8 @@ class DriveService extends ChangeNotifier {
           sessionId: requestId,
           deviceName: deviceName ?? 'Windows PC (TetherPass Extension)',
           authMode: 'PUSH',
-          createdAt: now.millisecondsSinceEpoch,
-          expiresAt: now.add(const Duration(minutes: 30)).millisecondsSinceEpoch,
+          createdAt: approvedAt,
+          expiresAt: sessionExpiresAt,
         );
       }
 

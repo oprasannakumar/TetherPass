@@ -415,6 +415,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
 
+    if (action === 'CANCEL_MOBILE_APPROVAL_REQUEST' || action === 'EXPIRE_MOBILE_APPROVAL_REQUEST') {
+      if (payload?.token) driveClient.setToken(payload.token);
+      try {
+        if (payload?.requestId) {
+          await driveClient.expireAccessRequest(payload.requestId);
+        }
+        sendResponse({ success: true });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
+
     if (action === 'GET_AUTOFILL_SUGGESTIONS') {
       try {
         const res = await handleGetAutofillSuggestions(payload);
@@ -542,19 +555,20 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
     const backupPayload = await driveClient.fetchEncryptedVaultBackup();
     const decryptedItems = await decryptCardVaultBackup(backupPayload, effectivePassword);
 
-    // Save in RAM and session storage with a full 30-minute desktop session
+    // Save in RAM and session storage with a synchronized 30-minute desktop session
     const desktopSessionDurationMs = 30 * 60 * 1000;
     const sessionId = requestId || ('sess_' + Date.now());
     memoryVault.isAuthorized = true;
     memoryVault.isUnlocked = true;
     memoryVault.items = decryptedItems;
     memoryVault.lastSyncedAt = Date.now();
-    memoryVault.authExpiresAt = Date.now() + desktopSessionDurationMs;
+    // Synchronize authExpiresAt strictly to mobile's chosen expiresAt so both devices match down to the second
+    memoryVault.authExpiresAt = check.expiresAt || (Date.now() + desktopSessionDurationMs);
     memoryVault.masterPassword = effectivePassword;
     memoryVault.activeRequestId = requestId;
     memoryVault.sessionId = sessionId;
     memoryVault.authMode = 'PUSH';
-    memoryVault.sessionStartTime = Date.now();
+    memoryVault.sessionStartTime = check.approvedAt || Date.now();
 
     await persistSession();
 

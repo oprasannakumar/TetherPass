@@ -23,6 +23,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
   String _currentDeviceName = '';
   List<Map<String, dynamic>> _desktopSessions = [];
   Timer? _sessionsRefreshTimer;
+  Timer? _tickerTimer;
 
   @override
   void initState() {
@@ -34,11 +35,18 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
         _fetchSessions();
       }
     });
+    // 1-second countdown ticker for synchronized live seconds display
+    _tickerTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _desktopSessions.any((s) => s['isCurrentlyActive'] == true)) {
+        setState(() {});
+      }
+    });
   }
 
   @override
   void dispose() {
     _sessionsRefreshTimer?.cancel();
+    _tickerTimer?.cancel();
     super.dispose();
   }
 
@@ -150,6 +158,50 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
 
     final targetDevice = deviceName ?? 'Desktop Browser Extension';
 
+    // Verify if pairing request is still pending and active on Google Drive before prompting
+    final drive = context.read<DriveService>();
+    final reqDetails = await drive.getAccessRequestDetails(requestId!);
+    if (reqDetails == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invalid pairing request. Please refresh the QR code on your PC.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+      return;
+    }
+
+    final currentStatus = reqDetails['status'] as String?;
+    final reqExpiresAt = (reqDetails['expiresAt'] as num?)?.toInt();
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+
+    if (currentStatus == 'EXPIRED' ||
+        (reqExpiresAt != null && nowMs > reqExpiresAt && currentStatus != 'APPROVED')) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This QR code has expired on your desktop. Tap "Refresh" on your PC to generate a new one.'),
+            backgroundColor: Colors.redAccent,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+    if (currentStatus == 'APPROVED') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This session is already approved and active!'),
+            backgroundColor: Colors.blueAccent,
+          ),
+        );
+      }
+      return;
+    }
+
     // Request confirmation
     final confirmed = await showDialog<bool>(
       context: context,
@@ -185,7 +237,6 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
     if (confirmed != true || !mounted) return;
 
     final sec = context.read<VaultSecurityService>();
-    final drive = context.read<DriveService>();
     final masterPwd = await sec.getMasterPassword();
 
     final ok = await TetherSyncDialog.run<bool>(
@@ -202,6 +253,21 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
 
     if (ok == true && mounted) {
       await _fetchSessions();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Connected to "$targetDevice"! Desktop unlocked for 30 mins.'),
+            backgroundColor: const Color(0xFF16A34A),
+          ),
+        );
+      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pairing expired or rejected. Tap "Refresh" on your PC to try again.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     }
   }
 
@@ -803,7 +869,12 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
   Widget _buildSessionTile(Map<String, dynamic> s, {required bool isActive}) {
     final sessionId = (s['sessionId'] as String?) ?? '';
     final deviceName = (s['deviceName'] as String?) ?? 'Windows Browser Extension';
-    final minsLeft = (s['minutesRemaining'] as num?)?.toInt() ?? 0;
+    final expiresAt = (s['expiresAt'] as num?)?.toInt() ?? 0;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final remainingMs = (expiresAt > nowMs) ? (expiresAt - nowMs) : 0;
+    final mins = remainingMs ~/ 60000;
+    final secs = (remainingMs % 60000) ~/ 1000;
+    final timeStr = mins > 0 ? '$mins m $secs s left' : '$secs s left';
     final createdAt = (s['createdAt'] as num?)?.toInt() ?? 0;
     final status = (s['status'] as String?) ?? (isActive ? 'ACTIVE' : 'EXPIRED');
 
@@ -892,7 +963,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'Active • $minsLeft min${minsLeft == 1 ? "" : "s"} left',
+                            'Active • $timeStr',
                             style: const TextStyle(
                               color: Color(0xFF15803D),
                               fontSize: 12,

@@ -1013,18 +1013,6 @@ body {
   line-height: 1;
 }
 
-.btn-extend-session {
-  color: #1D4ED8;
-  border: 1px solid #BFDBFE;
-  background: #EFF6FF;
-}
-
-.btn-extend-session:hover {
-  background: #DBEAFE;
-  color: #1E40AF;
-  border-color: #93C5FD;
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.2);
-}
 
 .btn-devices-session {
   color: #334155;
