@@ -51,6 +51,8 @@ void main() async {
   // Pre-load offline BIN database in background
   unawaited(BinDatabaseService.init());
 
+  await AutoLockService.init(appNavigatorKey);
+
   final isOnboarded = await securityService.isOnboarded();
 
   runApp(
@@ -92,15 +94,14 @@ class _TetherPassAppState extends State<TetherPassApp> with WidgetsBindingObserv
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) async {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
       AutoLockService.markPaused();
     } else if (state == AppLifecycleState.resumed) {
-      final shouldLock = await AutoLockService.shouldLock();
+      final shouldLock = AutoLockService.shouldLockOnResume();
       AutoLockService.clearPaused();
       if (shouldLock) {
-        // Automatically lock and present UnlockScreen
-        appNavigatorKey.currentState?.pushNamedAndRemoveUntil('/unlock', (route) => false);
+        AutoLockService.lockVault();
       }
     }
   }
@@ -113,11 +114,16 @@ class _TetherPassAppState extends State<TetherPassApp> with WidgetsBindingObserv
     const textPrimary = Color(0xFF1E293B); // Dark slate
     const textSecondary = Color(0xFF64748B); // Muted slate
 
-    return MaterialApp(
-      navigatorKey: appNavigatorKey,
-      title: 'TetherPass',
-      debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.light,
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => AutoLockService.recordUserActivity(),
+      onPointerMove: (_) => AutoLockService.recordUserActivity(),
+      onPointerUp: (_) => AutoLockService.recordUserActivity(),
+      child: MaterialApp(
+        navigatorKey: appNavigatorKey,
+        title: 'TetherPass',
+        debugShowCheckedModeBanner: false,
+        themeMode: ThemeMode.light,
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
@@ -197,6 +203,7 @@ class _TetherPassAppState extends State<TetherPassApp> with WidgetsBindingObserv
         '/settings': (_) => const SettingsScreen(),
         '/add': (_) => const AddEditScreen(),
       },
-    );
-  }
+    ),
+  );
+}
 }

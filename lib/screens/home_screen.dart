@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/vault_item.dart';
 import '../services/auth_service.dart';
 import '../services/autofill_bridge_service.dart';
+import '../services/auto_lock_service.dart';
 import '../services/database_service.dart';
 import '../services/device_identity_service.dart';
 import '../services/drive_service.dart';
@@ -45,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    AutoLockService.markUnlocked();
     _loadItems();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final drive = context.read<DriveService>();
@@ -653,10 +655,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _lockVault() {
-    AutofillBridgeService.syncVaultState(isUnlocked: false);
-    // Desktop extension retains its independent 30-minute session duration.
-    // Explicit revocation is handled via Settings -> Browser Extension -> Revoke.
-    Navigator.of(context).pushNamedAndRemoveUntil('/unlock', (route) => false);
+    AutoLockService.lockVault();
   }
 
   // ─── Google Drive Actions ───────────────────────────────────────────────────

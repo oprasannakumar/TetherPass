@@ -562,29 +562,24 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
     memoryVault.isUnlocked = true;
     memoryVault.items = decryptedItems;
     memoryVault.lastSyncedAt = Date.now();
-    // Synchronize authExpiresAt strictly to mobile's chosen expiresAt so both devices match down to the second
-    memoryVault.authExpiresAt = check.expiresAt || (Date.now() + desktopSessionDurationMs);
+
+    // NTP clock synchronization: eliminate any seconds difference between Phone clock and PC clock
+    const nowDesktop = Date.now();
+    let desktopAuthExpiresAt = nowDesktop + desktopSessionDurationMs;
+    if (check.expiresAt && check.approvedAt) {
+      const reqAt = check.requestedAt || (nowDesktop - 1500);
+      const halfRoundtrip = Math.max(0, Math.floor((nowDesktop - reqAt) / 2));
+      const clockOffset = check.approvedAt - (reqAt + halfRoundtrip);
+      desktopAuthExpiresAt = check.expiresAt - clockOffset;
+    }
+    memoryVault.authExpiresAt = desktopAuthExpiresAt;
     memoryVault.masterPassword = effectivePassword;
     memoryVault.activeRequestId = requestId;
     memoryVault.sessionId = sessionId;
     memoryVault.authMode = 'PUSH';
-    memoryVault.sessionStartTime = check.approvedAt || Date.now();
+    memoryVault.sessionStartTime = nowDesktop;
 
     await persistSession();
-
-    // Register active session in Google Drive asynchronously without blocking popup
-    (async () => {
-      try {
-        const devName = await getDesktopDeviceName('Windows PC (Chrome)');
-        await driveClient.recordActiveSession({
-          sessionId,
-          deviceName: devName,
-          authMode: 'PUSH',
-          createdAt: memoryVault.sessionStartTime,
-          expiresAt: memoryVault.authExpiresAt
-        });
-      } catch (_) {}
-    })();
 
     notifyAllTabsStatusChange();
 

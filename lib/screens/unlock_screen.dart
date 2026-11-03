@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../services/auth_service.dart';
 import '../services/autofill_bridge_service.dart';
+import '../services/auto_lock_service.dart';
 import '../services/vault_security_service.dart';
 
 class UnlockScreen extends StatefulWidget {
@@ -46,6 +47,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
   }
 
   Future<void> _triggerBiometric() async {
+    AutoLockService.isAuthenticating = true;
     setState(() => _isAuthenticating = true);
     final auth = context.read<AuthService>();
 
@@ -53,9 +55,11 @@ class _UnlockScreenState extends State<UnlockScreen> {
       reason: 'Scan your fingerprint or face to unlock TetherPass',
     );
 
+    AutoLockService.isAuthenticating = false;
     if (mounted) {
       setState(() => _isAuthenticating = false);
       if (success) {
+        AutoLockService.markUnlocked();
         Navigator.of(context).pushReplacementNamed('/home');
       }
     }
@@ -79,6 +83,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
     if (mounted) {
       setState(() => _isAuthenticating = false);
       if (valid) {
+        AutoLockService.markUnlocked();
         Navigator.of(context).pushReplacementNamed('/home');
       } else {
         setState(() => _errorMessage = 'Incorrect Master Password');

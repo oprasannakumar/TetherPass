@@ -1110,8 +1110,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
               subtitle: 'Return immediately to Master Password screen',
               iconColor: Colors.amber.shade800,
               onTap: () {
-                AutofillBridgeService.syncVaultState(isUnlocked: false);
-                Navigator.of(context).pushNamedAndRemoveUntil('/unlock', (route) => false);
+                AutoLockService.lockVault();
               },
             ),
 

@@ -300,6 +300,7 @@ class DriveClient {
 
     return {
       status: req.status, // 'PENDING', 'APPROVED', 'DENIED', 'LOCKED', 'EXPIRED'
+      requestedAt: req.requestedAt,
       approvedAt: req.approvedAt,
       expiresAt: req.expiresAt,
       message: req.message,
