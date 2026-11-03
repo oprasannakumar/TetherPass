@@ -38,6 +38,15 @@
   gap: 6px !important;
 }
 
+.cv-brand-icon {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 4px !important;
+  object-fit: contain !important;
+  display: inline-block !important;
+  vertical-align: middle !important;
+}
+
 .cv-logo-badge {
   background: #FF6F00 !important;
   color: #FFFFFF !important;

@@ -1051,7 +1051,7 @@ async function startDirectQrPairing(force = false) {
 
     const requestId = startRes.requestId;
     currentDirectQrRequestId = requestId;
-    qrSessionExpiresAt = Date.now() + 120000; // Generous 120-second (2 minute) pairing window
+    qrSessionExpiresAt = Date.now() + 60000; // Strictly 60 seconds
     isQrExpired = false;
     directQrState = 'ACTIVE';
 

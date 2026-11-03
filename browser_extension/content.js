@@ -473,9 +473,21 @@
     // ── Header ──
     const header = document.createElement('div');
     header.className = 'cv-dropdown-header';
+    let brandLogoHtml;
+    try {
+      const logoUrl = chrome.runtime?.getURL ? chrome.runtime.getURL('icons/icon48.png') : '';
+      if (logoUrl) {
+        brandLogoHtml = `<img src="${logoUrl}" class="cv-brand-icon" alt="TetherPass" onerror="this.outerHTML='<span class=\\'cv-logo-badge\\'>TP</span>'" />`;
+      } else {
+        brandLogoHtml = `<span class="cv-logo-badge">TP</span>`;
+      }
+    } catch (_) {
+      brandLogoHtml = `<span class="cv-logo-badge">TP</span>`;
+    }
+
     header.innerHTML = `
       <div class="cv-header-left">
-        <span class="cv-logo-badge">CV</span>
+        ${brandLogoHtml}
         <span class="cv-title">TetherPass</span>
       </div>
       <span class="cv-status-tag ${data.authorized ? 'cv-authorized' : 'cv-locked'}">
