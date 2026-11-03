@@ -540,8 +540,14 @@ class DriveService extends ChangeNotifier {
       final now = DateTime.now().millisecondsSinceEpoch;
       final Map<String, Map<String, dynamic>> sessionMap = {};
 
-      // 1. Read from card_vault_active_sessions.json
-      final text = await downloadTextFile(activeSessionsFileName);
+      // 1. Fetch both active sessions and access request files concurrently in parallel
+      final downloads = await Future.wait([
+        downloadTextFile(activeSessionsFileName),
+        downloadTextFile(accessRequestFileName),
+      ]);
+      final text = downloads[0];
+      final reqText = downloads[1];
+
       if (text != null && text.trim().isNotEmpty) {
         try {
           final data = jsonDecode(text) as Map<String, dynamic>;
@@ -564,8 +570,7 @@ class DriveService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // 2. Synthesize/merge from card_vault_access_request.json (Push approvals)
-      final reqText = await downloadTextFile(accessRequestFileName);
+      // 2. Synthesize/merge from card_vault_access_request.json (Push & QR approvals)
       if (reqText != null && reqText.trim().isNotEmpty) {
         try {
           final req = jsonDecode(reqText) as Map<String, dynamic>;
@@ -576,11 +581,13 @@ class DriveService extends ChangeNotifier {
           final device = req['device'] as String? ?? 'Windows PC (TetherPass Extension)';
 
           if (status == 'LOCKED' || status == 'REVOKED' || status == 'TERMINATED') {
-            // Extension is locked! Instantly remove all push sessions from mobile
+            // Extension is locked! Instantly remove matching/all sessions from mobile
             sessionMap.removeWhere((key, val) =>
-                val['authMode'] == 'PUSH' ||
+                reqId.isEmpty ||
+                key == reqId ||
                 key.startsWith('req_') ||
-                (reqId.isNotEmpty && key == reqId));
+                val['authMode'] == 'PUSH' ||
+                val['authMode'] == 'QR');
           } else if (status == 'APPROVED' && expiresAt > now && reqId.isNotEmpty) {
             if (!sessionMap.containsKey(reqId)) {
               sessionMap[reqId] = {

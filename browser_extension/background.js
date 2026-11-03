@@ -256,6 +256,7 @@ async function lockVault(reason = 'Vault locked') {
     } catch (_) {}
   }
 
+  // Clear in-memory state immediately for zero-latency lock
   memoryVault.isAuthorized = false;
   memoryVault.isUnlocked = false;
   memoryVault.items = [];
@@ -269,24 +270,6 @@ async function lockVault(reason = 'Vault locked') {
   await clearPersistedSession();
   console.log('[TetherPass]', reason);
 
-  // ── Mark session as LOCKED in Google Drive so mobile app sees it immediately ──
-  try {
-    if (!driveClient.token) {
-      const stored = await chrome.storage.local.get('googleOAuthToken');
-      if (stored?.googleOAuthToken) {
-        driveClient.setToken(stored.googleOAuthToken);
-      }
-    }
-    if (driveClient.token) {
-      await driveClient.markSessionLocked(sessionIdToLock);
-      console.log('[TetherPass] Session marked LOCKED on Drive:', sessionIdToLock);
-    } else {
-      console.warn('[TetherPass] No token available — cannot mark session LOCKED on Drive');
-    }
-  } catch (e) {
-    console.warn('[TetherPass] Could not mark session locked on Drive:', e.message);
-  }
-
   notifyAllTabsStatusChange();
 
   // Internal runtime message to instantly notify popup if open
@@ -296,6 +279,26 @@ async function lockVault(reason = 'Vault locked') {
     isUnlocked: false,
     reason
   }).catch(() => {});
+
+  // Mark session as LOCKED in Google Drive asynchronously so mobile updates immediately
+  (async () => {
+    try {
+      if (!driveClient.token) {
+        const stored = await chrome.storage.local.get('googleOAuthToken');
+        if (stored?.googleOAuthToken) {
+          driveClient.setToken(stored.googleOAuthToken);
+        }
+      }
+      if (driveClient.token) {
+        await driveClient.markSessionLocked(sessionIdToLock);
+        console.log('[TetherPass] Session marked LOCKED on Drive:', sessionIdToLock);
+      } else {
+        console.warn('[TetherPass] No token available — cannot mark session LOCKED on Drive');
+      }
+    } catch (e) {
+      console.warn('[TetherPass] Could not mark session locked on Drive:', e.message);
+    }
+  })();
 }
 
 function notifyAllTabsStatusChange() {
@@ -320,9 +323,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     await restoreSessionIfNeeded();
 
     if (action === 'GET_STATUS') {
-      if (memoryVault.isAuthorized && memoryVault.isUnlocked) {
-        await verifyMobileAuth();
-      }
       const suggestions = (memoryVault.isAuthorized && memoryVault.isUnlocked)
         ? organizeVaultItems(memoryVault.items)
         : { cards: [], bankAccounts: [], passwords: [] };
@@ -508,17 +508,19 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
 
     await persistSession();
 
-    // Register active session in Google Drive
-    try {
-      const devName = await getDesktopDeviceName('Windows PC (Chrome)');
-      await driveClient.recordActiveSession({
-        sessionId,
-        deviceName: devName,
-        authMode: 'PUSH',
-        createdAt: memoryVault.sessionStartTime,
-        expiresAt: memoryVault.authExpiresAt
-      });
-    } catch (_) {}
+    // Register active session in Google Drive asynchronously without blocking popup
+    (async () => {
+      try {
+        const devName = await getDesktopDeviceName('Windows PC (Chrome)');
+        await driveClient.recordActiveSession({
+          sessionId,
+          deviceName: devName,
+          authMode: 'PUSH',
+          createdAt: memoryVault.sessionStartTime,
+          expiresAt: memoryVault.authExpiresAt
+        });
+      } catch (_) {}
+    })();
 
     notifyAllTabsStatusChange();
 
@@ -526,7 +528,10 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
       status: 'APPROVED',
       success: true,
       itemCount: decryptedItems.length,
-      expiresAt: memoryVault.authExpiresAt
+      expiresAt: memoryVault.authExpiresAt,
+      isAuthorized: true,
+      isUnlocked: true,
+      suggestions: organizeVaultItems(decryptedItems)
     };
   }
 

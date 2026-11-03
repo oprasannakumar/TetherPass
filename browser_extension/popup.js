@@ -738,7 +738,7 @@ async function handleRequestMobilePushApproval() {
       }
     }, 1000);
 
-    // 3. Start Polling for Approval
+    // 3. Start Polling for Approval (fast 800ms interval)
     activePollingInterval = setInterval(async () => {
       const pollRes = await sendExtensionMessage({
         action: 'POLL_MOBILE_APPROVAL',
@@ -753,9 +753,9 @@ async function handleRequestMobilePushApproval() {
 
       if (pollRes.status === 'APPROVED' && pollRes.success) {
         cancelApprovalPolling();
+        applyUnlockedUI(pollRes);
         showSuccess('✓ Mobile approved with Biometrics! Vault unlocked.');
         if (passwordInput) passwordInput.value = '';
-        setTimeout(() => refreshStatus(), 600);
       } else if (pollRes.status === 'DENIED') {
         cancelApprovalPolling();
         showError('Access request was denied on your mobile phone.');
@@ -763,7 +763,7 @@ async function handleRequestMobilePushApproval() {
         cancelApprovalPolling();
         showError('Access request expired on your mobile phone.');
       }
-    }, 1500);
+    }, 800);
 
   } catch (err) {
     cancelApprovalPolling();
@@ -959,7 +959,7 @@ async function startDirectQrPairing(force = false) {
       }
     }, 1000);
 
-    // Poll for mobile biometric approval
+    // Poll for mobile biometric approval (fast 800ms interval)
     activeDirectQrInterval = setInterval(async () => {
       if (!currentDirectQrRequestId || isQrExpired) return;
       const pollRes = await sendExtensionMessage({
@@ -975,15 +975,15 @@ async function startDirectQrPairing(force = false) {
 
       if (pollRes.status === 'APPROVED' && pollRes.success) {
         stopDirectQrPairing(true);
+        applyUnlockedUI(pollRes);
         showSuccess('✓ Mobile QR Verified! Vault unlocked.');
-        setTimeout(() => refreshStatus(), 400);
       } else if (pollRes.status === 'DENIED') {
         stopDirectQrPairing(true);
         showError('Pairing request was denied on mobile phone.');
       } else if (pollRes.status === 'EXPIRED') {
         markQrCodeExpired();
       }
-    }, 1500);
+    }, 800);
 
   } catch (err) {
     isQrPairingInProgress = false;
@@ -1194,21 +1194,19 @@ async function refreshStatus() {
   }
 }
 
-async function handleLock() {
+function handleLock() {
+  // Instantly lock the UI with ZERO latency
   stopDirectQrPairing();
   cancelApprovalPolling();
   currentVaultItems = { cards: [], bankAccounts: [], passwords: [] };
-  if (currentOAuthToken) {
-    driveClient.setToken(currentOAuthToken);
-    try {
-      await driveClient.markSessionLocked();
-    } catch (_) {}
-  }
-  await sendExtensionMessage({
+  applyLockedUI();
+  showSuccess('Vault locked.');
+
+  // Notify background script to clear in-memory credentials and update Drive
+  sendExtensionMessage({
     action: 'LOCK_VAULT',
     payload: { token: currentOAuthToken }
-  });
-  applyLockedUI();
+  }).catch(() => {});
 }
 
 function showError(msg) {

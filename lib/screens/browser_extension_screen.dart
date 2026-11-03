@@ -28,10 +28,9 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
     super.initState();
     _loadDeviceIdentityAndDevices();
     _fetchSessions();
-    _sessionsRefreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+    _sessionsRefreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (mounted) {
         _fetchSessions();
-        _fetchDevices();
       }
     });
   }

@@ -14,6 +14,7 @@ class DriveClient {
   constructor() {
     this.token = null;
     this.clientId = GOOGLE_CLIENT_ID;
+    this._fileIdCache = new Map();
   }
 
   setToken(token) {
@@ -87,6 +88,9 @@ class DriveClient {
   }
 
   async findFile(filename) {
+    if (this._fileIdCache.has(filename)) {
+      return { id: this._fileIdCache.get(filename), name: filename };
+    }
     const token = await this.getAuthToken(false);
     const query = encodeURIComponent(`name = '${filename}' and trashed = false`);
     const url = `https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive,appDataFolder&fields=files(id,name,modifiedTime)`;
@@ -101,7 +105,11 @@ class DriveClient {
     }
 
     const data = await res.json();
-    return data.files && data.files.length > 0 ? data.files[0] : null;
+    const file = data.files && data.files.length > 0 ? data.files[0] : null;
+    if (file && file.id) {
+      this._fileIdCache.set(filename, file.id);
+    }
+    return file;
   }
 
   async downloadFileContent(fileId) {
@@ -113,6 +121,11 @@ class DriveClient {
     });
 
     if (!res.ok) {
+      if (res.status === 404) {
+        for (const [k, v] of this._fileIdCache.entries()) {
+          if (v === fileId) this._fileIdCache.delete(k);
+        }
+      }
       throw new Error(`Drive download failed HTTP ${res.status}`);
     }
 
@@ -165,10 +178,17 @@ class DriveClient {
     });
 
     if (!res.ok) {
+      if (res.status === 404) {
+        this._fileIdCache.delete(filename);
+      }
       throw new Error(`Drive upload failed HTTP ${res.status}: ${await res.text()}`);
     }
 
-    return await res.json();
+    const uploadResult = await res.json();
+    if (uploadResult && uploadResult.id) {
+      this._fileIdCache.set(filename, uploadResult.id);
+    }
+    return uploadResult;
   }
 
   async uploadAppDataFile(filename, textContent) {
@@ -446,58 +466,69 @@ class DriveClient {
       }
     }
     if (!this.token) return;
+
     try {
-      // 1. Overwrite card_vault_access_request.json with LOCKED status
-      try {
-        let existingReqId = sessionId || '';
-        const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
-        if (reqFile) {
-          try {
-            const reqContent = await this.downloadFileContent(reqFile.id);
-            const req = JSON.parse(reqContent);
-            if (req?.requestId) existingReqId = req.requestId;
-          } catch (_) {}
-        }
-
-        const reqClear = JSON.stringify({
-          requestId: existingReqId,
-          status: 'LOCKED',
-          locked_at: Date.now()
-        });
-        await this.uploadOrUpdateFile(DRIVE_REQUEST_FILENAME, reqClear);
-        console.log('[TetherPass] Access request overwritten with LOCKED on Drive, reqId:', existingReqId);
-      } catch (e) {
-        console.warn('[TetherPass] Could not overwrite access request:', e.message);
-      }
-
-      // 2. Remove session from card_vault_active_sessions.json
-      let sessions = [];
-      const file = await this.findFile(DRIVE_SESSIONS_FILENAME);
-      if (file) {
+      // Execute both Drive updates in parallel for fast lock execution
+      const taskRequest = (async () => {
         try {
-          const content = await this.downloadFileContent(file.id);
-          const data = JSON.parse(content);
-          sessions = data.sessions || [];
-        } catch (_) {}
-      }
+          let existingReqId = sessionId || '';
+          if (!existingReqId) {
+            const reqFile = await this.findFile(DRIVE_REQUEST_FILENAME);
+            if (reqFile) {
+              try {
+                const reqContent = await this.downloadFileContent(reqFile.id);
+                const req = JSON.parse(reqContent);
+                if (req?.requestId) existingReqId = req.requestId;
+              } catch (_) {}
+            }
+          }
 
-      if (sessionId) {
-        sessions = sessions.filter(s => s && s.sessionId !== sessionId);
-      } else {
-        // Clear all active sessions
-        sessions = [];
-      }
+          const reqClear = JSON.stringify({
+            requestId: existingReqId,
+            status: 'LOCKED',
+            locked_at: Date.now()
+          });
+          await this.uploadOrUpdateFile(DRIVE_REQUEST_FILENAME, reqClear);
+          console.log('[TetherPass] Access request overwritten with LOCKED on Drive, reqId:', existingReqId);
+        } catch (e) {
+          console.warn('[TetherPass] Could not overwrite access request:', e.message);
+        }
+      })();
 
-      const payload = JSON.stringify({
-        version: 1,
-        updatedAt: Date.now(),
-        sessions: sessions.slice(0, 20)
-      });
+      const taskSessions = (async () => {
+        try {
+          let sessions = [];
+          const file = await this.findFile(DRIVE_SESSIONS_FILENAME);
+          if (file) {
+            try {
+              const content = await this.downloadFileContent(file.id);
+              const data = JSON.parse(content);
+              sessions = data.sessions || [];
+            } catch (_) {}
+          }
 
-      await this.uploadAppDataFile(DRIVE_SESSIONS_FILENAME, payload);
-      console.log('[TetherPass] Sessions file updated (removed locked session) on Drive:', sessionId || 'all');
+          if (sessionId) {
+            sessions = sessions.filter(s => s && s.sessionId !== sessionId);
+          } else {
+            sessions = [];
+          }
+
+          const payload = JSON.stringify({
+            version: 1,
+            updatedAt: Date.now(),
+            sessions: sessions.slice(0, 20)
+          });
+
+          await this.uploadAppDataFile(DRIVE_SESSIONS_FILENAME, payload);
+          console.log('[TetherPass] Sessions file updated on Drive for:', sessionId || 'all');
+        } catch (e) {
+          console.warn('[TetherPass] Could not update active sessions on lock:', e.message);
+        }
+      })();
+
+      await Promise.allSettled([taskRequest, taskSessions]);
     } catch (e) {
-      console.warn('[TetherPass] markSessionLocked failed:', e.message);
+      console.warn('[TetherPass] markSessionLocked error:', e.message);
     }
   }
 
