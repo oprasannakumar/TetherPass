@@ -102,21 +102,26 @@
       sibCount++;
     }
 
-    // Inspect up to 3 parent containers (grandparent, great-grandparent) for floating labels / headers
+    // Inspect immediate field container for floating labels / headers
     let cur = input.parentElement;
-    for (let depth = 0; depth < 3 && cur && cur !== document.body; depth++) {
+    for (let depth = 0; depth < 2 && cur && cur !== document.body && cur.tagName !== 'FORM'; depth++) {
       if (cur.className && typeof cur.className === 'string') pieces.push(cur.className);
       if (cur.id) pieces.push(cur.id);
 
-      const textEls = cur.querySelectorAll('label, span, div, p, strong, b, small, h1, h2, h3, h4, h5, h6');
-      textEls.forEach(el => {
-        if (el !== input && !el.contains(input)) {
-          const txt = el.textContent ? el.textContent.trim() : '';
-          if (txt && txt.length > 0 && txt.length < 60) {
-            pieces.push(txt);
+      // Only inspect descendant text elements if this container is dedicated to this input
+      // (does not wrap multiple separate inputs like an entire form or table)
+      const siblingInputs = cur.querySelectorAll('input:not([type="hidden"])');
+      if (siblingInputs.length <= 1) {
+        const textEls = cur.querySelectorAll('label, span, div, p, strong, b, small, h1, h2, h3, h4, h5, h6');
+        textEls.forEach(el => {
+          if (el !== input && !el.contains(input)) {
+            const txt = el.textContent ? el.textContent.trim() : '';
+            if (txt && txt.length > 0 && txt.length < 60) {
+              pieces.push(txt);
+            }
           }
-        }
-      });
+        });
+      }
       cur = cur.parentElement;
     }
 
@@ -133,7 +138,15 @@
     const autocomplete = (input.getAttribute('autocomplete') || '').toLowerCase();
     const ph = (input.placeholder || '').toLowerCase();
 
-    // 0. 2FA / TOTP / One-Time Passcode
+    // 0. Explicit Password Input Type
+    if (type === 'password') {
+      if (input.maxLength >= 3 && input.maxLength <= 4 && (norm.includes('cvv') || norm.includes('cvc') || norm.includes('security code'))) {
+        return 'CVV';
+      }
+      return 'PASSWORD';
+    }
+
+    // 1. 2FA / TOTP / One-Time Passcode
     if (
       autocomplete.includes('one-time-code') ||
       raw.includes('totp') || raw.includes('2fa') || raw.includes('mfa') ||
@@ -143,17 +156,16 @@
       return 'TOTP';
     }
 
-    // 1. CVV / Security Code
+    // 2. CVV / Security Code
     if (
       autocomplete.includes('cc-csc') || autocomplete.includes('security-code') ||
       raw.includes('cvv') || raw.includes('cvc') || raw.includes('cid') || raw.includes('csc') ||
-      norm.includes('security code') || norm.includes('verification code') ||
-      (type === 'password' && input.maxLength >= 3 && input.maxLength <= 4 && (norm.includes('code') || norm.includes('security') || norm.includes('cvv')))
+      norm.includes('security code') || norm.includes('verification code')
     ) {
       return 'CVV';
     }
 
-    // 2. Expiry Date
+    // 3. Expiry Date
     if (
       autocomplete.includes('cc-exp') || norm.includes('expiry') || norm.includes('expire') ||
       norm.includes('expiration') || norm.includes('exp date') || norm.includes('expiry date') ||
@@ -164,7 +176,7 @@
       return 'EXPIRY';
     }
 
-    // 3. Cardholder Name (Check BEFORE Card Number so "Name on Card" matches Cardholder Name!)
+    // 4. Cardholder Name (Check BEFORE Card Number so "Name on Card" matches Cardholder Name!)
     if (
       autocomplete.includes('cc-name') || raw.includes('cardholder') || raw.includes('card_holder') ||
       norm.includes('name on card') || norm.includes('card holder') || norm.includes('cardholder') ||
@@ -174,7 +186,7 @@
       return 'CARD_HOLDER';
     }
 
-    // 4. Card Number
+    // 5. Card Number
     if (
       autocomplete.includes('cc-number') || raw.includes('cardnumber') || raw.includes('card_number') ||
       raw.includes('card_no') || raw.includes('cardno') || norm.includes('card number') ||
@@ -186,12 +198,12 @@
       return 'CARD_NUMBER';
     }
 
-    // 5. Bank IFSC Code
+    // 6. Bank IFSC Code
     if (raw.includes('ifsc') || norm.includes('ifsc code') || norm.includes('bank code')) {
       return 'IFSC';
     }
 
-    // 6. Bank Account Number
+    // 7. Bank Account Number
     if (
       raw.includes('account_number') || raw.includes('accountnumber') || raw.includes('acc_num') ||
       raw.includes('acc_no') || norm.includes('account number') || norm.includes('account no') ||
@@ -200,19 +212,29 @@
       return 'ACCOUNT_NUMBER';
     }
 
-    // 7. Password / MPIN
-    if (type === 'password' || raw.includes('mpin') || raw.includes('password') || raw.includes('passcode')) {
-      return 'PASSWORD';
-    }
-
-    // 8. User ID / Customer ID / Username / Email
+    // 8. User ID / Customer ID / Username / Email / Netbanking ID (Checked BEFORE generic text password!)
     if (
       type === 'email' || autocomplete.includes('username') || autocomplete.includes('email') ||
+      raw.includes('customer id') || raw.includes('customer_id') || raw.includes('cust_id') ||
+      raw.includes('user id') || raw.includes('userid') || raw.includes('user_id') ||
       raw.includes('username') || raw.includes('user_name') || raw.includes('email') ||
-      raw.includes('login') || raw.includes('userid') || raw.includes('user_id') ||
-      raw.includes('customer_id') || raw.includes('cust_id') || raw.includes('cif')
+      raw.includes('login id') || raw.includes('cif') || norm.includes('customer id') || norm.includes('user id') ||
+      raw.includes('login')
     ) {
       return 'USER_ID';
+    }
+
+    // 9. Text-based Password / MPIN (e.g. unmasked password toggled with eye icon, strictly requires password keywords in its own attributes)
+    const selfName = (input.name || '').toLowerCase();
+    const selfId = (input.id || '').toLowerCase();
+    if (
+      autocomplete.includes('current-password') || autocomplete.includes('new-password') ||
+      selfName.includes('password') || selfName.includes('pass') || selfName.includes('pwd') || selfName.includes('mpin') ||
+      selfId.includes('password') || selfId.includes('pass') || selfId.includes('pwd') || selfId.includes('mpin')
+    ) {
+      if (!selfName.includes('user') && !selfId.includes('user') && !selfName.includes('cust') && !selfId.includes('cust')) {
+        return 'PASSWORD';
+      }
     }
 
     return null;
