@@ -197,7 +197,7 @@ class DriveClient {
    */
   async sendAccessRequestToMobile(deviceName = 'Windows PC (TetherPass Extension)', targetDeviceId = 'ALL', authMode = 'PUSH') {
     const requestId = 'req_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-    const durationMs = (authMode === 'QR') ? 30000 : 60000; // 30s timeout for QR pairing
+    const durationMs = 60000; // 60s timeout for desktop pairing
     const expiresAt = Date.now() + durationMs;
 
     const payload = JSON.stringify({

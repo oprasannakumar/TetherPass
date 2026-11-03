@@ -787,6 +787,8 @@ let activeDirectQrInterval = null;
 let activeDirectQrCountdown = null;
 let currentDirectQrRequestId = null;
 let qrSessionExpiresAt = 0;
+let isQrPairingInProgress = false;
+let isQrExpired = false;
 
 function switchUnlockTab(tab) {
   const qrBtn = document.getElementById('tabModeQrBtn');
@@ -800,7 +802,7 @@ function switchUnlockTab(tab) {
     if (qrContainer) qrContainer.style.display = 'block';
     if (pushContainer) pushContainer.style.display = 'none';
 
-    // Start direct QR pairing (only if not already running a valid 30s session)
+    // Start direct QR pairing (only if not already running a valid session)
     startDirectQrPairing(false);
   } else {
     pushBtn?.classList.add('active');
@@ -817,27 +819,65 @@ function stopDirectQrPairing(clearSession = true) {
   if (activeDirectQrCountdown) clearInterval(activeDirectQrCountdown);
   activeDirectQrInterval = null;
   activeDirectQrCountdown = null;
+  isQrPairingInProgress = false;
   if (clearSession) {
     currentDirectQrRequestId = null;
     qrSessionExpiresAt = 0;
+    isQrExpired = false;
+  }
+}
+
+function markQrCodeExpired() {
+  if (activeDirectQrInterval) clearInterval(activeDirectQrInterval);
+  if (activeDirectQrCountdown) clearInterval(activeDirectQrCountdown);
+  activeDirectQrInterval = null;
+  activeDirectQrCountdown = null;
+  isQrExpired = true;
+
+  const timerEl = document.getElementById('qrWaitingTimer');
+  const canvas = document.getElementById('directPairingQrCanvas');
+  const pulseDot = document.querySelector('.pulse-dot-amber');
+  const refreshBtn = document.getElementById('refreshQrBtn');
+
+  if (timerEl) timerEl.textContent = '⌛ Code expired. Tap Refresh to reload';
+  if (canvas) canvas.style.opacity = '0.3';
+  if (pulseDot) pulseDot.style.background = '#94A3B8';
+  if (refreshBtn) {
+    refreshBtn.style.background = '#FF6F00';
+    refreshBtn.style.color = '#FFFFFF';
+    refreshBtn.style.border = 'none';
+    refreshBtn.style.fontWeight = '700';
   }
 }
 
 async function startDirectQrPairing(force = false) {
   const now = Date.now();
-  // Strictly enforce: regenerate ONLY after 30s or when user hits refresh
-  if (!force && currentDirectQrRequestId && qrSessionExpiresAt > now) {
-    return; // Current QR code is still valid and actively counting down
+  // Strictly prevent automatic regeneration: only generate if first time, or if user explicitly clicked refresh
+  if (!force && (currentDirectQrRequestId || isQrExpired || isQrPairingInProgress)) {
+    return;
   }
 
+  isQrPairingInProgress = true;
   stopDirectQrPairing(true);
 
   const loadingEl = document.getElementById('qrLoadingState');
   const readyEl = document.getElementById('qrReadyState');
   const timerEl = document.getElementById('qrWaitingTimer');
   const canvas = document.getElementById('directPairingQrCanvas');
+  const pulseDot = document.querySelector('.pulse-dot-amber');
+  const refreshBtn = document.getElementById('refreshQrBtn');
+
+  if (canvas) canvas.style.opacity = '1';
+  if (pulseDot) pulseDot.style.background = '#F59E0B';
+  if (refreshBtn) {
+    refreshBtn.style.background = '#F8FAFC';
+    refreshBtn.style.color = '#334155';
+    refreshBtn.style.border = '1px solid #CBD5E1';
+    refreshBtn.style.fontWeight = '600';
+  }
 
   if (!currentOAuthToken) {
+    isQrPairingInProgress = false;
     if (loadingEl) {
       loadingEl.style.display = 'block';
       loadingEl.innerHTML = `
@@ -874,6 +914,7 @@ async function startDirectQrPairing(force = false) {
     });
 
     if (!startRes || !startRes.success) {
+      isQrPairingInProgress = false;
       if (loadingEl) {
         loadingEl.innerHTML = `
           <div style="color: #EF4444; font-weight: 600; margin-bottom: 6px;">⚠️ Pairing Setup Error</div>
@@ -887,7 +928,8 @@ async function startDirectQrPairing(force = false) {
 
     const requestId = startRes.requestId;
     currentDirectQrRequestId = requestId;
-    qrSessionExpiresAt = Date.now() + 30000; // Exact 30-second validity window
+    qrSessionExpiresAt = Date.now() + 60000; // Stable 60-second validity window
+    isQrExpired = false;
 
     // Render pairing QR for mobile scan
     if (canvas && window.renderQRCode) {
@@ -897,10 +939,13 @@ async function startDirectQrPairing(force = false) {
 
     if (loadingEl) loadingEl.style.display = 'none';
     if (readyEl) readyEl.style.display = 'block';
+    isQrPairingInProgress = false;
 
     const updateCountdown = () => {
       const remainingSecs = Math.max(0, Math.ceil((qrSessionExpiresAt - Date.now()) / 1000));
-      if (timerEl) timerEl.textContent = `Waiting for scan (${remainingSecs}s)...`;
+      if (timerEl && !isQrExpired) {
+        timerEl.textContent = `Waiting for scan (${remainingSecs}s)...`;
+      }
       return remainingSecs;
     };
 
@@ -909,15 +954,14 @@ async function startDirectQrPairing(force = false) {
     activeDirectQrCountdown = setInterval(() => {
       const remaining = updateCountdown();
       if (remaining <= 0) {
-        // Exactly after 30 seconds: automatically regenerate a fresh QR code
-        stopDirectQrPairing(true);
-        startDirectQrPairing(true);
+        // Stop timer and mark expired — strictly NEVER regenerate automatically!
+        markQrCodeExpired();
       }
     }, 1000);
 
     // Poll for mobile biometric approval
     activeDirectQrInterval = setInterval(async () => {
-      if (!currentDirectQrRequestId) return;
+      if (!currentDirectQrRequestId || isQrExpired) return;
       const pollRes = await sendExtensionMessage({
         action: 'POLL_MOBILE_APPROVAL',
         payload: {
@@ -937,12 +981,12 @@ async function startDirectQrPairing(force = false) {
         stopDirectQrPairing(true);
         showError('Pairing request was denied on mobile phone.');
       } else if (pollRes.status === 'EXPIRED') {
-        stopDirectQrPairing(true);
-        startDirectQrPairing(true);
+        markQrCodeExpired();
       }
-    }, 1200);
+    }, 1500);
 
   } catch (err) {
+    isQrPairingInProgress = false;
     if (loadingEl) {
       loadingEl.style.display = 'block';
       if (readyEl) readyEl.style.display = 'none';
