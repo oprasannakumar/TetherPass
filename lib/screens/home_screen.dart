@@ -11,8 +11,6 @@ import '../services/database_service.dart';
 import '../services/device_identity_service.dart';
 import '../services/drive_service.dart';
 import '../services/vault_security_service.dart';
-import '../widgets/app_tour_dialog.dart';
-import '../widgets/spotlight_tour.dart';
 import '../widgets/tether_sync_dialog.dart';
 import 'add_edit_screen.dart';
 import 'item_detail_screen.dart';
@@ -32,10 +30,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   int _selectedFilter = 0; // 0 = All, 1 = Credit, 2 = Debit, 3 = Bank
 
-  // GlobalKeys to point directly to each button in the spotlight tour
+  // GlobalKeys for home screen elements
   final GlobalKey _profileKey = GlobalKey();
   final GlobalKey _driveSyncKey = GlobalKey();
-  final GlobalKey _tourHelpKey = GlobalKey();
   final GlobalKey _lockKey = GlobalKey();
   final GlobalKey _searchFilterKey = GlobalKey();
   final GlobalKey _fabKey = GlobalKey();
@@ -53,7 +50,6 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!drive.isSignedIn) {
         await drive.trySilentSignIn();
       }
-      _checkFirstTimeTour();
       _startApprovalPolling();
 
       final isRemoved = await drive.isCurrentDeviceRemoved();
@@ -432,173 +428,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return result ?? false;
   }
 
-  Future<void> _checkFirstTimeTour() async {
-    final sec = context.read<VaultSecurityService>();
-    final seen = await sec.hasSeenTour();
-    if (!seen && mounted) {
-      // Small delay to ensure widgets are laid out with accurate coordinates
-      Future.delayed(const Duration(milliseconds: 400), () {
-        if (mounted) _startSpotlightTour();
-      });
-    }
-  }
-
-  void _startSpotlightTour() {
-    final steps = <SpotlightTourStep>[
-      SpotlightTourStep(
-        targetKey: _profileKey,
-        icon: Icons.person_rounded,
-        title: 'Profile & Settings',
-        description: 'Tap here to change your Master Password, toggle Biometrics, view your 16-character Recovery Key, or Link Google Drive.',
-        isCircle: true,
-      ),
-      SpotlightTourStep(
-        targetKey: _driveSyncKey,
-        icon: Icons.cloud_sync_rounded,
-        title: 'Google Drive Cloud Sync',
-        description: 'Tap to manually back up your encrypted vault or restore saved cards from your Google Drive anytime.',
-        isCircle: true,
-      ),
-      SpotlightTourStep(
-        targetKey: _tourHelpKey,
-        icon: Icons.help_outline_rounded,
-        title: 'Interactive App Tour',
-        description: 'Tap this Help icon anytime to replay this button pointer tour or view the full feature guide.',
-        isCircle: true,
-      ),
-      SpotlightTourStep(
-        targetKey: _lockKey,
-        icon: Icons.lock_rounded,
-        title: 'Instant Vault Lock',
-        description: 'Tap here to immediately lock the app and secure all credentials behind Master Password & Biometrics.',
-        isCircle: true,
-      ),
-      SpotlightTourStep(
-        targetKey: _searchFilterKey,
-        icon: Icons.search_rounded,
-        title: 'Search & Quick Filters',
-        description: 'Search cards by nickname or bank name, or toggle between All, Credit Cards, Debit Cards, and Bank accounts.',
-        isCircle: false,
-        borderRadius: 16,
-      ),
-      SpotlightTourStep(
-        targetKey: _fabKey,
-        icon: Icons.add_rounded,
-        title: 'Add New Card or Account (+)',
-        description: 'Tap this orange button to add a new Credit Card, Debit Card, or Bank account to your vault.',
-        isCircle: true,
-      ),
-    ];
-
-    SpotlightTourOverlay.show(
-      context: context,
-      steps: steps,
-      onFinish: () {
-        final sec = context.read<VaultSecurityService>();
-        sec.setTourSeen(true);
-      },
-    );
-  }
-
-  void _showTourOptionsSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFCBD5E1),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF6F00).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.school_rounded, color: Color(0xFFFF6F00), size: 22),
-                ),
-                const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'TetherPass Interactive Tour',
-                      style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    Text(
-                      'Choose how you would like to explore features',
-                      style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-
-            // Option 1: 7-Chapter Illustrated Guide
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF6F00).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.auto_stories_rounded, color: Color(0xFFFF6F00)),
-              ),
-              title: const Text('Complete Illustrated Guide', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
-              subtitle: const Text('7 illustrated chapters covering cards, bank accounts, keyboard autofill, and security', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFFE2E8F0))),
-              tileColor: const Color(0xFFF8FAFC),
-              onTap: () {
-                Navigator.pop(ctx);
-                AppTourDialog.show(context);
-              },
-            ),
-            const SizedBox(height: 10),
-
-            // Option 2: Screen Pointer Tour
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.touch_app_rounded, color: Colors.blueAccent),
-              ),
-              title: const Text('Interactive Screen Tour', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
-              subtitle: const Text('Spotlight walk through every button and icon on the main screen', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFFE2E8F0))),
-              tileColor: const Color(0xFFF8FAFC),
-              onTap: () {
-                Navigator.pop(ctx);
-                _startSpotlightTour();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _loadItems() async {
     setState(() => _isLoading = true);
     final db = context.read<DatabaseService>();
@@ -946,7 +775,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 MaterialPageRoute(builder: (_) => const SettingsScreen()),
               );
               _loadItems();
-              _checkFirstTimeTour();
             },
             child: CircleAvatar(
               backgroundColor: const Color(0xFFFF6F00).withValues(alpha: 0.15),
@@ -990,13 +818,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
             tooltip: 'Google Drive Sync',
             onPressed: _showDriveMenu,
-          ),
-          // App Tour & Guide
-          IconButton(
-            key: _tourHelpKey,
-            icon: const Icon(Icons.help_outline_rounded, color: Color(0xFF64748B)),
-            tooltip: 'App Tour & Guide',
-            onPressed: _showTourOptionsSheet,
           ),
           // Lock Icon
           IconButton(
@@ -1407,35 +1228,16 @@ class _HomeScreenState extends State<HomeScreen> {
             style: TextStyle(color: Color(0xFF64748B), fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 24),
-          // Actions in empty state: Interactive Button Tour + Quick Restore
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            alignment: WrapAlignment.center,
-            children: [
-              ElevatedButton.icon(
-                icon: const Icon(Icons.touch_app_rounded, size: 16),
-                label: const Text('Button Tour (Pointing Tour)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6F00),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                ),
-                onPressed: _startSpotlightTour,
-              ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.cloud_download_rounded, color: Colors.blueAccent, size: 16),
-                label: const Text('Restore from Drive', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.blueAccent),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                ),
-                onPressed: _restoreFromGoogleDrive,
-              ),
-            ],
+          // Action in empty state: Quick Restore
+          OutlinedButton.icon(
+            icon: const Icon(Icons.cloud_download_rounded, color: Colors.blueAccent, size: 16),
+            label: const Text('Restore from Drive', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Colors.blueAccent),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            onPressed: _restoreFromGoogleDrive,
           ),
         ],
       ),

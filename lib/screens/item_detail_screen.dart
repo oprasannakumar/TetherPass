@@ -12,7 +12,6 @@ import '../services/totp_service.dart';
 import '../services/breach_watch_service.dart';
 import '../services/clipboard_service.dart';
 import '../widgets/card_input_formatter.dart';
-import '../widgets/spotlight_tour.dart';
 import 'add_edit_screen.dart';
 
 class ItemDetailScreen extends StatefulWidget {
@@ -46,121 +45,6 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   final GlobalKey _shareDockKey = GlobalKey();
   final GlobalKey _editDockKey = GlobalKey();
   final GlobalKey _deleteDockKey = GlobalKey();
-
-  void _startSpotlightTour() {
-    if (_item.isCard) {
-      _startCardSpotlightTour();
-    } else {
-      _startBankSpotlightTour();
-    }
-  }
-
-  void _startCardSpotlightTour() {
-    final steps = <SpotlightTourStep>[
-      SpotlightTourStep(
-        targetKey: _cardNumKey,
-        icon: Icons.pin_rounded,
-        title: 'Card Number (Tap to Copy)',
-        description: 'The card number is always visible for quick reading. Tap directly on the digits to copy only the number to your clipboard!',
-        isCircle: false,
-        borderRadius: 8,
-      ),
-      SpotlightTourStep(
-        targetKey: _cvvEyeKey,
-        icon: Icons.visibility_rounded,
-        title: 'CVV Eye Reveal Button',
-        description: 'Only the CVV is masked for privacy. Tap this eye icon directly beside the CVV to reveal or hide the 3-digit security code.',
-        isCircle: true,
-      ),
-      SpotlightTourStep(
-        targetKey: _copyDockKey,
-        icon: Icons.copy_rounded,
-        title: 'Quick Copy All Button',
-        description: 'Tap this button to copy the entire card profile (Cardholder Name, Number, Expiry, and CVV) into your clipboard in one tap.',
-        isCircle: true,
-      ),
-      SpotlightTourStep(
-        targetKey: _shareDockKey,
-        icon: Icons.share_rounded,
-        title: 'Share Credentials Button',
-        description: 'Opens native Android ShareSheet with clean formatted details (emojis included) for easy messaging.',
-        isCircle: true,
-      ),
-      SpotlightTourStep(
-        targetKey: _editDockKey,
-        icon: Icons.edit_outlined,
-        title: 'Edit Credentials Button',
-        description: 'Tap here to change bank name, nickname, card tier, expiry date, network, or notes.',
-        isCircle: true,
-      ),
-      SpotlightTourStep(
-        targetKey: _deleteDockKey,
-        icon: Icons.delete_outline_rounded,
-        title: 'Delete Item Button',
-        description: 'Permanently removes this credential from your encrypted local storage with a safety confirmation prompt.',
-        isCircle: true,
-      ),
-    ];
-
-    SpotlightTourOverlay.show(
-      context: context,
-      steps: steps,
-    );
-  }
-
-  void _startBankSpotlightTour() {
-    final steps = <SpotlightTourStep>[
-      SpotlightTourStep(
-        targetKey: _nbAccountRowKey,
-        icon: Icons.account_balance_rounded,
-        title: 'Account Number & IFSC Code',
-        description: 'Compact high-density formatting fits full 18-digit numbers on a single line. Tap the Account Number or IFSC code to copy each individually!',
-        isCircle: false,
-        borderRadius: 14,
-      ),
-      SpotlightTourStep(
-        targetKey: _nbCopyBothKey,
-        icon: Icons.copy_all_rounded,
-        title: 'Copy Both (A/C + IFSC)',
-        description: 'Tap "Copy Both" to immediately copy both the Account Number and IFSC code together formatted for IMPS / NEFT transfer.',
-        isCircle: false,
-        borderRadius: 8,
-      ),
-      SpotlightTourStep(
-        targetKey: _copyDockKey,
-        icon: Icons.copy_rounded,
-        title: 'Quick Copy All Button',
-        description: 'Copies the complete bank profile (Bank Name, all Account Numbers, IFSC codes, User ID, and CIF) formatted cleanly in one tap.',
-        isCircle: true,
-      ),
-      SpotlightTourStep(
-        targetKey: _shareDockKey,
-        icon: Icons.share_rounded,
-        title: 'Share Bank Details',
-        description: 'Opens native Android ShareSheet with formatted account and bank details for easy messaging via WhatsApp, SMS, or Email.',
-        isCircle: true,
-      ),
-      SpotlightTourStep(
-        targetKey: _editDockKey,
-        icon: Icons.edit_outlined,
-        title: 'Edit Bank Details',
-        description: 'Add or remove account numbers, update passwords, MPIN, or change bank notes anytime.',
-        isCircle: true,
-      ),
-      SpotlightTourStep(
-        targetKey: _deleteDockKey,
-        icon: Icons.delete_outline_rounded,
-        title: 'Delete Item Button',
-        description: 'Permanently removes this bank account entry from your encrypted local vault with a safety confirmation prompt.',
-        isCircle: true,
-      ),
-    ];
-
-    SpotlightTourOverlay.show(
-      context: context,
-      steps: steps,
-    );
-  }
 
   @override
   void initState() {
@@ -375,13 +259,6 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
           style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.help_outline_rounded, color: Color(0xFF64748B)),
-            tooltip: _item.isCard ? 'Card Features Tour' : 'Bank Account Tour',
-            onPressed: _startSpotlightTour,
-          ),
-        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

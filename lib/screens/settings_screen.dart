@@ -13,8 +13,6 @@ import '../services/database_service.dart';
 import '../services/drive_service.dart';
 import '../services/secure_backup_export_service.dart';
 import '../services/vault_security_service.dart';
-import '../widgets/app_tour_dialog.dart';
-import '../widgets/spotlight_tour.dart';
 import 'browser_extension_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -39,80 +37,6 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   final GlobalKey _exportKey = GlobalKey();
   final GlobalKey _importKey = GlobalKey();
   final GlobalKey _lockNowKey = GlobalKey();
-
-  void _startSettingsSpotlightTour() {
-    final steps = <SpotlightTourStep>[
-      SpotlightTourStep(
-        targetKey: _accountKey,
-        icon: Icons.account_circle_rounded,
-        title: 'Account & Google Drive Linking',
-        description: 'Displays your profile and lets you link or disconnect Google Drive. When connected, vault backups happen automatically in the background.',
-        isCircle: false,
-        borderRadius: 16,
-      ),
-      SpotlightTourStep(
-        targetKey: _biometricKey,
-        icon: Icons.fingerprint_rounded,
-        title: 'Biometric Unlock Toggle',
-        description: 'Enable or disable fingerprint/face recognition. When enabled, the vault unlocks immediately with no password fallback prompt.',
-        isCircle: false,
-        borderRadius: 16,
-      ),
-      SpotlightTourStep(
-        targetKey: _changePasswordKey,
-        icon: Icons.lock_outline_rounded,
-        title: 'Change Master Password',
-        description: 'Update your Master Password at any time with zero-knowledge verification (only salted SHA-256 is checked).',
-        isCircle: false,
-        borderRadius: 16,
-      ),
-      SpotlightTourStep(
-        targetKey: _recoveryKeyTileKey,
-        icon: Icons.key_rounded,
-        title: '16-Character Emergency Recovery Key',
-        description: 'View or regenerate your emergency recovery key (XXXX-XXXX-XXXX-XXXX). If you ever forget your Master Password, this key lets you reset it!',
-        isCircle: false,
-        borderRadius: 16,
-      ),
-      SpotlightTourStep(
-        targetKey: _autofillKey,
-        icon: Icons.keyboard_rounded,
-        title: 'Keyboard Payment Autofill',
-        description: 'Enables card chips above your keyboard in Chrome and shopping apps. Only active when TetherPass is unlocked!',
-        isCircle: false,
-        borderRadius: 16,
-      ),
-      SpotlightTourStep(
-        targetKey: _exportKey,
-        icon: Icons.file_upload_outlined,
-        title: 'Export Offline Backup',
-        description: 'Exports your entire vault locally encrypted with AES-256 so you can save a copy to file or message it securely.',
-        isCircle: false,
-        borderRadius: 16,
-      ),
-      SpotlightTourStep(
-        targetKey: _importKey,
-        icon: Icons.file_download_outlined,
-        title: 'Import Offline Backup',
-        description: 'Restore your vault credentials by pasting your previously exported encrypted backup code.',
-        isCircle: false,
-        borderRadius: 16,
-      ),
-      SpotlightTourStep(
-        targetKey: _lockNowKey,
-        icon: Icons.lock_clock_rounded,
-        title: 'Lock Vault Now',
-        description: 'Instantly lock the app and return to the biometric and Master Password authentication screen.',
-        isCircle: false,
-        borderRadius: 16,
-      ),
-    ];
-
-    SpotlightTourOverlay.show(
-      context: context,
-      steps: steps,
-    );
-  }
 
   @override
   void initState() {
@@ -807,13 +731,6 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text('Settings & Security', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 18)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.help_outline_rounded, color: Color(0xFF64748B)),
-            tooltip: 'Settings Tour',
-            onPressed: _startSettingsSpotlightTour,
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -1058,40 +975,6 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
               title: 'Import Backup from File',
               subtitle: 'Restore from exported encrypted backup code',
               onTap: _importBackupFile,
-            ),
-
-            const SizedBox(height: 24),
-
-            // ── App Tour & Guide ──
-            const Text(
-              'HELP & APP TOUR',
-              style: TextStyle(color: Color(0xFFFF6F00), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-            ),
-            const SizedBox(height: 10),
-
-            _buildSettingTile(
-              icon: Icons.touch_app_rounded,
-              title: 'Settings Pointer Tour',
-              subtitle: 'Points directly to buttons on this screen & explains each setting',
-              onTap: _startSettingsSpotlightTour,
-            ),
-
-            _buildSettingTile(
-              icon: Icons.home_outlined,
-              title: 'Dashboard Pointer Tour',
-              subtitle: 'Return to dashboard and point to vault buttons',
-              onTap: () async {
-                final sec = context.read<VaultSecurityService>();
-                await sec.setTourSeen(false);
-                if (mounted) Navigator.pop(context); // Returns to Home, which immediately triggers the pointer tour!
-              },
-            ),
-
-            _buildSettingTile(
-              icon: Icons.menu_book_rounded,
-              title: 'Feature Overview Guide',
-              subtitle: '7-chapter illustrated guide covering cards, banks, autofill & security',
-              onTap: () => AppTourDialog.show(context),
             ),
 
             const SizedBox(height: 24),

@@ -15,7 +15,6 @@ import '../services/nfc_card_scanner_service.dart';
 import '../services/totp_service.dart';
 import '../widgets/card_input_formatter.dart';
 import '../widgets/card_widget.dart';
-import '../widgets/spotlight_tour.dart';
 import '../widgets/totp_qr_scanner_dialog.dart';
 
 class AddEditScreen extends StatefulWidget {
@@ -137,109 +136,6 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
   final GlobalKey _nbBankSectionKey = GlobalKey();
   final GlobalKey _nbAccountsSectionKey = GlobalKey();
   final GlobalKey _nbAddAccountBtnKey = GlobalKey();
-
-  void _startAddEditTour() {
-    if (_tabController.index == 0) {
-      _startCardFormTour();
-    } else if (_tabController.index == 1) {
-      _startBankFormTour();
-    } else {
-      _startPasswordFormTour();
-    }
-  }
-
-  void _startPasswordFormTour() {
-    final steps = <SpotlightTourStep>[
-      SpotlightTourStep(
-        targetKey: _tabBarKey,
-        icon: Icons.tab_rounded,
-        title: 'Vault Type Tabs',
-        description: 'Switch between Cards, Bank Accounts, or Website Credentials to store passwords for any site or app.',
-        isCircle: false,
-        borderRadius: 12,
-      ),
-    ];
-    SpotlightTourOverlay.show(
-      context: context,
-      steps: steps,
-    );
-  }
-
-  void _startCardFormTour() {
-    final steps = <SpotlightTourStep>[
-      SpotlightTourStep(
-        targetKey: _tabBarKey,
-        icon: Icons.tab_rounded,
-        title: 'Card vs Bank Tabs',
-        description: 'Switch between saving a Credit/Debit Card or a Bank Account with multi-account rows.',
-        isCircle: false,
-        borderRadius: 12,
-      ),
-      SpotlightTourStep(
-        targetKey: _cardTypeKey,
-        icon: Icons.credit_card_rounded,
-        title: 'Credit or Debit Selection',
-        description: 'Toggle between Credit Card and Debit Card. Auto-detected when you type the card number.',
-        isCircle: false,
-        borderRadius: 14,
-      ),
-      SpotlightTourStep(
-        targetKey: _cardNumberKey,
-        icon: Icons.document_scanner_rounded,
-        title: 'Smart Number, OCR & NFC Scan',
-        description: 'Paste card text, tap the Camera icon for instant OCR photo scan, or tap NFC to tap your physical card against your phone!',
-        isCircle: false,
-        borderRadius: 14,
-      ),
-    ];
-
-    SpotlightTourOverlay.show(
-      context: context,
-      steps: steps,
-    );
-  }
-
-  void _startBankFormTour() {
-    final steps = <SpotlightTourStep>[
-      SpotlightTourStep(
-        targetKey: _tabBarKey,
-        icon: Icons.tab_rounded,
-        title: 'Bank Accounts Form',
-        description: 'You are on the Bank form. Save multiple account numbers and IFSC codes under a single bank entry.',
-        isCircle: false,
-        borderRadius: 12,
-      ),
-      SpotlightTourStep(
-        targetKey: _nbBankSectionKey,
-        icon: Icons.account_balance_rounded,
-        title: 'Bank Name & Nickname',
-        description: 'Enter your bank name (e.g. HDFC Bank, SBI) and a custom label (e.g. Salary, Savings).',
-        isCircle: false,
-        borderRadius: 14,
-      ),
-      SpotlightTourStep(
-        targetKey: _nbAccountsSectionKey,
-        icon: Icons.format_list_numbered_rounded,
-        title: 'Same-Row Account No & IFSC',
-        description: 'Account Number and IFSC code share the same row with maximized space. When you have multiple accounts, swipe left on any row to delete it!',
-        isCircle: false,
-        borderRadius: 14,
-      ),
-      SpotlightTourStep(
-        targetKey: _nbAddAccountBtnKey,
-        icon: Icons.add_circle_outline_rounded,
-        title: '+ Add Another Account Number',
-        description: 'Tap here to add multiple accounts for the same bank (Salary, Savings, Joint) in this single form!',
-        isCircle: false,
-        borderRadius: 12,
-      ),
-    ];
-
-    SpotlightTourOverlay.show(
-      context: context,
-      steps: steps,
-    );
-  }
 
   @override
   void initState() {
@@ -1381,13 +1277,6 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           isEditing ? 'Edit Item' : 'Add to Vault',
           style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.help_outline_rounded, color: Color(0xFF64748B)),
-            tooltip: 'Form Tour',
-            onPressed: _startAddEditTour,
-          ),
-        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
