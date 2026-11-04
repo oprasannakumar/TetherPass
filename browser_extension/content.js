@@ -157,20 +157,26 @@
     }
 
     // 1. 2FA / TOTP / One-Time Passcode
-    if (
+    const isTotpCandidate = (
       autocomplete.includes('one-time-code') ||
       raw.includes('totp') || raw.includes('2fa') || raw.includes('mfa') ||
       raw.includes('otp') || raw.includes('authenticator') ||
-      (type === 'text' && input.maxLength === 6 && (norm.includes('code') || norm.includes('pin')))
-    ) {
+      raw.includes('verification_code') || raw.includes('verification-code') ||
+      raw.includes('auth_code') || raw.includes('auth-code') ||
+      norm.includes('verification code') || norm.includes('two factor') ||
+      norm.includes('2 step') || norm.includes('two step') ||
+      (type === 'text' && input.maxLength === 6 && (norm.includes('code') || norm.includes('pin'))) ||
+      ((norm.includes('security code') || norm.includes('passcode') || norm.includes('auth code')) &&
+       !norm.includes('card') && !norm.includes('cvv') && !norm.includes('payment') && !norm.includes('credit') && !norm.includes('debit'))
+    );
+    if (isTotpCandidate) {
       return 'TOTP';
     }
 
-    // 2. CVV / Security Code
+    // 2. CVV / Security Code (Card payment only)
     if (
-      autocomplete.includes('cc-csc') || autocomplete.includes('security-code') ||
-      raw.includes('cvv') || raw.includes('cvc') || raw.includes('cid') || raw.includes('csc') ||
-      norm.includes('security code') || norm.includes('verification code')
+      autocomplete.includes('cc-csc') || raw.includes('cvv') || raw.includes('cvc') || raw.includes('cid') || raw.includes('csc') ||
+      ((norm.includes('security code') || norm.includes('verification code')) && (norm.includes('card') || norm.includes('payment') || input.maxLength === 3 || input.maxLength === 4))
     ) {
       return 'CVV';
     }

@@ -43,9 +43,11 @@ class CardVaultAutofillService : AutofillService() {
             detector.traverse(window.rootViewNode)
         }
 
-        val hasCardFields = detector.cardNumber != null || detector.expiry != null ||
-                detector.expiryMonth != null || detector.expiryYear != null || detector.cvv != null
-        val hasLoginFields = detector.username != null || detector.password != null
+        val hasTotpFields = detector.totp != null
+        val hasCardFields = (detector.cardNumber != null || detector.expiry != null ||
+                detector.expiryMonth != null || detector.expiryYear != null || detector.cvv != null) &&
+                !hasTotpFields
+        val hasLoginFields = detector.username != null || detector.password != null || hasTotpFields
 
         if (!hasCardFields && !hasLoginFields) {
             callback.onSuccess(null)
@@ -55,6 +57,7 @@ class CardVaultAutofillService : AutofillService() {
         // If vault is locked in RAM, offer an Unlock prompt so the user can authenticate TetherPass and autofill!
         if (!AutofillBridge.isUnlocked) {
             val targetField = detector.focusedField
+                ?: detector.totp
                 ?: detector.cardNumber
                 ?: detector.username
                 ?: detector.password
@@ -104,8 +107,77 @@ class CardVaultAutofillService : AutofillService() {
             inlineRequest.inlinePresentationSpecs
         } else null
 
-        // ── 1. LOGIN CREDENTIALS AUTOFILL ──
-        if (hasLoginFields && passwords.isNotEmpty()) {
+        // ── 0. 2FA / TOTP VERIFICATION CODES AUTOFILL ──
+        if (hasTotpFields && passwords.isNotEmpty()) {
+            val passwordsWithTotp = passwords.filter { it.totpSecret.isNotEmpty() }
+            val matchingTotp = passwordsWithTotp.filter { pwd ->
+                val cleanWeb = cleanDomain(pwd.website)
+                val domainRoot = extractDomainRoot(pwd.website)
+                val nick = pwd.nickname.lowercase().trim()
+
+                val webMatch = detector.webDomains.any { dom ->
+                    cleanWeb.isNotEmpty() && (
+                        dom == cleanWeb ||
+                        dom.endsWith(".$cleanWeb") ||
+                        cleanWeb.endsWith(".$dom") ||
+                        (domainRoot.length >= 3 && dom.contains(domainRoot))
+                    )
+                }
+
+                val pkgMatch = targetPackage.isNotEmpty() && (
+                    (domainRoot.length >= 3 && targetPackage.contains(domainRoot)) ||
+                    (nick.length >= 3 && targetPackage.contains(nick))
+                )
+
+                webMatch || pkgMatch
+            }.let { filtered ->
+                if (filtered.isNotEmpty()) filtered else passwordsWithTotp
+            }
+
+            for (pwd in matchingTotp) {
+                val totpCode = TotpGenerator.generateCurrentCode(pwd.totpSecret) ?: continue
+                val datasetBuilder = Dataset.Builder()
+                val displayTitle = "⚡ $totpCode"
+                val displaySub = if (pwd.nickname.isNotEmpty()) pwd.nickname else pwd.website.ifEmpty { "2FA Code" }
+
+                var inlinePresentation: InlinePresentation? = null
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && specs != null && specs.isNotEmpty()) {
+                    try {
+                        val spec = specs[0]
+                        val emptyIntent = PendingIntent.getActivity(
+                            applicationContext,
+                            0,
+                            Intent(),
+                            PendingIntent.FLAG_IMMUTABLE
+                        )
+                        val contentBuilder = InlineSuggestionUi.newContentBuilder(emptyIntent)
+                            .setTitle(displayTitle)
+                            .setContentDescription(displayTitle)
+                            .setSubtitle(displaySub)
+
+                        val slice = contentBuilder.build().slice
+                        inlinePresentation = InlinePresentation(slice, spec, false)
+                    } catch (_: Exception) {}
+                }
+
+                val afVal = AutofillValue.forText(totpCode)
+                val fieldRemoteViews = RemoteViews(packageName, R.layout.autofill_dropdown_item).apply {
+                    setTextViewText(R.id.autofill_title, displayTitle)
+                    setTextViewText(R.id.autofill_subtitle, "🔐 $displaySub")
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
+                    datasetBuilder.setValue(detector.totp!!.id, afVal, fieldRemoteViews, inlinePresentation)
+                } else {
+                    datasetBuilder.setValue(detector.totp!!.id, afVal, fieldRemoteViews)
+                }
+
+                responseBuilder.addDataset(datasetBuilder.build())
+            }
+        }
+
+        // ── 1. LOGIN CREDENTIALS AUTOFILL (Only when username or password input is present) ──
+        val hasDirectLoginFields = detector.username != null || detector.password != null
+        if (hasDirectLoginFields && passwords.isNotEmpty()) {
             val matchingPasswords = passwords.filter { pwd ->
                 val cleanWeb = cleanDomain(pwd.website)
                 val domainRoot = extractDomainRoot(pwd.website)
@@ -310,6 +382,7 @@ class CardVaultAutofillService : AutofillService() {
 
         var username: FieldInfo? = null
         var password: FieldInfo? = null
+        var totp: FieldInfo? = null
         var focusedField: FieldInfo? = null
         val webDomains = mutableSetOf<String>()
 
@@ -344,25 +417,41 @@ class CardVaultAutofillService : AutofillService() {
                     focusedField = fieldInfo
                 }
 
-                // 1. Password detection
-                val isPassword = hints.any { it.contains("password") } ||
+                // 1. 2FA / TOTP / One-Time Passcode Detection
+                val isTotp = hints.any {
+                    it.contains("one-time-code") || it.contains("otp") || it.contains("2fa") ||
+                    it.contains("totp") || it.contains("verification") || it.contains("passcode")
+                } || raw.contains("one-time-code") || raw.contains("onetimecode") ||
+                     raw.contains("totp") || raw.contains("2fa") || raw.contains("mfa") ||
+                     raw.contains("otp") || raw.contains("authenticator") ||
+                     raw.contains("verification_code") || raw.contains("verification-code") ||
+                     raw.contains("verificationcode") || raw.contains("auth_code") ||
+                     raw.contains("auth-code") || norm.contains("verification code") ||
+                     norm.contains("two factor") || norm.contains("2 step") || norm.contains("two step") ||
+                     ((norm.contains("security code") || norm.contains("passcode") || norm.contains("code")) &&
+                      !norm.contains("card") && !norm.contains("cvv") && !norm.contains("payment") && !norm.contains("credit") && !norm.contains("debit"))
+
+                // 2. Password detection
+                val isPassword = !isTotp && (hints.any { it.contains("password") } ||
                         (node.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_TEXT &&
                                 (node.inputType and InputType.TYPE_MASK_VARIATION == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
                                  node.inputType and InputType.TYPE_MASK_VARIATION == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
                                  node.inputType and InputType.TYPE_MASK_VARIATION == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD)) ||
                         idEntry.contains("password") || idEntry.contains("pwd") || idEntry.contains("pass") ||
-                        raw.contains("password") || raw.contains("passwd")
+                        raw.contains("password") || raw.contains("passwd"))
 
-                // 2. CVV detection
-                val isCvv = hints.any {
-                    it.contains("securitycode") || it.contains("csc") || it.contains("cvv") || it.contains("cvc")
+                // 3. CVV detection (Strictly for card payment fields, NEVER for 2FA / OTP!)
+                val isCvv = !isTotp && !isPassword && (hints.any {
+                    it.contains("creditcardsecuritycode") || it.contains("csc") || it.contains("cvv") || it.contains("cvc")
                 } || raw.contains("cvv") || raw.contains("cvc") || raw.contains("cvn") ||
-                     raw.contains("cid") || raw.contains("csc") || raw.contains("security_code") ||
-                     raw.contains("security-code") || norm.contains("security code") ||
-                     norm.contains("sec code") || norm.contains("card verification") ||
-                     norm.contains("verification code")
+                     raw.contains("cid") || raw.contains("csc") || raw.contains("card_cvv") ||
+                     raw.contains("card-cvv") ||
+                     ((norm.contains("security code") || norm.contains("sec code") || norm.contains("card verification")) &&
+                      (norm.contains("card") || norm.contains("payment") || norm.contains("credit") || norm.contains("debit"))))
 
-                if (isCvv) {
+                if (isTotp) {
+                    if (totp == null || node.isFocused) totp = fieldInfo
+                } else if (isCvv) {
                     if (cvv == null || node.isFocused) cvv = fieldInfo
                 } else if (isPassword) {
                     if (password == null || node.isFocused) password = fieldInfo

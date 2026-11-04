@@ -31,7 +31,7 @@ class AutofillBridgeService {
             .toList();
 
         pwdMaps = items
-            .where((item) => item.isPassword)
+            .where((item) => item.isPassword || item.hasTotp)
             .map((item) => {
                   'nickname': item.nickname.trim().isEmpty ? item.bankName : item.nickname,
                   'website': item.website.trim(),

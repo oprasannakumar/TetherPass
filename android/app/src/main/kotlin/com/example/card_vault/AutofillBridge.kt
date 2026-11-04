@@ -13,7 +13,8 @@ data class AutofillPassword(
     val nickname: String,
     val website: String,
     val username: String,
-    val password: String
+    val password: String,
+    val totpSecret: String = ""
 )
 
 object AutofillBridge {
@@ -49,8 +50,9 @@ object AutofillBridge {
                     val website = map["website"] as? String ?: ""
                     val username = map["username"] as? String ?: ""
                     val password = map["password"] as? String ?: ""
-                    if (username.isNotEmpty() || password.isNotEmpty()) {
-                        _passwords.add(AutofillPassword(nickname, website, username, password))
+                    val totpSecret = map["totpSecret"] as? String ?: ""
+                    if (username.isNotEmpty() || password.isNotEmpty() || totpSecret.isNotEmpty()) {
+                        _passwords.add(AutofillPassword(nickname, website, username, password, totpSecret))
                     }
                 }
             }
