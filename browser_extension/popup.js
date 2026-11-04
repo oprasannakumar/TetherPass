@@ -1080,13 +1080,39 @@ async function startDirectQrPairing(force = false) {
 
     if (!startRes || !startRes.success) {
       directQrState = 'IDLE';
+      const errMsg = startRes?.error || 'Could not connect to Google Drive';
+      const isAuthErr = errMsg.includes('401') || errMsg.includes('UNAUTHENTICATED') || errMsg.includes('AUTH_EXPIRED') || errMsg.includes('Invalid Credentials');
+
+      if (isAuthErr) {
+        currentOAuthToken = null;
+        driveClient.setToken(null);
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          chrome.storage.local.remove(['googleOAuthToken', 'googleAccountEmail', 'googleAccountPicture']).catch(() => {});
+        }
+      }
+
       if (loadingEl) {
         loadingEl.innerHTML = `
-          <div style="color: #EF4444; font-weight: 600; margin-bottom: 6px;">⚠️ Pairing Setup Error</div>
-          <div style="font-size: 11px; color: #64748B; margin-bottom: 8px;">${escapeHtml(startRes?.error || 'Could not connect to Google Drive')}</div>
-          <button type="button" id="retryDirectQrBtn" class="btn-refresh-qr">🔄 Try Again</button>
+          <div style="color: #EF4444; font-weight: 700; font-size: 13px; margin-bottom: 6px;">
+            ${isAuthErr ? '⚠️ Google Session Expired' : '⚠️ Pairing Setup Error'}
+          </div>
+          <div style="font-size: 11px; color: #64748B; margin-bottom: 12px; line-height: 1.4;">
+            ${isAuthErr ? 'Your Google authorization has expired or is invalid. Please sign in again to continue.' : escapeHtml(errMsg)}
+          </div>
+          ${isAuthErr ? `
+            <button type="button" id="reauthGoogleBtn" class="btn btn-google" style="margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <img src="icons/google_logo.svg" alt="G" class="google-logo" style="width: 16px; height: 16px;" />
+              <span>Sign in with Google Account</span>
+            </button>
+          ` : `
+            <button type="button" id="retryDirectQrBtn" class="btn-refresh-qr">🔄 Try Again</button>
+          `}
         `;
-        document.getElementById('retryDirectQrBtn')?.addEventListener('click', () => startDirectQrPairing(true));
+        if (isAuthErr) {
+          document.getElementById('reauthGoogleBtn')?.addEventListener('click', handleGoogleSignIn);
+        } else {
+          document.getElementById('retryDirectQrBtn')?.addEventListener('click', () => startDirectQrPairing(true));
+        }
       }
       return;
     }
@@ -1160,15 +1186,41 @@ async function startDirectQrPairing(force = false) {
 
   } catch (err) {
     directQrState = 'IDLE';
+    const errMsg = err?.message || '';
+    const isAuthErr = errMsg.includes('401') || errMsg.includes('UNAUTHENTICATED') || errMsg.includes('AUTH_EXPIRED') || errMsg.includes('Invalid Credentials');
+
+    if (isAuthErr) {
+      currentOAuthToken = null;
+      driveClient.setToken(null);
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        chrome.storage.local.remove(['googleOAuthToken', 'googleAccountEmail', 'googleAccountPicture']).catch(() => {});
+      }
+    }
+
     if (loadingEl) {
       loadingEl.style.display = 'block';
       if (readyEl) readyEl.style.display = 'none';
       loadingEl.innerHTML = `
-        <div style="color: #EF4444; font-weight: 700; font-size: 12px; margin-bottom: 4px;">⚠️ Pairing Setup Error</div>
-        <div style="color: #64748B; font-size: 11px; margin-bottom: 10px;">${escapeHtml(err.message)}</div>
-        <button type="button" id="retryDirectQrErrBtn" class="btn-refresh-qr">🔄 Try Again</button>
+        <div style="color: #EF4444; font-weight: 700; font-size: 13px; margin-bottom: 6px;">
+          ${isAuthErr ? '⚠️ Google Session Expired' : '⚠️ Pairing Setup Error'}
+        </div>
+        <div style="color: #64748B; font-size: 11px; margin-bottom: 12px; line-height: 1.4;">
+          ${isAuthErr ? 'Your Google authorization has expired or is invalid. Please sign in again to continue.' : escapeHtml(errMsg)}
+        </div>
+        ${isAuthErr ? `
+          <button type="button" id="reauthGoogleErrBtn" class="btn btn-google" style="margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <img src="icons/google_logo.svg" alt="G" class="google-logo" style="width: 16px; height: 16px;" />
+            <span>Sign in with Google Account</span>
+          </button>
+        ` : `
+          <button type="button" id="retryDirectQrErrBtn" class="btn-refresh-qr">🔄 Try Again</button>
+        `}
       `;
-      document.getElementById('retryDirectQrErrBtn')?.addEventListener('click', () => startDirectQrPairing(true));
+      if (isAuthErr) {
+        document.getElementById('reauthGoogleErrBtn')?.addEventListener('click', handleGoogleSignIn);
+      } else {
+        document.getElementById('retryDirectQrErrBtn')?.addEventListener('click', () => startDirectQrPairing(true));
+      }
     }
   }
 }

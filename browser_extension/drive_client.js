@@ -31,47 +31,47 @@ class DriveClient {
         return reject(new Error('chrome.identity API unavailable'));
       }
 
-      // 1. Try getAuthToken first (seamless if account already authorized)
-      chrome.identity.getAuthToken({ interactive: true }, (token) => {
-        if (!chrome.runtime.lastError && token) {
-          this.token = token;
-          if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-            chrome.storage.local.set({ googleOAuthToken: token });
-          }
-          return resolve(token);
+      // 1. Prioritize launchWebAuthFlow so full Google Drive scopes are explicitly granted by user
+      const redirectUri = chrome.identity.getRedirectURL();
+      const scopes = [
+        'https://www.googleapis.com/auth/drive.appdata',
+        'https://www.googleapis.com/auth/drive.file',
+        'https://www.googleapis.com/auth/userinfo.email',
+        'https://www.googleapis.com/auth/userinfo.profile'
+      ].join(' ');
+
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
+        `?client_id=${encodeURIComponent(this.clientId)}` +
+        `&response_type=token` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&scope=${encodeURIComponent(scopes)}` +
+        `&prompt=select_account`;
+
+      chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (responseUrl) => {
+        if (!chrome.runtime.lastError && responseUrl) {
+          try {
+            const url = new URL(responseUrl);
+            const hash = url.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            const accessToken = params.get('access_token');
+            if (accessToken) {
+              this.token = accessToken;
+              if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                chrome.storage.local.set({ googleOAuthToken: accessToken });
+              }
+              return resolve(accessToken);
+            }
+          } catch (_) {}
         }
 
-        // 2. Fallback to launchWebAuthFlow with select_account
-        const redirectUri = chrome.identity.getRedirectURL();
-        const scopes = [
-          'https://www.googleapis.com/auth/drive.appdata',
-          'https://www.googleapis.com/auth/drive.file',
-          'https://www.googleapis.com/auth/userinfo.email',
-          'https://www.googleapis.com/auth/userinfo.profile'
-        ].join(' ');
-
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
-          `?client_id=${encodeURIComponent(this.clientId)}` +
-          `&response_type=token` +
-          `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-          `&scope=${encodeURIComponent(scopes)}` +
-          `&prompt=select_account`;
-
-        chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (responseUrl) => {
-          if (!chrome.runtime.lastError && responseUrl) {
-            try {
-              const url = new URL(responseUrl);
-              const hash = url.hash.substring(1);
-              const params = new URLSearchParams(hash);
-              const accessToken = params.get('access_token');
-              if (accessToken) {
-                this.token = accessToken;
-                if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-                  chrome.storage.local.set({ googleOAuthToken: accessToken });
-                }
-                return resolve(accessToken);
-              }
-            } catch (_) {}
+        // 2. Fallback to getAuthToken if launchWebAuthFlow is unavailable or rejected
+        chrome.identity.getAuthToken({ interactive: true }, (token) => {
+          if (!chrome.runtime.lastError && token) {
+            this.token = token;
+            if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+              chrome.storage.local.set({ googleOAuthToken: token });
+            }
+            return resolve(token);
           }
           reject(new Error(chrome.runtime.lastError ? chrome.runtime.lastError.message : 'Google Sign-In was cancelled'));
         });
@@ -119,40 +119,18 @@ class DriveClient {
     let res = await fetch(url, { ...options, headers: makeHeaders(token) });
 
     if (res.status === 401) {
-      console.warn('[DriveClient] 401 Unauthorized detected. Clearing cached token and refreshing...');
+      console.warn('[DriveClient] 401 Unauthorized detected. Clearing cached token...');
       if (typeof chrome !== 'undefined' && chrome.identity?.removeCachedAuthToken) {
-        await new Promise(r => chrome.identity.removeCachedAuthToken({ token }, r));
+        try {
+          await new Promise(r => chrome.identity.removeCachedAuthToken({ token }, r));
+        } catch (_) {}
       }
       this.token = null;
       if (typeof chrome !== 'undefined' && chrome.storage?.local) {
         await chrome.storage.local.remove('googleOAuthToken');
       }
 
-      // Try silent refresh
-      try {
-        const freshToken = await new Promise((resolve) => {
-          if (typeof chrome !== 'undefined' && chrome.identity) {
-            chrome.identity.getAuthToken({ interactive: false }, (t) => {
-              if (!chrome.runtime.lastError && t) resolve(t);
-              else resolve(null);
-            });
-          } else {
-            resolve(null);
-          }
-        });
-
-        if (freshToken) {
-          this.token = freshToken;
-          if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-            await chrome.storage.local.set({ googleOAuthToken: freshToken });
-          }
-          res = await fetch(url, { ...options, headers: makeHeaders(freshToken) });
-        } else {
-          throw new Error('Google session expired. Please tap "Sign in with Google Account" to re-authenticate.');
-        }
-      } catch (err) {
-        throw new Error('Google session expired. Please tap "Sign in with Google Account" to re-authenticate.');
-      }
+      throw new Error('AUTH_EXPIRED: Google session expired or invalid credentials. Please sign in again.');
     }
 
     return res;

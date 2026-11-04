@@ -239,14 +239,17 @@
     }
 
     // 8. User ID / Customer ID / Username / Email / Netbanking ID (Checked BEFORE generic text password!)
-    if (
-      type === 'email' || autocomplete.includes('username') || autocomplete.includes('email') ||
+    // Strictly requires an actual login context: either explicit username/customer attribute,
+    // OR a form/page containing a password field. General emails (newsletters, shipping, contact) are ignored!
+    const hasPasswordInForm = !!(input.form?.querySelector('input[type="password"]') || document.querySelector('input[type="password"]'));
+    const isExplicitLoginField = autocomplete === 'username' || autocomplete === 'current-password' ||
       raw.includes('customer id') || raw.includes('customer_id') || raw.includes('cust_id') ||
       raw.includes('user id') || raw.includes('userid') || raw.includes('user_id') ||
-      raw.includes('username') || raw.includes('user_name') || raw.includes('email') ||
-      raw.includes('login id') || raw.includes('cif') || norm.includes('customer id') || norm.includes('user id') ||
-      raw.includes('login')
-    ) {
+      raw.includes('username') || raw.includes('user_name') || raw.includes('login id') || raw.includes('cif') ||
+      norm.includes('customer id') || norm.includes('user id') || norm.includes('login id') ||
+      raw.includes('netbanking') || raw.includes('sign in') || raw.includes('signin');
+
+    if (isExplicitLoginField || (hasPasswordInForm && (type === 'email' || autocomplete.includes('email') || raw.includes('email') || raw.includes('login')))) {
       return 'USER_ID';
     }
 
@@ -464,6 +467,22 @@
 
     // Guard: do not render if input already has credentials / value
     if (!targetInput || isInputFilled(targetInput)) {
+      return;
+    }
+
+    // STRICT AUTONOMY GUARD: If locked or not authorized, NEVER render any popup or notice!
+    if (!data || !data.authorized) {
+      removeDropdown();
+      return;
+    }
+
+    // Only render dropdown if there are matching items for this field type
+    const hasCardItems = ['CARD_NUMBER', 'EXPIRY', 'EXPIRY_MONTH', 'EXPIRY_YEAR', 'CVV', 'CARD_HOLDER'].includes(fieldType) && data.cards && data.cards.length > 0;
+    const hasBankItems = ['ACCOUNT_NUMBER', 'IFSC'].includes(fieldType) && data.bankAccounts && data.bankAccounts.length > 0;
+    const hasLoginItems = ['USER_ID', 'PASSWORD', 'TOTP'].includes(fieldType) && data.passwords && data.passwords.length > 0;
+
+    if (!hasCardItems && !hasBankItems && !hasLoginItems) {
+      removeDropdown();
       return;
     }
 

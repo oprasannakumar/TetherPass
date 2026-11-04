@@ -43,50 +43,22 @@ class CardVaultAutofillService : AutofillService() {
             detector.traverse(window.rootViewNode)
         }
 
-        val hasTotpFields = detector.totp != null
-        val hasCardFields = (detector.cardNumber != null || detector.expiry != null ||
-                detector.expiryMonth != null || detector.expiryYear != null || detector.cvv != null) &&
-                !hasTotpFields
-        val hasLoginFields = detector.username != null || detector.password != null || hasTotpFields
-
-        if (!hasCardFields && !hasLoginFields) {
+        // 1. If vault is locked in RAM or app is not running, NEVER prompt or show autofill
+        if (!AutofillBridge.isUnlocked) {
             callback.onSuccess(null)
             return
         }
 
-        // If vault is locked in RAM, offer an Unlock prompt so the user can authenticate TetherPass and autofill!
-        if (!AutofillBridge.isUnlocked) {
-            val targetField = detector.focusedField
-                ?: detector.totp
-                ?: detector.cardNumber
-                ?: detector.username
-                ?: detector.password
-                ?: detector.expiry
-                ?: detector.cvv
+        // 2. Strict Payment Page detection (must have card number field or expiry + cvv)
+        val hasTotpFields = detector.totp != null
+        val hasCardFields = (detector.cardNumber != null || (detector.expiry != null && detector.cvv != null)) &&
+                !hasTotpFields
 
-            if (targetField != null) {
-                try {
-                    val unlockIntent = Intent(applicationContext, MainActivity::class.java).apply {
-                        action = Intent.ACTION_VIEW
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    }
-                    val pendingIntent = PendingIntent.getActivity(
-                        applicationContext,
-                        1001,
-                        unlockIntent,
-                        PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-                    val unlockViews = RemoteViews(packageName, R.layout.autofill_dropdown_item).apply {
-                        setTextViewText(R.id.autofill_title, "🔒 Unlock TetherPass")
-                        setTextViewText(R.id.autofill_subtitle, "Tap to authenticate & autofill")
-                    }
-                    val resp = FillResponse.Builder()
-                        .setAuthentication(arrayOf(targetField.id), pendingIntent.intentSender, unlockViews)
-                        .build()
-                    callback.onSuccess(resp)
-                    return
-                } catch (_: Exception) {}
-            }
+        // 3. Strict Login Page detection (must have password field or 2FA/TOTP field)
+        // Standalone email/phone fields without a password field are NOT login pages!
+        val hasLoginFields = detector.password != null || hasTotpFields
+
+        if (!hasCardFields && !hasLoginFields) {
             callback.onSuccess(null)
             return
         }
