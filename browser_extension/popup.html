@@ -34,14 +34,14 @@
     </div>
 
     <!-- Linked State Minimal Account Strip (Replaces the huge STEP 1 box!) -->
-    <div id="oauthLinkedBox" class="account-strip" style="display: none;">
+    <div id="oauthLinkedBox" class="account-strip hidden" style="display: none;">
       <div class="strip-left">
         <div class="avatar-circle-sm">
           <img id="accountProfileImg" src="" alt="Profile" style="display: none; width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
-          <span id="accountAvatarLetter">O</span>
+          <span id="accountAvatarLetter"></span>
         </div>
         <div class="strip-user-info">
-          <div id="connectedEmailDisplay" class="strip-email">user@gmail.com</div>
+          <div id="connectedEmailDisplay" class="strip-email"></div>
           <div class="strip-status">
             <span class="status-dot-sm"></span>
             <span class="strip-status-text">Connected</span>
@@ -51,7 +51,7 @@
       <div class="strip-actions">
         <button type="button" id="openDeviceManagerFromHeaderBtn" class="btn-strip-action" title="Manage Linked Phones">
           <span class="strip-action-icon">📱</span>
-          <span id="headerDeviceCount" class="strip-action-text">1 Phone</span>
+          <span id="headerDeviceCount" class="strip-action-text">0 Phones</span>
         </button>
         <button id="disconnectOAuthBtn" class="btn-strip-disconnect" title="Disconnect Google Account">
           Disconnect
@@ -60,7 +60,7 @@
     </div>
 
     <!-- ── Screen 1: Locked & Authorization Required ── -->
-    <div id="lockedView" class="view-panel active">
+    <div id="lockedView" class="view-panel" style="display: none;">
       
       <!-- Modern Unlock Segmented Control -->
       <div class="unlock-segmented-control">

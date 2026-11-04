@@ -125,30 +125,29 @@ function sendExtensionMessage(message) {
 document.addEventListener('DOMContentLoaded', async () => {
   initUI();
 
-  // Instant 0ms session recovery from local storage cache (ZERO delay, NO locked screen flicker)
-  try {
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      const data = await chrome.storage.local.get(['tetherpass_session', 'google_account']);
-      const sess = data?.tetherpass_session;
-      const now = Date.now();
-      if (sess && sess.isAuthorized && sess.isUnlocked && (!sess.authExpiresAt || now < sess.authExpiresAt)) {
-        applyUnlockedUI(sess);
-      } else {
-        applyLockedUI();
-      }
-    }
-  } catch (_) {}
-
   await detectActiveTabDomain();
   await initDesktopDeviceName();
   await loadSavedGoogleAccount();
-  await refreshStatus();
 
-  // If locked, QR tab is active, and directQrState is IDLE, generate pairing QR once
-  const lockedView = document.getElementById('lockedView');
-  if (lockedView && lockedView.classList.contains('active') && directQrState === 'IDLE' && currentOAuthToken) {
-    startDirectQrPairing(false);
+  // Instant 0ms session recovery from local storage cache (ZERO delay, NO locked screen flicker)
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const data = await chrome.storage.local.get(['tetherpass_session']);
+      const sess = data?.tetherpass_session;
+      const now = Date.now();
+      if (currentGoogleAccount && sess && sess.isAuthorized && sess.isUnlocked && (!sess.authExpiresAt || now < sess.authExpiresAt)) {
+        applyUnlockedUI(sess);
+      } else {
+        applyLockedUI(true);
+      }
+    } else {
+      applyLockedUI(true);
+    }
+  } catch (_) {
+    applyLockedUI(true);
   }
+
+  await refreshStatus();
 
   // Auto-refresh desktop status periodically
   setInterval(() => {
@@ -254,18 +253,26 @@ async function loadSavedGoogleAccount() {
         'cachedBackupPayload',
         'preferredAuthMethod'
       ]);
-      if (data.googleOAuthToken) {
+      if (data.googleOAuthToken && data.googleAccountEmail) {
         currentOAuthToken = data.googleOAuthToken;
+        currentGoogleAccount = data.googleAccountEmail;
         driveClient.setToken(data.googleOAuthToken);
-      }
-      if (data.googleAccountPicture) {
-        currentGooglePicture = data.googleAccountPicture;
-      }
-      if (data.googleAccountEmail) {
+        if (data.googleAccountPicture) {
+          currentGooglePicture = data.googleAccountPicture;
+        }
         setConnectedGoogleAccount(data.googleAccountEmail, data.googleAccountPicture || null, false);
       } else {
+        currentOAuthToken = null;
+        currentGoogleAccount = null;
+        currentGooglePicture = null;
+        driveClient.setToken(null);
         const unlinked = document.getElementById('oauthUnlinkedBox');
         if (unlinked) unlinked.style.display = 'block';
+        const linked = document.getElementById('oauthLinkedBox');
+        if (linked) {
+          linked.style.display = 'none';
+          linked.classList.add('hidden');
+        }
       }
       if (data.cachedBackupPayload) {
         localBackupPayload = data.cachedBackupPayload;
@@ -569,8 +576,11 @@ async function handleGoogleSignIn() {
       const userInfo = await driveClient.getUserInfo();
       setConnectedGoogleAccount(userInfo.email || 'Google Account Connected', userInfo.picture || null);
     } catch (_) {
-      setConnectedGoogleAccount('Google Drive Connected');
+      setConnectedGoogleAccount('Google Account Connected');
     }
+
+    // Successfully connected! Show connection options and start QR code generation
+    applyLockedUI(true);
   } catch (err) {
     showError(`Google Sign-In notice: ${err.message}`);
   } finally {
@@ -669,7 +679,7 @@ async function handleDisconnectOAuth() {
     linkedBox.classList.add('hidden');
   }
 
-  setVaultState(false);
+  applyLockedUI(false);
 }
 
 async function handleSaveCustomToken() {
@@ -1273,11 +1283,25 @@ function applyUnlockedUI(data) {
   const statusText = document.getElementById('statusText');
   const lockedView = document.getElementById('lockedView');
   const unlockedView = document.getElementById('unlockedView');
+  const unlinkedBox = document.getElementById('oauthUnlinkedBox');
+  const linkedBox = document.getElementById('oauthLinkedBox');
+
+  if (unlinkedBox) unlinkedBox.style.display = 'none';
+  if (linkedBox) {
+    linkedBox.classList.remove('hidden');
+    linkedBox.style.display = 'flex';
+  }
 
   if (statusBadge) statusBadge.className = 'status-badge unlocked';
   if (statusText) statusText.textContent = 'Unlocked';
-  lockedView?.classList.remove('active');
-  unlockedView?.classList.add('active');
+  if (lockedView) {
+    lockedView.style.display = 'none';
+    lockedView.classList.remove('active');
+  }
+  if (unlockedView) {
+    unlockedView.style.display = 'block';
+    unlockedView.classList.add('active');
+  }
 
   const expAt = data.authExpiresAt || data.expiresAt;
   if (expAt) {
@@ -1303,11 +1327,47 @@ function applyLockedUI(autoStartQr = true) {
   const statusText = document.getElementById('statusText');
   const lockedView = document.getElementById('lockedView');
   const unlockedView = document.getElementById('unlockedView');
+  const unlinkedBox = document.getElementById('oauthUnlinkedBox');
+  const linkedBox = document.getElementById('oauthLinkedBox');
+
+  // If user has not connected Google Account, show ONLY the Sign In button!
+  if (!currentGoogleAccount || !currentOAuthToken) {
+    if (statusBadge) statusBadge.className = 'status-badge locked';
+    if (statusText) statusText.textContent = 'Not Connected';
+    if (unlinkedBox) unlinkedBox.style.display = 'block';
+    if (linkedBox) {
+      linkedBox.style.display = 'none';
+      linkedBox.classList.add('hidden');
+    }
+    if (lockedView) {
+      lockedView.style.display = 'none';
+      lockedView.classList.remove('active');
+    }
+    if (unlockedView) {
+      unlockedView.style.display = 'none';
+      unlockedView.classList.remove('active');
+    }
+    stopDirectQrPairing(true);
+    return;
+  }
+
+  // Account IS connected: Show account strip & unlock options
+  if (unlinkedBox) unlinkedBox.style.display = 'none';
+  if (linkedBox) {
+    linkedBox.classList.remove('hidden');
+    linkedBox.style.display = 'flex';
+  }
 
   if (statusBadge) statusBadge.className = 'status-badge locked';
   if (statusText) statusText.textContent = 'Locked';
-  lockedView?.classList.add('active');
-  unlockedView?.classList.remove('active');
+  if (lockedView) {
+    lockedView.style.display = 'block';
+    lockedView.classList.add('active');
+  }
+  if (unlockedView) {
+    unlockedView.style.display = 'none';
+    unlockedView.classList.remove('active');
+  }
   currentVaultItems = { cards: [], bankAccounts: [], passwords: [] };
   const vaultList = document.getElementById('vaultList');
   if (vaultList) vaultList.innerHTML = '';
@@ -1341,6 +1401,10 @@ function fillPageWithCard(card, btn) {
 }
 
 async function refreshStatus() {
+  if (!currentGoogleAccount || !currentOAuthToken) {
+    applyLockedUI(false);
+    return;
+  }
   const status = await sendExtensionMessage({ action: 'GET_STATUS' });
   if (status && status.isAuthorized && status.isUnlocked) {
     applyUnlockedUI(status);
