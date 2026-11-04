@@ -18,6 +18,9 @@ class AutoLockService {
   static int _cachedTimeout = defaultAutoLockSeconds;
   static bool _initialized = false;
 
+  /// Returns true if user set Auto-Lock to 'Never (Stay unlocked)'
+  static bool get isNeverLock => _cachedTimeout < 0;
+
   /// Global state flags to prevent re-locking during unlock/biometric prompt
   static bool isLocked = true;
   static bool isAuthenticating = false;
@@ -42,10 +45,14 @@ class AutoLockService {
     }
 
     _inactivityCheckTimer?.cancel();
-    // Inactivity ticker: checks every 2 seconds if in-app user has been idle
-    _inactivityCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      checkInAppInactivity();
-    });
+    if (!isNeverLock) {
+      // Inactivity ticker: checks every 2 seconds if in-app user has been idle
+      _inactivityCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        checkInAppInactivity();
+      });
+    } else {
+      isLocked = false;
+    }
   }
 
   /// Records user touch interaction on screen (resets inactivity countdown)
@@ -73,7 +80,7 @@ class AutoLockService {
 
   /// Checks in-app user inactivity. Called periodically while app is open.
   static void checkInAppInactivity() {
-    if (isLocked || isAuthenticating) return;
+    if (isNeverLock || isLocked || isAuthenticating) return;
     if (_cachedTimeout <= 0) return; // 0 is immediately on app switch, -1 is never
 
     final idleSeconds = DateTime.now().difference(_lastActivityAt).inSeconds;
@@ -91,11 +98,24 @@ class AutoLockService {
   static Future<void> setAutoLockSeconds(int seconds) async {
     _cachedTimeout = seconds;
     _lastActivityAt = DateTime.now();
-    await _storage.write(key: _keyAutoLockSeconds, value: seconds.toString());
+    try {
+      await _storage.write(key: _keyAutoLockSeconds, value: seconds.toString());
+    } catch (_) {}
+
+    _inactivityCheckTimer?.cancel();
+    if (!isNeverLock) {
+      _inactivityCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        checkInAppInactivity();
+      });
+    } else {
+      isLocked = false;
+      _pausedAt = null;
+    }
   }
 
   /// Invoked ONLY when app transitions to paused (real app switch/screen off)
   static void markPaused() {
+    if (isNeverLock) return;
     // Only record if app is currently unlocked and not inside biometric prompt
     if (!isLocked && !isAuthenticating) {
       _pausedAt = DateTime.now();
@@ -109,6 +129,8 @@ class AutoLockService {
 
   /// Returns true if app has spent enough time in background to mandate locking.
   static bool shouldLockOnResume() {
+    if (isNeverLock) return false;
+
     // 1. If already locked, NEVER re-lock (prevents infinite unlock loop)
     if (isLocked) return false;
 

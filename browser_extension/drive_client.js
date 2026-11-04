@@ -103,11 +103,63 @@ class DriveClient {
     return await this.signInWithGoogle();
   }
 
+  /**
+   * Helper that performs fetch with auto-refresh on HTTP 401 expired tokens
+   */
+  async fetchWithAuth(url, options = {}) {
+    let token = await this.getAuthToken(false);
+    if (!token) throw new Error('Not connected to Google Account. Please sign in above.');
+
+    const makeHeaders = (tok) => {
+      const h = new Headers(options.headers || {});
+      h.set('Authorization', `Bearer ${tok}`);
+      return h;
+    };
+
+    let res = await fetch(url, { ...options, headers: makeHeaders(token) });
+
+    if (res.status === 401) {
+      console.warn('[DriveClient] 401 Unauthorized detected. Clearing cached token and refreshing...');
+      if (typeof chrome !== 'undefined' && chrome.identity?.removeCachedAuthToken) {
+        await new Promise(r => chrome.identity.removeCachedAuthToken({ token }, r));
+      }
+      this.token = null;
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        await chrome.storage.local.remove('googleOAuthToken');
+      }
+
+      // Try silent refresh
+      try {
+        const freshToken = await new Promise((resolve) => {
+          if (typeof chrome !== 'undefined' && chrome.identity) {
+            chrome.identity.getAuthToken({ interactive: false }, (t) => {
+              if (!chrome.runtime.lastError && t) resolve(t);
+              else resolve(null);
+            });
+          } else {
+            resolve(null);
+          }
+        });
+
+        if (freshToken) {
+          this.token = freshToken;
+          if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+            await chrome.storage.local.set({ googleOAuthToken: freshToken });
+          }
+          res = await fetch(url, { ...options, headers: makeHeaders(freshToken) });
+        } else {
+          throw new Error('Google session expired. Please tap "Sign in with Google Account" to re-authenticate.');
+        }
+      } catch (err) {
+        throw new Error('Google session expired. Please tap "Sign in with Google Account" to re-authenticate.');
+      }
+    }
+
+    return res;
+  }
+
   async getUserInfo() {
-    const token = await this.getAuthToken(false);
-    const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const res = await this.fetchWithAuth('https://www.googleapis.com/oauth2/v2/userinfo');
     if (!res.ok) throw new Error(`UserInfo failed: ${res.status}`);
     return await res.json();
   }
@@ -116,21 +168,17 @@ class DriveClient {
     if (this._fileIdCache.has(filename)) {
       return { id: this._fileIdCache.get(filename), name: filename };
     }
-    const token = await this.getAuthToken(false);
-    if (!token) return null;
     const query = encodeURIComponent(`name = '${filename}' and trashed = false`);
     const url = `https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive,appDataFolder&fields=files(id,name,modifiedTime)`;
 
-    const res = await fetch(url, {
+    const res = await this.fetchWithAuth(url, {
       cache: 'no-store',
       headers: {
-        Authorization: `Bearer ${token}`,
         'Cache-Control': 'no-cache, no-store'
       }
     });
 
     if (!res.ok) {
-      if (res.status === 401) this.token = null;
       throw new Error(`Drive search failed HTTP ${res.status}: ${await res.text()}`);
     }
 
@@ -143,14 +191,11 @@ class DriveClient {
   }
 
   async downloadFileContent(fileId) {
-    const token = await this.getAuthToken(false);
-    if (!token) throw new Error('Not connected to Google Drive');
     const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&_t=${Date.now()}`;
 
-    const res = await fetch(url, {
+    const res = await this.fetchWithAuth(url, {
       cache: 'no-store',
       headers: {
-        Authorization: `Bearer ${token}`,
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache'
       }
@@ -172,8 +217,6 @@ class DriveClient {
    * Uploads or updates a file in Google Drive AppData folder
    */
   async uploadOrUpdateFile(filename, textContent) {
-    const token = await this.getAuthToken(false);
-    if (!token) throw new Error('Not connected to Google Drive');
     const existing = await this.findFile(filename);
 
     const boundary = '-------314159265358979323846';
@@ -205,10 +248,9 @@ class DriveClient {
       method = 'POST';
     }
 
-    const res = await fetch(url, {
+    const res = await this.fetchWithAuth(url, {
       method,
       headers: {
-        Authorization: `Bearer ${token}`,
         'Content-Type': `multipart/related; boundary=${boundary}`
       },
       body: multipartRequestBody

@@ -54,6 +54,11 @@ void main() async {
   await AutoLockService.init(appNavigatorKey);
 
   final isOnboarded = await securityService.isOnboarded();
+  final autoLockSec = await AutoLockService.getAutoLockSeconds();
+  final startAtHome = isOnboarded && autoLockSec < 0;
+  if (startAtHome) {
+    AutoLockService.markUnlocked();
+  }
 
   runApp(
     MultiProvider(
@@ -64,7 +69,9 @@ void main() async {
         Provider<AuthService>.value(value: authService),
         ChangeNotifierProvider<DriveService>.value(value: driveService),
       ],
-      child: TetherPassApp(initialRoute: isOnboarded ? '/unlock' : '/onboarding'),
+      child: TetherPassApp(
+        initialRoute: !isOnboarded ? '/onboarding' : (startAtHome ? '/home' : '/unlock'),
+      ),
     ),
   );
 }
@@ -96,8 +103,13 @@ class _TetherPassAppState extends State<TetherPassApp> with WidgetsBindingObserv
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
+      if (AutoLockService.isNeverLock) return;
       AutoLockService.markPaused();
     } else if (state == AppLifecycleState.resumed) {
+      if (AutoLockService.isNeverLock) {
+        AutoLockService.clearPaused();
+        return;
+      }
       final shouldLock = AutoLockService.shouldLockOnResume();
       AutoLockService.clearPaused();
       if (shouldLock) {

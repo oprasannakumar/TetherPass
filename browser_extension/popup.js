@@ -292,7 +292,10 @@ function setConnectedGoogleAccount(email, picture = null, save = true) {
 
   if (step1Sub) step1Sub.style.display = 'none';
   if (unlinkedBox) unlinkedBox.style.display = 'none';
-  if (linkedBox) linkedBox.style.display = 'flex';
+  if (linkedBox) {
+    linkedBox.classList.remove('hidden');
+    linkedBox.style.display = 'flex';
+  }
   if (emailDisplay) emailDisplay.textContent = email;
 
   if (currentGooglePicture && profileImg) {
@@ -612,9 +615,17 @@ async function handleDisconnectOAuth() {
   const anim = showTransitionAnimation({
     mode: 'disconnect',
     title: 'Disconnecting Account...',
-    subtitle: 'Unlinking Google Drive and securing local cache...'
+    subtitle: 'Unlinking Google Account and wiping session...'
   });
   stopDirectQrPairing();
+
+  const tokenToRevoke = currentOAuthToken || driveClient.token;
+  if (tokenToRevoke && typeof chrome !== 'undefined' && chrome.identity?.removeCachedAuthToken) {
+    try {
+      await new Promise(r => chrome.identity.removeCachedAuthToken({ token: tokenToRevoke }, r));
+    } catch (_) {}
+  }
+
   currentOAuthToken = null;
   currentGoogleAccount = null;
   currentGooglePicture = null;
@@ -623,21 +634,42 @@ async function handleDisconnectOAuth() {
   const profileImg = document.getElementById('accountProfileImg');
   if (profileImg) profileImg.style.display = 'none';
 
+  const emailDisplay = document.getElementById('connectedEmailDisplay');
+  if (emailDisplay) emailDisplay.textContent = '';
+
+  const avatarLetter = document.getElementById('accountAvatarLetter');
+  if (avatarLetter) avatarLetter.textContent = '';
+
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    await chrome.storage.local.remove(['googleAccountEmail', 'googleAccountPicture', 'googleOAuthToken']);
+    await chrome.storage.local.remove([
+      'googleAccountEmail',
+      'googleAccountPicture',
+      'googleOAuthToken',
+      'tetherpass_session',
+      'cachedBackupPayload'
+    ]);
   }
 
+  try {
+    await sendExtensionMessage({ action: 'LOCK_VAULT', payload: { reason: 'User disconnected account.' } });
+  } catch (_) {}
+
   await anim.finish({
-    title: 'Account Unlinked',
-    subtitle: 'Local authorization wiped.'
+    title: 'Account Disconnected',
+    subtitle: 'Sign in again anytime.'
   });
 
   const unlinkedBox = document.getElementById('oauthUnlinkedBox');
   const linkedBox = document.getElementById('oauthLinkedBox');
   const step1Sub = document.getElementById('step1Subtitle');
-  if (step1Sub) step1Sub.style.display = 'block';
+  if (step1Sub) step1Sub.style.display = 'none';
   if (unlinkedBox) unlinkedBox.style.display = 'block';
-  if (linkedBox) linkedBox.style.display = 'none';
+  if (linkedBox) {
+    linkedBox.style.display = 'none';
+    linkedBox.classList.add('hidden');
+  }
+
+  setVaultState(false);
 }
 
 async function handleSaveCustomToken() {

@@ -39,22 +39,16 @@
 }
 
 .cv-brand-icon {
-  width: 18px !important;
-  height: 18px !important;
-  border-radius: 4px !important;
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 5px !important;
   object-fit: contain !important;
   display: inline-block !important;
   vertical-align: middle !important;
 }
 
 .cv-logo-badge {
-  background: #FF6F00 !important;
-  color: #FFFFFF !important;
-  font-size: 10px !important;
-  font-weight: 900 !important;
-  padding: 2px 5px !important;
-  border-radius: 4px !important;
-  letter-spacing: 0.5px !important;
+  display: none !important;
 }
 
 .cv-title {
