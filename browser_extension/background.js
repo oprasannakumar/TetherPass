@@ -613,36 +613,38 @@ function extractDomain(urlOrHost) {
   return str.replace(/^www\./, '');
 }
 
+const MULTI_TLDS = ['co', 'com', 'org', 'net', 'edu', 'gov', 'ac', 'bank', 'mil', 'nic', 'res', 'gen'];
+const STOP_WORDS = ['bank', 'banking', 'netbanking', 'login', 'portal', 'app', 'account', 'card', 'pass', 'password', 'online', 'store', 'auth', 'web', 'mobile', 'secure', 'retail'];
+
 function extractBaseBrand(domain) {
   if (!domain) return '';
   const clean = extractDomain(domain);
   const parts = clean.split('.');
   if (parts.length <= 1) return parts[0];
-  const multiTlds = ['co', 'com', 'org', 'net', 'edu', 'gov', 'ac'];
-  if (parts.length >= 3 && multiTlds.includes(parts[parts.length - 2])) {
+  if (parts.length >= 3 && MULTI_TLDS.includes(parts[parts.length - 2])) {
     return parts[parts.length - 3];
   }
   return parts[parts.length - 2];
 }
 
 const BANK_DOMAIN_ALIASES = {
-  federal: ['federalbank.co.in', 'fednetbank.com', 'federalbank.com', 'fednet', 'federal'],
-  hdfc: ['hdfcbank.com', 'hdfcbank.net', 'hdfc.com', 'hdfc'],
-  sbi: ['onlinesbi.sbi', 'onlinesbi.com', 'sbi.co.in', 'statebankofindia.com', 'sbi'],
-  rbl: ['rblbank.com', 'rblbank.in', 'rbl'],
-  icici: ['icicibank.com', 'icici.com', 'icici'],
-  axis: ['axisbank.com', 'axisbank.co.in', 'axis'],
-  kotak: ['kotak.com', 'kotakbank.com', 'kotak'],
-  pnb: ['pnbindia.in', 'netpnb.com', 'pnb'],
-  bob: ['bankofbaroda.in', 'bobibanking.com', 'bankofbaroda.com', 'bob'],
-  canara: ['canarabank.com', 'canarabank.in', 'canara'],
-  idbi: ['idbibank.in', 'idbibank.com', 'idbi'],
-  indusind: ['indusind.com', 'indusindbank.com', 'indusind'],
-  yes: ['yesbank.in', 'yesbank.com', 'yes'],
-  union: ['unionbankofindia.co.in', 'unionbankonline.co.in', 'union'],
+  federal: ['federalbank.co.in', 'fednetbank.com', 'federalbank.com', 'fednet', 'federal', 'federal.bank.in'],
+  hdfc: ['hdfcbank.com', 'hdfcbank.net', 'hdfc.com', 'hdfc', 'hdfc.bank.in'],
+  sbi: ['onlinesbi.sbi', 'onlinesbi.com', 'sbi.co.in', 'statebankofindia.com', 'sbi', 'sbi.bank.in'],
+  rbl: ['rblbank.com', 'rblbank.in', 'rbl', 'rbl.bank.in'],
+  icici: ['icicibank.com', 'icici.com', 'icici', 'icici.bank.in'],
+  axis: ['axisbank.com', 'axisbank.co.in', 'axis', 'axis.bank.in'],
+  kotak: ['kotak.com', 'kotakbank.com', 'kotak', 'kotak.bank.in'],
+  pnb: ['pnbindia.in', 'netpnb.com', 'pnb', 'pnb.bank.in'],
+  bob: ['bankofbaroda.in', 'bobibanking.com', 'bankofbaroda.com', 'bob', 'bob.bank.in'],
+  canara: ['canarabank.com', 'canarabank.in', 'canara', 'canarabank.bank.in'],
+  idbi: ['idbibank.in', 'idbibank.com', 'idbi', 'idbi.bank.in'],
+  indusind: ['indusind.com', 'indusindbank.com', 'indusind', 'indusind.bank.in'],
+  yes: ['yesbank.in', 'yesbank.com', 'yes', 'yesbank.bank.in'],
+  union: ['unionbankofindia.co.in', 'unionbankonline.co.in', 'union', 'unionbank.bank.in'],
   dbs: ['dbs.com', 'dbs.com.sg', 'dbs'],
-  iob: ['iob.in', 'iobnet.co.in', 'iob'],
-  sib: ['southindianbank.com', 'sib.co.in', 'sib'],
+  iob: ['iob.in', 'iobnet.co.in', 'iob', 'iob.bank.in'],
+  sib: ['southindianbank.com', 'sib.co.in', 'sib', 'southindianbank.bank.in'],
   standardchartered: ['sc.com', 'standardchartered.co.in', 'standardchartered'],
   citi: ['citibank.co.in', 'citibank.com', 'citi']
 };
@@ -660,7 +662,7 @@ function doesDomainMatch(itemWebsite, pageHost, itemNickname = '') {
     if (itemDom && pageDom) {
       if (itemDom === pageDom) return true;
       if (pageDom.endsWith('.' + itemDom) || itemDom.endsWith('.' + pageDom)) return true;
-      if (itemBrand && pageBrand && itemBrand === pageBrand && itemBrand.length >= 3) {
+      if (itemBrand && pageBrand && itemBrand === pageBrand && itemBrand.length >= 3 && !STOP_WORDS.includes(itemBrand)) {
         return true;
       }
     }
@@ -668,33 +670,31 @@ function doesDomainMatch(itemWebsite, pageHost, itemNickname = '') {
     const rawClean = itemWebsite.trim().toLowerCase().replace(/^[a-zA-Z]+:\/\//, '').replace(/^www\./, '');
     if (rawClean.length >= 3) {
       if (pageDom.includes(rawClean) || rawClean.includes(pageDom)) return true;
-      if (pageBrand && (pageBrand === rawClean || pageBrand.includes(rawClean) || rawClean.includes(pageBrand))) {
+      if (pageBrand && !STOP_WORDS.includes(pageBrand) && (pageBrand === rawClean || pageBrand.includes(rawClean) || rawClean.includes(pageBrand))) {
         return true;
       }
     }
   }
 
-  // 2. Nickname match against page brand (e.g. "Amazon" on amazon.in, "RBL" on rblbank.com, "HDFC" on hdfcbank.com)
-  if (itemNickname && itemNickname.trim() && (pageBrand || pageDom)) {
+  // 2. Tokenized Brand Matching (filters out generic words like 'bank', 'banking', 'mobile', etc.)
+  if (itemNickname && itemNickname.trim()) {
     const nick = itemNickname.trim().toLowerCase();
-    const nickClean = nick.replace(/[^a-z0-9]/g, '');
-    if (nickClean === pageBrand || (nickClean.length >= 3 && (pageBrand.includes(nickClean) || nickClean.includes(pageBrand) || pageDom.includes(nickClean)))) {
-      return true;
-    }
-    const stopWords = ['bank', 'banking', 'netbanking', 'login', 'portal', 'app', 'account', 'card', 'pass', 'password', 'online', 'store'];
-    const tokens = nick.split(/[\s\-_.]+/).filter(t => t.length >= 3 && !stopWords.includes(t));
-    if (tokens.includes(pageBrand)) return true;
-    for (const t of tokens) {
-      if (pageBrand === t || (t.length >= 3 && (pageBrand.includes(t) || t.includes(pageBrand) || pageDom.includes(t)))) {
-        return true;
+    const itemTokens = nick.split(/[^a-z0-9]+/).filter(t => t.length >= 3 && !STOP_WORDS.includes(t));
+    const pageTokens = pageDom.split(/[^a-z0-9]+/).filter(t => t.length >= 3 && !STOP_WORDS.includes(t));
+
+    // Direct distinctive token intersection
+    for (const t of itemTokens) {
+      if (pageTokens.includes(t) || t === pageBrand) return true;
+      if (pageBrand && pageBrand.length >= 3 && !STOP_WORDS.includes(pageBrand)) {
+        if (pageBrand.startsWith(t) || t.startsWith(pageBrand)) return true;
       }
     }
 
     // 3. Known Bank Domain Aliases
     for (const [bankKey, aliases] of Object.entries(BANK_DOMAIN_ALIASES)) {
-      const bankMatched = nickClean.includes(bankKey) || tokens.includes(bankKey) || (itemWebsite && itemWebsite.toLowerCase().includes(bankKey));
+      const bankMatched = itemTokens.includes(bankKey) || nick.includes(bankKey) || (itemWebsite && itemWebsite.toLowerCase().includes(bankKey));
       if (bankMatched) {
-        if (aliases.some(a => pageDom.includes(a) || a.includes(pageBrand))) {
+        if (aliases.some(a => pageDom.includes(a) || pageTokens.includes(a) || (pageBrand && pageBrand === a))) {
           return true;
         }
       }
@@ -737,7 +737,7 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
     const type = (item.type || '').toLowerCase();
     if (type === 'card' || type === 'password') return false;
     const bWeb = item.website || item.url || '';
-    const bName = item.bank_name || item.bankName || item.nickname || '';
+    const bName = [item.bank_name, item.bankName, item.nickname].filter(Boolean).join(' ');
     return doesDomainMatch(bWeb, domain, bName);
   }) : null;
 
@@ -808,7 +808,7 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
       if (isCardField) continue; // Don't include bank accounts for card payment fields
 
       const bankWeb = item.website || item.url || '';
-      const bankName = item.bank_name || item.bankName || item.nickname || 'Bank';
+      const bankName = [item.bank_name, item.bankName, item.nickname].filter(Boolean).join(' ') || 'Bank';
       const matchesBank = domain ? doesDomainMatch(bankWeb, domain, bankName) : true;
 
       // STRICT DOMAIN RELEVANCE:
