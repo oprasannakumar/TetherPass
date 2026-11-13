@@ -86,17 +86,21 @@ function organizeVaultItems(rawItems) {
       const normalizedAccounts = [];
       if (Array.isArray(rawAccounts) && rawAccounts.length > 0) {
         for (const a of rawAccounts) {
-          normalizedAccounts.push({
-            accountNumber: a.account_number || a.accountNumber || '',
-            ifscCode: (a.ifsc_code || a.ifscCode || '').toUpperCase(),
-            label: a.label || ''
-          });
+          const accNum = String(a.account_number || a.accountNumber || a.accountNo || a.acc_num || a.acc_no || a.accNo || '').trim();
+          const ifsc = String(a.ifsc_code || a.ifscCode || a.ifsc || '').trim().toUpperCase();
+          if (accNum || ifsc) {
+            normalizedAccounts.push({
+              accountNumber: accNum,
+              ifscCode: ifsc,
+              label: a.label || ''
+            });
+          }
         }
       }
 
-      const primaryAcc = item.account_number || item.accountNumber || '';
-      const primaryIfsc = (item.ifsc_code || item.ifscCode || '').toUpperCase();
-      if (primaryAcc && !normalizedAccounts.some(a => a.accountNumber === primaryAcc)) {
+      const primaryAcc = String(item.account_number || item.accountNumber || item.accountNo || item.acc_num || item.acc_no || item.accNo || '').trim();
+      const primaryIfsc = String(item.ifsc_code || item.ifscCode || item.ifsc || '').trim().toUpperCase();
+      if ((primaryAcc || primaryIfsc) && !normalizedAccounts.some(a => a.accountNumber === primaryAcc && a.accountNumber !== '')) {
         normalizedAccounts.unshift({
           accountNumber: primaryAcc,
           ifscCode: primaryIfsc,
@@ -106,14 +110,16 @@ function organizeVaultItems(rawItems) {
 
       bankAccounts.push({
         id: item.id || String(Math.random()),
-        bankName: item.bank_name || item.bankName || 'Bank',
+        bankName: item.bank_name || item.bankName || item.nickname || 'Bank',
         nickname: item.nickname || '',
+        website: item.website || item.url || '',
         accounts: normalizedAccounts,
-        userId: item.user_id || item.userId || '',
-        cifNumber: item.cif_number || item.cifNumber || '',
-        loginPassword: item.login_password || item.loginPassword || '',
+        userId: item.user_id || item.userId || item.username || '',
+        cifNumber: item.cif_number || item.cifNumber || item.cif || '',
+        loginPassword: item.login_password || item.loginPassword || item.password || '',
         profilePassword: item.profile_password || item.profilePassword || '',
-        mpin: item.mpin || ''
+        mpin: item.mpin || '',
+        notes: item.notes || ''
       });
     }
   }
@@ -619,6 +625,28 @@ function extractBaseBrand(domain) {
   return parts[parts.length - 2];
 }
 
+const BANK_DOMAIN_ALIASES = {
+  federal: ['federalbank.co.in', 'fednetbank.com', 'federalbank.com', 'fednet', 'federal'],
+  hdfc: ['hdfcbank.com', 'hdfcbank.net', 'hdfc.com', 'hdfc'],
+  sbi: ['onlinesbi.sbi', 'onlinesbi.com', 'sbi.co.in', 'statebankofindia.com', 'sbi'],
+  rbl: ['rblbank.com', 'rblbank.in', 'rbl'],
+  icici: ['icicibank.com', 'icici.com', 'icici'],
+  axis: ['axisbank.com', 'axisbank.co.in', 'axis'],
+  kotak: ['kotak.com', 'kotakbank.com', 'kotak'],
+  pnb: ['pnbindia.in', 'netpnb.com', 'pnb'],
+  bob: ['bankofbaroda.in', 'bobibanking.com', 'bankofbaroda.com', 'bob'],
+  canara: ['canarabank.com', 'canarabank.in', 'canara'],
+  idbi: ['idbibank.in', 'idbibank.com', 'idbi'],
+  indusind: ['indusind.com', 'indusindbank.com', 'indusind'],
+  yes: ['yesbank.in', 'yesbank.com', 'yes'],
+  union: ['unionbankofindia.co.in', 'unionbankonline.co.in', 'union'],
+  dbs: ['dbs.com', 'dbs.com.sg', 'dbs'],
+  iob: ['iob.in', 'iobnet.co.in', 'iob'],
+  sib: ['southindianbank.com', 'sib.co.in', 'sib'],
+  standardchartered: ['sc.com', 'standardchartered.co.in', 'standardchartered'],
+  citi: ['citibank.co.in', 'citibank.com', 'citi']
+};
+
 function doesDomainMatch(itemWebsite, pageHost, itemNickname = '') {
   if (!pageHost) return false;
   const pageDom = extractDomain(pageHost);
@@ -646,19 +674,29 @@ function doesDomainMatch(itemWebsite, pageHost, itemNickname = '') {
     }
   }
 
-  // 2. Nickname match against page brand (e.g. nickname "Amazon", "Amazon India", "Flipkart" on amazon.in)
-  if (itemNickname && itemNickname.trim() && pageBrand && pageBrand.length >= 3) {
+  // 2. Nickname match against page brand (e.g. "Amazon" on amazon.in, "RBL" on rblbank.com, "HDFC" on hdfcbank.com)
+  if (itemNickname && itemNickname.trim() && (pageBrand || pageDom)) {
     const nick = itemNickname.trim().toLowerCase();
     const nickClean = nick.replace(/[^a-z0-9]/g, '');
-    if (nickClean === pageBrand || (nickClean.length >= 4 && (pageBrand.includes(nickClean) || nickClean.includes(pageBrand)))) {
+    if (nickClean === pageBrand || (nickClean.length >= 3 && (pageBrand.includes(nickClean) || nickClean.includes(pageBrand) || pageDom.includes(nickClean)))) {
       return true;
     }
     const stopWords = ['bank', 'banking', 'netbanking', 'login', 'portal', 'app', 'account', 'card', 'pass', 'password', 'online', 'store'];
     const tokens = nick.split(/[\s\-_.]+/).filter(t => t.length >= 3 && !stopWords.includes(t));
     if (tokens.includes(pageBrand)) return true;
     for (const t of tokens) {
-      if (pageBrand === t || (t.length >= 4 && (pageBrand.includes(t) || t.includes(pageBrand)))) {
+      if (pageBrand === t || (t.length >= 3 && (pageBrand.includes(t) || t.includes(pageBrand) || pageDom.includes(t)))) {
         return true;
+      }
+    }
+
+    // 3. Known Bank Domain Aliases
+    for (const [bankKey, aliases] of Object.entries(BANK_DOMAIN_ALIASES)) {
+      const bankMatched = nickClean.includes(bankKey) || tokens.includes(bankKey) || (itemWebsite && itemWebsite.toLowerCase().includes(bankKey));
+      if (bankMatched) {
+        if (aliases.some(a => pageDom.includes(a) || a.includes(pageBrand))) {
+          return true;
+        }
       }
     }
   }
@@ -760,10 +798,13 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
       // NetBanking & Bank Accounts
       if (isCardField) continue; // Don't include bank accounts for card payment fields
 
+      const bankWeb = item.website || item.url || '';
+      const bankName = item.bank_name || item.bankName || item.nickname || 'Bank';
+      const matchesBank = domain ? doesDomainMatch(bankWeb, domain, bankName) : true;
+
       // If user is on a login/password field on an external site (e.g. Amazon),
       // ONLY include bank credentials if this website is actually that bank's website!
       if (isCredentialField && domain && fieldType !== 'ALL') {
-        const matchesBank = doesDomainMatch('', domain, item.bank_name || item.nickname || '');
         if (!matchesBank) {
           continue; // Do NOT suggest bank accounts on Amazon, Netflix, etc.!
         }
@@ -779,17 +820,21 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
       const normalizedAccounts = [];
       if (Array.isArray(rawAccounts) && rawAccounts.length > 0) {
         for (const a of rawAccounts) {
-          normalizedAccounts.push({
-            accountNumber: a.account_number || a.accountNumber || '',
-            ifscCode: (a.ifsc_code || a.ifscCode || '').toUpperCase(),
-            label: a.label || ''
-          });
+          const accNum = String(a.account_number || a.accountNumber || a.accountNo || a.acc_num || a.acc_no || a.accNo || '').trim();
+          const ifsc = String(a.ifsc_code || a.ifscCode || a.ifsc || '').trim().toUpperCase();
+          if (accNum || ifsc) {
+            normalizedAccounts.push({
+              accountNumber: accNum,
+              ifscCode: ifsc,
+              label: a.label || ''
+            });
+          }
         }
       }
 
-      const primaryAcc = item.account_number || item.accountNumber || '';
-      const primaryIfsc = (item.ifsc_code || item.ifscCode || '').toUpperCase();
-      if (primaryAcc && !normalizedAccounts.some(a => a.accountNumber === primaryAcc)) {
+      const primaryAcc = String(item.account_number || item.accountNumber || item.accountNo || item.acc_num || item.acc_no || item.accNo || '').trim();
+      const primaryIfsc = String(item.ifsc_code || item.ifscCode || item.ifsc || '').trim().toUpperCase();
+      if ((primaryAcc || primaryIfsc) && !normalizedAccounts.some(a => a.accountNumber === primaryAcc && a.accountNumber !== '')) {
         normalizedAccounts.unshift({
           accountNumber: primaryAcc,
           ifscCode: primaryIfsc,
@@ -797,17 +842,38 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
         });
       }
 
-      bankAccounts.push({
+      const bankItem = {
         id: item.id || String(Math.random()),
-        bankName: item.bank_name || item.bankName || 'Bank',
+        bankName: bankName,
         nickname: item.nickname || '',
+        website: bankWeb,
         accounts: normalizedAccounts,
-        userId: item.user_id || item.userId || '',
-        cifNumber: item.cif_number || item.cifNumber || '',
-        loginPassword: item.login_password || item.loginPassword || '',
+        userId: item.user_id || item.userId || item.username || '',
+        cifNumber: item.cif_number || item.cifNumber || item.cif || '',
+        loginPassword: item.login_password || item.loginPassword || item.password || '',
         profilePassword: item.profile_password || item.profilePassword || '',
-        mpin: item.mpin || ''
-      });
+        mpin: item.mpin || '',
+        notes: item.notes || ''
+      };
+
+      bankAccounts.push(bankItem);
+
+      // If user is on a login field and this bank matches the domain, also push a password representation
+      // so content.js and popup.js can easily render and autofill the login details
+      if (isCredentialField && (bankItem.userId || bankItem.loginPassword)) {
+        passwords.push({
+          id: item.id || String(Math.random()),
+          nickname: bankName + ' NetBanking',
+          website: bankWeb || domain,
+          username: bankItem.userId,
+          password: bankItem.loginPassword,
+          totpSecret: item.totp_secret || item.totpSecret || '',
+          totpCode: '',
+          totpSeconds: 0,
+          notes: item.notes || '',
+          isBankLogin: true
+        });
+      }
     }
   }
 

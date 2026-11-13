@@ -243,10 +243,13 @@
     // OR a form/page containing a password field. General emails (newsletters, shipping, contact) are ignored!
     const hasPasswordInForm = !!(input.form?.querySelector('input[type="password"]') || document.querySelector('input[type="password"]'));
     const isExplicitLoginField = autocomplete === 'username' || autocomplete === 'current-password' ||
-      raw.includes('customer id') || raw.includes('customer_id') || raw.includes('cust_id') ||
+      raw.includes('customer id') || raw.includes('customer_id') || raw.includes('cust_id') || raw.includes('custid') ||
+      raw.includes('customer no') || raw.includes('customerno') || raw.includes('client id') || raw.includes('clientid') ||
       raw.includes('user id') || raw.includes('userid') || raw.includes('user_id') ||
-      raw.includes('username') || raw.includes('user_name') || raw.includes('login id') || raw.includes('cif') ||
-      norm.includes('customer id') || norm.includes('user id') || norm.includes('login id') ||
+      raw.includes('username') || raw.includes('user_name') || raw.includes('login id') || raw.includes('loginid') ||
+      raw.includes('cif') || raw.includes('cif no') || raw.includes('cif_no') ||
+      norm.includes('customer id') || norm.includes('user id') || norm.includes('login id') || norm.includes('client id') ||
+      norm.includes('customer no') || norm.includes('cust id') || norm.includes('cif no') ||
       raw.includes('netbanking') || raw.includes('sign in') || raw.includes('signin');
 
     if (isExplicitLoginField || (hasPasswordInForm && (type === 'email' || autocomplete.includes('email') || raw.includes('email') || raw.includes('login')))) {
@@ -479,7 +482,8 @@
     // Only render dropdown if there are matching items for this field type
     const hasCardItems = ['CARD_NUMBER', 'EXPIRY', 'EXPIRY_MONTH', 'EXPIRY_YEAR', 'CVV', 'CARD_HOLDER'].includes(fieldType) && data.cards && data.cards.length > 0;
     const hasBankItems = ['ACCOUNT_NUMBER', 'IFSC'].includes(fieldType) && data.bankAccounts && data.bankAccounts.length > 0;
-    const hasLoginItems = ['USER_ID', 'PASSWORD', 'TOTP'].includes(fieldType) && data.passwords && data.passwords.length > 0;
+    const hasBankLogin = ['USER_ID', 'PASSWORD'].includes(fieldType) && data.bankAccounts && data.bankAccounts.some(b => b.userId || b.loginPassword);
+    const hasLoginItems = (['USER_ID', 'PASSWORD', 'TOTP'].includes(fieldType) && data.passwords && data.passwords.length > 0) || hasBankLogin;
 
     if (!hasCardItems && !hasBankItems && !hasLoginItems) {
       removeDropdown();
@@ -1160,7 +1164,63 @@
         showFillToast(count > 0 ? 'Card details autofilled!' : 'No payment inputs found on page', count > 0);
         sendResponse({ success: true, count });
       }
+
+      if (message && message.action === 'FILL_BANK_NOW' && message.bank) {
+        const count = fillAllBankInputsOnPage(message.bank);
+        showFillToast(count > 0 ? `${message.bank.bankName || 'Bank'} credentials autofilled!` : 'No bank inputs found on page', count > 0);
+        sendResponse({ success: true, count });
+      }
+
+      if (message && message.action === 'FILL_PASSWORD_NOW' && message.password) {
+        const count = fillAllPasswordInputsOnPage(message.password);
+        showFillToast(count > 0 ? `${message.password.nickname || 'Login'} details autofilled!` : 'No login inputs found on page', count > 0);
+        sendResponse({ success: true, count });
+      }
     });
+  }
+
+  function fillAllBankInputsOnPage(bank) {
+    const inputs = Array.from(document.querySelectorAll('input')).filter(inp => {
+      return inp.type !== 'hidden' && inp.type !== 'submit' && inp.type !== 'button';
+    });
+    let filledCount = 0;
+    const acc = (bank.accounts && bank.accounts.length > 0) ? bank.accounts[0] : null;
+
+    inputs.forEach(inp => {
+      const type = classifyInput(inp);
+      if (type === 'USER_ID' && bank.userId) {
+        setInputValue(inp, bank.userId);
+        filledCount++;
+      } else if (type === 'PASSWORD' && (bank.loginPassword || bank.profilePassword || bank.mpin)) {
+        setInputValue(inp, bank.loginPassword || bank.profilePassword || bank.mpin);
+        filledCount++;
+      } else if (type === 'ACCOUNT_NUMBER' && acc && acc.accountNumber) {
+        setInputValue(inp, acc.accountNumber);
+        filledCount++;
+      } else if (type === 'IFSC' && acc && acc.ifscCode) {
+        setInputValue(inp, acc.ifscCode);
+        filledCount++;
+      }
+    });
+    return filledCount;
+  }
+
+  function fillAllPasswordInputsOnPage(pwd) {
+    const inputs = Array.from(document.querySelectorAll('input')).filter(inp => {
+      return inp.type !== 'hidden' && inp.type !== 'submit' && inp.type !== 'button';
+    });
+    let filledCount = 0;
+    inputs.forEach(inp => {
+      const type = classifyInput(inp);
+      if (type === 'USER_ID' && (pwd.username || pwd.userId)) {
+        setInputValue(inp, pwd.username || pwd.userId);
+        filledCount++;
+      } else if (type === 'PASSWORD' && (pwd.password || pwd.loginPassword)) {
+        setInputValue(inp, pwd.password || pwd.loginPassword);
+        filledCount++;
+      }
+    });
+    return filledCount;
   }
 
   function fillAllCardInputsOnPage(card) {

@@ -50,6 +50,28 @@ function extractBaseBrand(domain) {
   return parts[parts.length - 2];
 }
 
+const BANK_DOMAIN_ALIASES = {
+  federal: ['federalbank.co.in', 'fednetbank.com', 'federalbank.com', 'fednet', 'federal'],
+  hdfc: ['hdfcbank.com', 'hdfcbank.net', 'hdfc.com', 'hdfc'],
+  sbi: ['onlinesbi.sbi', 'onlinesbi.com', 'sbi.co.in', 'statebankofindia.com', 'sbi'],
+  rbl: ['rblbank.com', 'rblbank.in', 'rbl'],
+  icici: ['icicibank.com', 'icici.com', 'icici'],
+  axis: ['axisbank.com', 'axisbank.co.in', 'axis'],
+  kotak: ['kotak.com', 'kotakbank.com', 'kotak'],
+  pnb: ['pnbindia.in', 'netpnb.com', 'pnb'],
+  bob: ['bankofbaroda.in', 'bobibanking.com', 'bankofbaroda.com', 'bob'],
+  canara: ['canarabank.com', 'canarabank.in', 'canara'],
+  idbi: ['idbibank.in', 'idbibank.com', 'idbi'],
+  indusind: ['indusind.com', 'indusindbank.com', 'indusind'],
+  yes: ['yesbank.in', 'yesbank.com', 'yes'],
+  union: ['unionbankofindia.co.in', 'unionbankonline.co.in', 'union'],
+  dbs: ['dbs.com', 'dbs.com.sg', 'dbs'],
+  iob: ['iob.in', 'iobnet.co.in', 'iob'],
+  sib: ['southindianbank.com', 'sib.co.in', 'sib'],
+  standardchartered: ['sc.com', 'standardchartered.co.in', 'standardchartered'],
+  citi: ['citibank.co.in', 'citibank.com', 'citi']
+};
+
 function doesDomainMatch(itemWebsite, pageHost, itemNickname = '') {
   if (!pageHost) return false;
   const pageDom = extractDomain(pageHost);
@@ -77,19 +99,29 @@ function doesDomainMatch(itemWebsite, pageHost, itemNickname = '') {
     }
   }
 
-  // 2. Nickname match against page brand (e.g. nickname "Amazon", "Amazon India", "Flipkart" on amazon.in)
-  if (itemNickname && itemNickname.trim() && pageBrand && pageBrand.length >= 3) {
+  // 2. Nickname match against page brand (e.g. "Amazon" on amazon.in, "RBL" on rblbank.com, "HDFC" on hdfcbank.com)
+  if (itemNickname && itemNickname.trim() && (pageBrand || pageDom)) {
     const nick = itemNickname.trim().toLowerCase();
     const nickClean = nick.replace(/[^a-z0-9]/g, '');
-    if (nickClean === pageBrand || (nickClean.length >= 4 && (pageBrand.includes(nickClean) || nickClean.includes(pageBrand)))) {
+    if (nickClean === pageBrand || (nickClean.length >= 3 && (pageBrand.includes(nickClean) || nickClean.includes(pageBrand) || pageDom.includes(nickClean)))) {
       return true;
     }
     const stopWords = ['bank', 'banking', 'netbanking', 'login', 'portal', 'app', 'account', 'card', 'pass', 'password', 'online', 'store'];
     const tokens = nick.split(/[\s\-_.]+/).filter(t => t.length >= 3 && !stopWords.includes(t));
     if (tokens.includes(pageBrand)) return true;
     for (const t of tokens) {
-      if (pageBrand === t || (t.length >= 4 && (pageBrand.includes(t) || t.includes(pageBrand)))) {
+      if (pageBrand === t || (t.length >= 3 && (pageBrand.includes(t) || t.includes(pageBrand) || pageDom.includes(t)))) {
         return true;
+      }
+    }
+
+    // 3. Known Bank Domain Aliases
+    for (const [bankKey, aliases] of Object.entries(BANK_DOMAIN_ALIASES)) {
+      const bankMatched = nickClean.includes(bankKey) || tokens.includes(bankKey) || (itemWebsite && itemWebsite.toLowerCase().includes(bankKey));
+      if (bankMatched) {
+        if (aliases.some(a => pageDom.includes(a) || a.includes(pageBrand))) {
+          return true;
+        }
       }
     }
   }
@@ -1291,17 +1323,21 @@ function normalizeRawVaultItems(rawItems) {
       const normalizedAccounts = [];
       if (Array.isArray(rawAccounts) && rawAccounts.length > 0) {
         for (const a of rawAccounts) {
-          normalizedAccounts.push({
-            accountNumber: a.account_number || a.accountNumber || '',
-            ifscCode: (a.ifsc_code || a.ifscCode || '').toUpperCase(),
-            label: a.label || ''
-          });
+          const accNum = String(a.account_number || a.accountNumber || a.accountNo || a.acc_num || a.acc_no || a.accNo || '').trim();
+          const ifsc = String(a.ifsc_code || a.ifscCode || a.ifsc || '').trim().toUpperCase();
+          if (accNum || ifsc) {
+            normalizedAccounts.push({
+              accountNumber: accNum,
+              ifscCode: ifsc,
+              label: a.label || ''
+            });
+          }
         }
       }
 
-      const primaryAcc = item.account_number || item.accountNumber || '';
-      const primaryIfsc = (item.ifsc_code || item.ifscCode || '').toUpperCase();
-      if (primaryAcc && !normalizedAccounts.some(a => a.accountNumber === primaryAcc)) {
+      const primaryAcc = String(item.account_number || item.accountNumber || item.accountNo || item.acc_num || item.acc_no || item.accNo || '').trim();
+      const primaryIfsc = String(item.ifsc_code || item.ifscCode || item.ifsc || '').trim().toUpperCase();
+      if ((primaryAcc || primaryIfsc) && !normalizedAccounts.some(a => a.accountNumber === primaryAcc && a.accountNumber !== '')) {
         normalizedAccounts.unshift({
           accountNumber: primaryAcc,
           ifscCode: primaryIfsc,
@@ -1311,14 +1347,16 @@ function normalizeRawVaultItems(rawItems) {
 
       bankAccounts.push({
         id: item.id || String(Math.random()),
-        bankName: item.bank_name || item.bankName || 'Bank',
+        bankName: item.bank_name || item.bankName || item.nickname || 'Bank',
         nickname: item.nickname || '',
+        website: item.website || item.url || '',
         accounts: normalizedAccounts,
-        userId: item.user_id || item.userId || '',
-        cifNumber: item.cif_number || item.cifNumber || '',
-        loginPassword: item.login_password || item.loginPassword || '',
+        userId: item.user_id || item.userId || item.username || '',
+        cifNumber: item.cif_number || item.cifNumber || item.cif || '',
+        loginPassword: item.login_password || item.loginPassword || item.password || '',
         profilePassword: item.profile_password || item.profilePassword || '',
-        mpin: item.mpin || ''
+        mpin: item.mpin || '',
+        notes: item.notes || ''
       });
     }
   }
@@ -1437,6 +1475,50 @@ function fillPageWithCard(card, btn) {
       chrome.tabs.sendMessage(tabs[0].id, {
         action: 'FILL_CARD_NOW',
         card: card
+      }, (res) => {
+        if (btn) {
+          const original = btn.textContent;
+          btn.textContent = res && res.count > 0 ? `✓ Filled (${res.count})` : '✓ Sent!';
+          btn.classList.add('copied');
+          setTimeout(() => {
+            btn.textContent = original;
+            btn.classList.remove('copied');
+          }, 1800);
+        }
+      });
+    }
+  });
+}
+
+function fillPageWithBank(bank, btn) {
+  if (typeof chrome === 'undefined' || !chrome.tabs) return;
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs && tabs[0] && tabs[0].id) {
+      chrome.tabs.sendMessage(tabs[0].id, {
+        action: 'FILL_BANK_NOW',
+        bank: bank
+      }, (res) => {
+        if (btn) {
+          const original = btn.textContent;
+          btn.textContent = res && res.count > 0 ? `✓ Filled (${res.count})` : '✓ Sent!';
+          btn.classList.add('copied');
+          setTimeout(() => {
+            btn.textContent = original;
+            btn.classList.remove('copied');
+          }, 1800);
+        }
+      });
+    }
+  });
+}
+
+function fillPageWithPassword(pwd, btn) {
+  if (typeof chrome === 'undefined' || !chrome.tabs) return;
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs && tabs[0] && tabs[0].id) {
+      chrome.tabs.sendMessage(tabs[0].id, {
+        action: 'FILL_PASSWORD_NOW',
+        password: pwd
       }, (res) => {
         if (btn) {
           const original = btn.textContent;
@@ -1592,8 +1674,10 @@ function renderVaultList(query = '') {
   } else if (currentTab === 'banks') {
     const banks = (currentVaultItems.bankAccounts || []).filter(b => {
       if (!query) return true;
-      const accMatch = (b.accounts || []).some(a => (a.accountNumber || '').includes(query) || (a.ifscCode || '').toLowerCase().includes(query));
-      return (b.bankName || '').toLowerCase().includes(query) || accMatch;
+      const q = query.toLowerCase();
+      const accMatch = (b.accounts || []).some(a => (a.accountNumber || '').includes(q) || (a.ifscCode || '').toLowerCase().includes(q));
+      const credMatch = (b.userId || '').toLowerCase().includes(q) || (b.cifNumber || '').toLowerCase().includes(q);
+      return (b.bankName || '').toLowerCase().includes(q) || (b.nickname || '').toLowerCase().includes(q) || accMatch || credMatch;
     });
 
     if (banks.length === 0) {
@@ -1601,55 +1685,140 @@ function renderVaultList(query = '') {
       return;
     }
 
+    // Sort matching tab domain to top
+    banks.sort((a, b) => {
+      const aMatch = currentActiveTabDomain && doesDomainMatch(a.website, currentActiveTabDomain, a.bankName || a.nickname);
+      const bMatch = currentActiveTabDomain && doesDomainMatch(b.website, currentActiveTabDomain, b.bankName || b.nickname);
+      if (aMatch && !bMatch) return -1;
+      if (!aMatch && bMatch) return 1;
+      return 0;
+    });
+
     banks.forEach(bank => {
-      const accs = bank.accounts && bank.accounts.length > 0 ? bank.accounts : [{ accountNumber: 'N/A', ifscCode: '' }];
-      accs.forEach((acc, i) => {
-        const tile = document.createElement('div');
-        tile.className = 'card-tile';
-        tile.innerHTML = `
-          <div class="tile-header">
-            <span class="tile-title">${escapeHtml(bank.bankName)} ${accs.length > 1 ? '#' + (i + 1) : ''}</span>
-            <span class="tile-badge">BANK</span>
+      const isMatch = currentActiveTabDomain && doesDomainMatch(bank.website, currentActiveTabDomain, bank.bankName || bank.nickname);
+      const accs = Array.isArray(bank.accounts) && bank.accounts.length > 0 ? bank.accounts : [];
+      const hasCreds = !!(bank.userId || bank.loginPassword || bank.profilePassword || bank.mpin || bank.cifNumber);
+      const webUrl = bank.website ? (bank.website.startsWith('http') ? bank.website : 'https://' + bank.website) : '';
+
+      const tile = document.createElement('div');
+      tile.className = 'card-tile';
+      if (isMatch) {
+        tile.style.border = '1px solid #93C5FD';
+        tile.style.backgroundColor = '#F0F9FF';
+      }
+
+      let accountsHtml = '';
+      if (accs.length > 0) {
+        accountsHtml = accs.map((acc, i) => `
+          <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:6px 8px;margin-top:4px;">
+            <div style="font-size:11px;font-weight:700;color:#1E293B;display:flex;justify-content:space-between;">
+              <span>A/C: ${escapeHtml(acc.accountNumber || '—')}</span>
+              ${acc.label ? `<span style="font-size:10px;color:#64748B;">${escapeHtml(acc.label)}</span>` : ''}
+            </div>
+            <div style="font-size:11px;color:#64748B;">IFSC: <strong>${escapeHtml(acc.ifscCode || 'None')}</strong></div>
           </div>
-          <div class="tile-number">A/C: ${escapeHtml(acc.accountNumber)}</div>
-          <div style="font-size:11px;color:#64748B;">IFSC: ${escapeHtml(acc.ifscCode || 'None')}</div>
-          <div class="tile-actions">
-            <button class="copy-chip" data-copy="${acc.accountNumber}">Copy A/C</button>
-            ${acc.ifscCode ? `<button class="copy-chip" data-copy="${acc.ifscCode}">Copy IFSC</button>` : ''}
-            <button class="copy-chip" data-copy="A/C: ${acc.accountNumber} | IFSC: ${acc.ifscCode}">Copy Both</button>
+        `).join('');
+      }
+
+      let credsHtml = '';
+      if (hasCreds) {
+        credsHtml = `
+          <div style="background:#F1F5F9;border-radius:6px;padding:6px 8px;margin-top:4px;font-size:11px;display:flex;flex-direction:column;gap:3px;">
+            ${bank.userId ? `<div style="color:#334155;">👤 User / Customer ID: <strong>${escapeHtml(bank.userId)}</strong></div>` : ''}
+            ${bank.loginPassword ? `<div style="color:#334155;">🔑 Login Password: <strong>••••••••</strong></div>` : ''}
+            ${bank.cifNumber ? `<div style="color:#64748B;">🏷️ CIF: <strong>${escapeHtml(bank.cifNumber)}</strong></div>` : ''}
+            ${bank.mpin ? `<div style="color:#64748B;">🔢 MPIN: <strong>••••</strong></div>` : ''}
           </div>
         `;
-        list.appendChild(tile);
-      });
+      }
+
+      // Action buttons
+      let actionBtns = [];
+      actionBtns.push(`<button class="copy-chip fill-page-chip bank-fill-btn">⚡ Fill Bank Page</button>`);
+      if (bank.userId) {
+        actionBtns.push(`<button class="copy-chip" data-copy="${escapeHtml(bank.userId)}">Copy User ID</button>`);
+      }
+      if (bank.loginPassword) {
+        actionBtns.push(`<button class="copy-chip" data-copy="${escapeHtml(bank.loginPassword)}">Copy Password</button>`);
+      }
+      if (accs.length > 0) {
+        if (accs[0].accountNumber) actionBtns.push(`<button class="copy-chip" data-copy="${escapeHtml(accs[0].accountNumber)}">Copy A/C</button>`);
+        if (accs[0].ifscCode) actionBtns.push(`<button class="copy-chip" data-copy="${escapeHtml(accs[0].ifscCode)}">Copy IFSC</button>`);
+        if (accs[0].accountNumber && accs[0].ifscCode) actionBtns.push(`<button class="copy-chip" data-copy="A/C: ${escapeHtml(accs[0].accountNumber)} | IFSC: ${escapeHtml(accs[0].ifscCode)}">Copy Both</button>`);
+      }
+      if (bank.cifNumber) {
+        actionBtns.push(`<button class="copy-chip" data-copy="${escapeHtml(bank.cifNumber)}">Copy CIF</button>`);
+      }
+      if (webUrl) {
+        actionBtns.push(`<button class="copy-chip open-site" data-url="${escapeHtml(webUrl)}">Open Portal</button>`);
+      }
+
+      tile.innerHTML = `
+        <div class="tile-header">
+          <span class="tile-title">🏦 ${escapeHtml(bank.bankName || 'Bank')} ${bank.nickname && bank.nickname !== bank.bankName ? '(' + escapeHtml(bank.nickname) + ')' : ''}</span>
+          ${isMatch ? '<span class="tile-badge" style="background:#DBEAFE;color:#1D4ED8;border-color:#93C5FD;">⭐ MATCHES TAB</span>' : '<span class="tile-badge">BANK</span>'}
+        </div>
+        ${webUrl ? `<div style="font-size:11px;color:#3B82F6;margin-bottom:2px;word-break:break-all;">🔗 ${escapeHtml(bank.website)}</div>` : ''}
+        ${accountsHtml}
+        ${credsHtml}
+        <div class="tile-actions">
+          ${actionBtns.join('')}
+        </div>
+      `;
+
+      const fillBtn = tile.querySelector('.bank-fill-btn');
+      if (fillBtn) {
+        fillBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          fillPageWithBank(bank, fillBtn);
+        });
+      }
+
+      list.appendChild(tile);
     });
   } else if (currentTab === 'passwords') {
     const pwds = (currentVaultItems.passwords || []).filter(p => {
       if (!query) return true;
-      return (p.nickname || '').toLowerCase().includes(query) ||
-             (p.website || '').toLowerCase().includes(query) ||
-             (p.username || '').toLowerCase().includes(query);
+      const q = query.toLowerCase();
+      return (p.nickname || '').toLowerCase().includes(q) ||
+             (p.website || '').toLowerCase().includes(q) ||
+             (p.username || '').toLowerCase().includes(q);
     });
 
-    const banks = (currentVaultItems.bankAccounts || []).filter(b => {
-      const hasCreds = b.loginPassword || b.profilePassword || b.mpin;
+    const banksWithCreds = (currentVaultItems.bankAccounts || []).filter(b => {
+      const hasCreds = b.userId || b.loginPassword || b.profilePassword || b.mpin;
       if (!query) return hasCreds;
+      const q = query.toLowerCase();
       return hasCreds &&
-             ((b.bankName || '').toLowerCase().includes(query) || (b.userId || '').toLowerCase().includes(query));
+             ((b.bankName || '').toLowerCase().includes(q) ||
+              (b.nickname || '').toLowerCase().includes(q) ||
+              (b.userId || '').toLowerCase().includes(q) ||
+              (b.cifNumber || '').toLowerCase().includes(q));
     });
 
-    if (pwds.length === 0 && banks.length === 0) {
+    if (pwds.length === 0 && banksWithCreds.length === 0) {
       list.innerHTML = '<div style="padding:20px;text-align:center;color:#94A3B8;font-size:12px;">No passwords saved in vault.</div>';
       return;
     }
 
-    // Partition passwords by active tab domain
-    const matchingPwds = [];
+    // Partition passwords and banks by active tab domain
+    const matchingItems = [];
     const otherPwds = [];
+    const otherBanks = [];
+
     pwds.forEach(p => {
       if (currentActiveTabDomain && doesDomainMatch(p.website, currentActiveTabDomain, p.nickname)) {
-        matchingPwds.push(p);
+        matchingItems.push({ type: 'pwd', data: p });
       } else {
         otherPwds.push(p);
+      }
+    });
+
+    banksWithCreds.forEach(b => {
+      if (currentActiveTabDomain && doesDomainMatch(b.website, currentActiveTabDomain, b.bankName || b.nickname)) {
+        matchingItems.push({ type: 'bank', data: b });
+      } else {
+        otherBanks.push(b);
       }
     });
 
@@ -1661,7 +1830,7 @@ function renderVaultList(query = '') {
         tile.style.backgroundColor = '#F0F9FF';
       }
       const webUrl = pwd.website ? (pwd.website.startsWith('http') ? pwd.website : 'https://' + pwd.website) : '';
-      const totpBtn = pwd.totpCode ? `<button class="copy-chip" style="background:#ECFDF5;color:#059669;border-color:#A7F3D0;font-weight:bold;" data-copy="${pwd.totpCode}">⚡ ${pwd.totpCode} (${pwd.totpSeconds}s)</button>` : '';
+      const totpBtn = pwd.totpCode ? `<button class="copy-chip" style="background:#ECFDF5;color:#059669;border-color:#A7F3D0;font-weight:bold;" data-copy="${escapeHtml(pwd.totpCode)}">⚡ ${escapeHtml(pwd.totpCode)} (${pwd.totpSeconds}s)</button>` : '';
       tile.innerHTML = `
         <div class="tile-header">
           <span class="tile-title">🌐 ${escapeHtml(pwd.nickname)}</span>
@@ -1670,63 +1839,88 @@ function renderVaultList(query = '') {
         ${pwd.website ? `<div style="font-size:11px;color:#3B82F6;margin-bottom:4px;word-break:break-all;">🔗 ${escapeHtml(pwd.website)}</div>` : ''}
         <div style="font-size:11px;color:#475569;margin-bottom:6px;">👤 User: <strong>${escapeHtml(pwd.username || 'N/A')}</strong></div>
         <div class="tile-actions">
-          ${pwd.username ? `<button class="copy-chip" data-copy="${pwd.username}">Copy User</button>` : ''}
-          ${pwd.password ? `<button class="copy-chip" data-copy="${pwd.password}">Copy Password</button>` : ''}
+          <button class="copy-chip fill-page-chip pwd-fill-btn">⚡ Fill Page</button>
+          ${pwd.username ? `<button class="copy-chip" data-copy="${escapeHtml(pwd.username)}">Copy User</button>` : ''}
+          ${pwd.password ? `<button class="copy-chip" data-copy="${escapeHtml(pwd.password)}">Copy Password</button>` : ''}
           ${totpBtn}
-          ${pwd.password ? `<button class="copy-chip check-leak-btn" data-pwd="${pwd.password}">🛡️ Leak Check</button>` : ''}
-          ${webUrl ? `<button class="copy-chip open-site" data-url="${webUrl}">Open Site</button>` : ''}
+          ${pwd.password ? `<button class="copy-chip check-leak-btn" data-pwd="${escapeHtml(pwd.password)}">🛡️ Leak Check</button>` : ''}
+          ${webUrl ? `<button class="copy-chip open-site" data-url="${escapeHtml(webUrl)}">Open Site</button>` : ''}
         </div>
       `;
+      const fillBtn = tile.querySelector('.pwd-fill-btn');
+      if (fillBtn) {
+        fillBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          fillPageWithPassword(pwd, fillBtn);
+        });
+      }
       return tile;
     };
 
-    // If tab matches exist, prioritize them at the top
-    if (matchingPwds.length > 0) {
+    const renderBankLoginTile = (bank, isMatch = false) => {
+      const tile = document.createElement('div');
+      tile.className = 'card-tile';
+      if (isMatch) {
+        tile.style.border = '1px solid #93C5FD';
+        tile.style.backgroundColor = '#F0F9FF';
+      }
+      const webUrl = bank.website ? (bank.website.startsWith('http') ? bank.website : 'https://' + bank.website) : '';
+      tile.innerHTML = `
+        <div class="tile-header">
+          <span class="tile-title">🏦 ${escapeHtml(bank.bankName)} NetBanking</span>
+          ${isMatch ? '<span class="tile-badge" style="background:#DBEAFE;color:#1D4ED8;border-color:#93C5FD;">⭐ MATCHES TAB</span>' : '<span class="tile-badge">BANK LOGIN</span>'}
+        </div>
+        ${bank.website ? `<div style="font-size:11px;color:#3B82F6;margin-bottom:4px;word-break:break-all;">🔗 ${escapeHtml(bank.website)}</div>` : ''}
+        <div style="font-size:11px;color:#475569;margin-bottom:4px;">👤 Customer / User ID: <strong>${escapeHtml(bank.userId || 'N/A')}</strong></div>
+        ${bank.loginPassword ? `<div style="font-size:11px;color:#475569;margin-bottom:6px;">🔑 Password: <strong>••••••••</strong></div>` : ''}
+        <div class="tile-actions">
+          <button class="copy-chip fill-page-chip bank-fill-btn">⚡ Fill Bank Page</button>
+          ${bank.userId ? `<button class="copy-chip" data-copy="${escapeHtml(bank.userId)}">Copy Customer ID</button>` : ''}
+          ${bank.loginPassword ? `<button class="copy-chip" data-copy="${escapeHtml(bank.loginPassword)}">Copy Password</button>` : ''}
+          ${bank.mpin ? `<button class="copy-chip" data-copy="${escapeHtml(bank.mpin)}">Copy MPIN</button>` : ''}
+          ${bank.cifNumber ? `<button class="copy-chip" data-copy="${escapeHtml(bank.cifNumber)}">Copy CIF</button>` : ''}
+          ${webUrl ? `<button class="copy-chip open-site" data-url="${escapeHtml(webUrl)}">Open Portal</button>` : ''}
+        </div>
+      `;
+      const fillBtn = tile.querySelector('.bank-fill-btn');
+      if (fillBtn) {
+        fillBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          fillPageWithBank(bank, fillBtn);
+        });
+      }
+      return tile;
+    };
+
+    // 1. Suggested for Active Tab (prioritized at the top)
+    if (matchingItems.length > 0) {
       const matchHeader = document.createElement('div');
       matchHeader.style.cssText = 'padding:6px 10px;margin-bottom:6px;background:#EFF6FF;border-radius:6px;font-size:11px;font-weight:bold;color:#1E40AF;display:flex;align-items:center;gap:6px;';
-      matchHeader.innerHTML = `<span>⭐ Suggested for <strong>${escapeHtml(currentActiveTabDomain)}</strong> (${matchingPwds.length})</span>`;
+      matchHeader.innerHTML = `<span>⭐ Suggested for <strong>${escapeHtml(currentActiveTabDomain)}</strong> (${matchingItems.length})</span>`;
       list.appendChild(matchHeader);
 
-      matchingPwds.forEach(p => list.appendChild(renderPwdTile(p, true)));
-
-      if (otherPwds.length > 0) {
-        const otherHeader = document.createElement('div');
-        otherHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
-        otherHeader.textContent = `All Other Logins (${otherPwds.length})`;
-        list.appendChild(otherHeader);
-      }
+      matchingItems.forEach(item => {
+        if (item.type === 'pwd') list.appendChild(renderPwdTile(item.data, true));
+        else if (item.type === 'bank') list.appendChild(renderBankLoginTile(item.data, true));
+      });
     }
 
-    // Render other passwords
-    otherPwds.forEach(p => list.appendChild(renderPwdTile(p, false)));
+    // 2. All Other Website Passwords
+    if (otherPwds.length > 0) {
+      const pwdHeader = document.createElement('div');
+      pwdHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+      pwdHeader.textContent = matchingItems.length > 0 ? `Other Website Logins (${otherPwds.length})` : `Website Logins (${otherPwds.length})`;
+      list.appendChild(pwdHeader);
+      otherPwds.forEach(p => list.appendChild(renderPwdTile(p, false)));
+    }
 
-    // 2. Bank Credentials (shown if searching, or if bank matches domain, or if no tab match exists)
-    const shouldShowBanks = query || !currentActiveTabDomain || (matchingPwds.length === 0 && otherPwds.length === 0);
-    if (shouldShowBanks && banks.length > 0) {
-      if (matchingPwds.length > 0 || otherPwds.length > 0) {
-        const bankHeader = document.createElement('div');
-        bankHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
-        bankHeader.textContent = `Bank Logins (${banks.length})`;
-        list.appendChild(bankHeader);
-      }
-
-      banks.forEach(bank => {
-        const tile = document.createElement('div');
-        tile.className = 'card-tile';
-        tile.innerHTML = `
-          <div class="tile-header">
-            <span class="tile-title">🏦 ${escapeHtml(bank.bankName)} Credentials</span>
-            <span class="tile-badge">BANK</span>
-          </div>
-          <div style="font-size:11px;color:#475569;margin-bottom:4px;">User: ${escapeHtml(bank.userId || 'N/A')}</div>
-          <div class="tile-actions">
-            ${bank.userId ? `<button class="copy-chip" data-copy="${bank.userId}">Copy User ID</button>` : ''}
-            ${bank.loginPassword ? `<button class="copy-chip" data-copy="${bank.loginPassword}">Copy Password</button>` : ''}
-            ${bank.mpin ? `<button class="copy-chip" data-copy="${bank.mpin}">Copy MPIN</button>` : ''}
-          </div>
-        `;
-        list.appendChild(tile);
-      });
+    // 3. Bank NetBanking Logins
+    if (otherBanks.length > 0) {
+      const bankHeader = document.createElement('div');
+      bankHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+      bankHeader.textContent = `Bank NetBanking Logins (${otherBanks.length})`;
+      list.appendChild(bankHeader);
+      otherBanks.forEach(b => list.appendChild(renderBankLoginTile(b, false)));
     }
   }
 
