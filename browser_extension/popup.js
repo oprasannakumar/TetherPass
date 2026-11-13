@@ -1407,6 +1407,26 @@ function applyUnlockedUI(data) {
   if (items && (items.cards || items.bankAccounts || items.passwords)) {
     currentVaultItems = items;
     updateCounts();
+
+    // Context-sensitive tab selection: if the active page matches a bank or website password, switch to it automatically
+    if (currentActiveTabDomain) {
+      const hasBankMatch = (items.bankAccounts || []).some(b => doesDomainMatch(b.website, currentActiveTabDomain, b.bankName || b.nickname));
+      const hasPwdMatch = (items.passwords || []).some(p => doesDomainMatch(p.website, currentActiveTabDomain, p.nickname));
+
+      if (hasBankMatch) {
+        currentTab = 'banks';
+      } else if (hasPwdMatch) {
+        currentTab = 'passwords';
+      }
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        if (btn.getAttribute('data-tab') === currentTab) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+    }
+
     renderVaultList();
   }
 }
@@ -1685,17 +1705,18 @@ function renderVaultList(query = '') {
       return;
     }
 
-    // Sort matching tab domain to top
-    banks.sort((a, b) => {
-      const aMatch = currentActiveTabDomain && doesDomainMatch(a.website, currentActiveTabDomain, a.bankName || a.nickname);
-      const bMatch = currentActiveTabDomain && doesDomainMatch(b.website, currentActiveTabDomain, b.bankName || b.nickname);
-      if (aMatch && !bMatch) return -1;
-      if (!aMatch && bMatch) return 1;
-      return 0;
+    // Partition matching banks for this page vs other banks
+    const matchingBanks = [];
+    const otherBanks = [];
+    banks.forEach(b => {
+      if (currentActiveTabDomain && doesDomainMatch(b.website, currentActiveTabDomain, b.bankName || b.nickname)) {
+        matchingBanks.push(b);
+      } else {
+        otherBanks.push(b);
+      }
     });
 
-    banks.forEach(bank => {
-      const isMatch = currentActiveTabDomain && doesDomainMatch(bank.website, currentActiveTabDomain, bank.bankName || bank.nickname);
+    const renderBankTile = (bank, isMatch = false) => {
       const accs = Array.isArray(bank.accounts) && bank.accounts.length > 0 ? bank.accounts : [];
       const hasCreds = !!(bank.userId || bank.loginPassword || bank.profilePassword || bank.mpin || bank.cifNumber);
       const webUrl = bank.website ? (bank.website.startsWith('http') ? bank.website : 'https://' + bank.website) : '';
@@ -1774,8 +1795,57 @@ function renderVaultList(query = '') {
         });
       }
 
-      list.appendChild(tile);
-    });
+      return tile;
+    };
+
+    if (matchingBanks.length > 0) {
+      const matchHeader = document.createElement('div');
+      matchHeader.style.cssText = 'padding:6px 10px;margin-bottom:6px;background:#EFF6FF;border-radius:6px;font-size:11px;font-weight:bold;color:#1E40AF;display:flex;align-items:center;gap:6px;';
+      matchHeader.innerHTML = `<span>⭐ Suggested for <strong>${escapeHtml(currentActiveTabDomain)}</strong> (${matchingBanks.length})</span>`;
+      list.appendChild(matchHeader);
+
+      matchingBanks.forEach(b => list.appendChild(renderBankTile(b, true)));
+
+      // If other banks exist, keep them collapsed behind a toggle button unless user searches
+      if (otherBanks.length > 0) {
+        if (query) {
+          const otherHeader = document.createElement('div');
+          otherHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+          otherHeader.textContent = `All Other Banks (${otherBanks.length})`;
+          list.appendChild(otherHeader);
+          otherBanks.forEach(b => list.appendChild(renderBankTile(b, false)));
+        } else {
+          const toggleWrap = document.createElement('div');
+          toggleWrap.style.cssText = 'text-align:center;margin-top:14px;margin-bottom:8px;';
+          const toggleBtn = document.createElement('button');
+          toggleBtn.className = 'btn-toggle-others';
+          toggleBtn.style.cssText = 'background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:8px;padding:7px 16px;color:#475569;font-size:11px;font-weight:600;cursor:pointer;width:100%;transition:all 0.15s ease;';
+          toggleBtn.textContent = `▾ Show Other Bank Accounts (${otherBanks.length})`;
+
+          const otherContainer = document.createElement('div');
+          otherContainer.style.display = 'none';
+          otherContainer.style.marginTop = '8px';
+          otherBanks.forEach(b => otherContainer.appendChild(renderBankTile(b, false)));
+
+          toggleBtn.addEventListener('click', () => {
+            if (otherContainer.style.display === 'none') {
+              otherContainer.style.display = 'block';
+              toggleBtn.textContent = `▴ Hide Other Bank Accounts (${otherBanks.length})`;
+            } else {
+              otherContainer.style.display = 'none';
+              toggleBtn.textContent = `▾ Show Other Bank Accounts (${otherBanks.length})`;
+            }
+          });
+
+          toggleWrap.appendChild(toggleBtn);
+          list.appendChild(toggleWrap);
+          list.appendChild(otherContainer);
+        }
+      }
+    } else {
+      // No domain match (e.g. on new tab or unlisted domain) -> list all banks
+      banks.forEach(b => list.appendChild(renderBankTile(b, false)));
+    }
   } else if (currentTab === 'passwords') {
     const pwds = (currentVaultItems.passwords || []).filter(p => {
       if (!query) return true;
@@ -1903,24 +1973,84 @@ function renderVaultList(query = '') {
         if (item.type === 'pwd') list.appendChild(renderPwdTile(item.data, true));
         else if (item.type === 'bank') list.appendChild(renderBankLoginTile(item.data, true));
       });
-    }
 
-    // 2. All Other Website Passwords
-    if (otherPwds.length > 0) {
-      const pwdHeader = document.createElement('div');
-      pwdHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
-      pwdHeader.textContent = matchingItems.length > 0 ? `Other Website Logins (${otherPwds.length})` : `Website Logins (${otherPwds.length})`;
-      list.appendChild(pwdHeader);
-      otherPwds.forEach(p => list.appendChild(renderPwdTile(p, false)));
-    }
+      const totalOthers = otherPwds.length + otherBanks.length;
+      if (totalOthers > 0) {
+        if (query) {
+          // When searching, display directly
+          if (otherPwds.length > 0) {
+            const pwdHeader = document.createElement('div');
+            pwdHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+            pwdHeader.textContent = `Other Website Logins (${otherPwds.length})`;
+            list.appendChild(pwdHeader);
+            otherPwds.forEach(p => list.appendChild(renderPwdTile(p, false)));
+          }
+          if (otherBanks.length > 0) {
+            const bankHeader = document.createElement('div');
+            bankHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+            bankHeader.textContent = `Other Bank Logins (${otherBanks.length})`;
+            list.appendChild(bankHeader);
+            otherBanks.forEach(b => list.appendChild(renderBankLoginTile(b, false)));
+          }
+        } else {
+          // Keep other logins collapsed so user sees ONLY what suits this website!
+          const toggleWrap = document.createElement('div');
+          toggleWrap.style.cssText = 'text-align:center;margin-top:14px;margin-bottom:8px;';
+          const toggleBtn = document.createElement('button');
+          toggleBtn.className = 'btn-toggle-others';
+          toggleBtn.style.cssText = 'background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:8px;padding:7px 16px;color:#475569;font-size:11px;font-weight:600;cursor:pointer;width:100%;transition:all 0.15s ease;';
+          toggleBtn.textContent = `▾ Show All Other Logins (${totalOthers})`;
 
-    // 3. Bank NetBanking Logins
-    if (otherBanks.length > 0) {
-      const bankHeader = document.createElement('div');
-      bankHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
-      bankHeader.textContent = `Bank NetBanking Logins (${otherBanks.length})`;
-      list.appendChild(bankHeader);
-      otherBanks.forEach(b => list.appendChild(renderBankLoginTile(b, false)));
+          const otherContainer = document.createElement('div');
+          otherContainer.style.display = 'none';
+          otherContainer.style.marginTop = '8px';
+
+          if (otherPwds.length > 0) {
+            const pwdHeader = document.createElement('div');
+            pwdHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+            pwdHeader.textContent = `Website Logins (${otherPwds.length})`;
+            otherContainer.appendChild(pwdHeader);
+            otherPwds.forEach(p => otherContainer.appendChild(renderPwdTile(p, false)));
+          }
+          if (otherBanks.length > 0) {
+            const bankHeader = document.createElement('div');
+            bankHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+            bankHeader.textContent = `Bank NetBanking Logins (${otherBanks.length})`;
+            otherContainer.appendChild(bankHeader);
+            otherBanks.forEach(b => otherContainer.appendChild(renderBankLoginTile(b, false)));
+          }
+
+          toggleBtn.addEventListener('click', () => {
+            if (otherContainer.style.display === 'none') {
+              otherContainer.style.display = 'block';
+              toggleBtn.textContent = `▴ Hide Other Logins (${totalOthers})`;
+            } else {
+              otherContainer.style.display = 'none';
+              toggleBtn.textContent = `▾ Show All Other Logins (${totalOthers})`;
+            }
+          });
+
+          toggleWrap.appendChild(toggleBtn);
+          list.appendChild(toggleWrap);
+          list.appendChild(otherContainer);
+        }
+      }
+    } else {
+      // No domain match (e.g. on new tab or unlisted website) -> list all logins
+      if (otherPwds.length > 0) {
+        const pwdHeader = document.createElement('div');
+        pwdHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+        pwdHeader.textContent = `Website Logins (${otherPwds.length})`;
+        list.appendChild(pwdHeader);
+        otherPwds.forEach(p => list.appendChild(renderPwdTile(p, false)));
+      }
+      if (otherBanks.length > 0) {
+        const bankHeader = document.createElement('div');
+        bankHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+        bankHeader.textContent = `Bank NetBanking Logins (${otherBanks.length})`;
+        list.appendChild(bankHeader);
+        otherBanks.forEach(b => list.appendChild(renderBankLoginTile(b, false)));
+      }
     }
   }
 

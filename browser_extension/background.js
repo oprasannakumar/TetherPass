@@ -732,6 +732,15 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
   const isCardField = ['CARD_NUMBER', 'EXPIRY', 'CVV', 'CARD_HOLDER'].includes(fieldType);
   const isBankField = ['ACCOUNT_NUMBER', 'IFSC'].includes(fieldType);
 
+  // Pre-check: Does this current domain specifically match any bank in the vault?
+  const domainMatchingBank = (domain && fieldType !== 'ALL') ? memoryVault.items.find(item => {
+    const type = (item.type || '').toLowerCase();
+    if (type === 'card' || type === 'password') return false;
+    const bWeb = item.website || item.url || '';
+    const bName = item.bank_name || item.bankName || item.nickname || '';
+    return doesDomainMatch(bWeb, domain, bName);
+  }) : null;
+
   // Group items using universal normalizer for Flutter VaultItem maps
   const cards = [];
   const bankAccounts = [];
@@ -802,11 +811,21 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
       const bankName = item.bank_name || item.bankName || item.nickname || 'Bank';
       const matchesBank = domain ? doesDomainMatch(bankWeb, domain, bankName) : true;
 
-      // If user is on a login/password field on an external site (e.g. Amazon),
-      // ONLY include bank credentials if this website is actually that bank's website!
-      if (isCredentialField && domain && fieldType !== 'ALL') {
-        if (!matchesBank) {
-          continue; // Do NOT suggest bank accounts on Amazon, Netflix, etc.!
+      // STRICT DOMAIN RELEVANCE:
+      // If user is on a specific webpage and requesting autofill suggestions for an input field:
+      // 1. If this domain specifically belongs to a bank (e.g. HDFC, Federal, SBI),
+      //    ONLY return the bank matching this domain! Never show Federal/SBI on HDFC!
+      // 2. If this is a login/credential field on a non-bank site (e.g. Amazon, GitHub),
+      //    NEVER return bank accounts!
+      if (domain && fieldType !== 'ALL') {
+        if (domainMatchingBank) {
+          if (!matchesBank) {
+            continue; // Filter out all non-matching banks on bank portal!
+          }
+        } else if (isCredentialField) {
+          if (!matchesBank) {
+            continue; // Do NOT suggest bank accounts on Amazon, GitHub, Netflix!
+          }
         }
       }
 

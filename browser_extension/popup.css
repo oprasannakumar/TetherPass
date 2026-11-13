@@ -1167,6 +1167,12 @@ body {
   border-color: #10B981 !important;
 }
 
+.btn-toggle-others:hover {
+  background: #F1F5F9 !important;
+  border-color: #94A3B8 !important;
+  color: #1E293B !important;
+}
+
 /* ── Device Management & Modal Styles ── */
 .btn-manage-link {
   background: none;
