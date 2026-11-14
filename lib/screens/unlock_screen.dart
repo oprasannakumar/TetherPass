@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/autofill_bridge_service.dart';
 import '../services/auto_lock_service.dart';
+import '../services/database_service.dart';
 import '../services/vault_security_service.dart';
 
 class UnlockScreen extends StatefulWidget {
@@ -78,11 +79,26 @@ class _UnlockScreenState extends State<UnlockScreen> {
     });
 
     final sec = context.read<VaultSecurityService>();
+    final db = context.read<DatabaseService>();
+
+    // Check if Duress (Decoy Vault) PIN was entered under coercion
+    final isDuress = await sec.isDuressEnabled();
+    if (isDuress && await sec.verifyDuressPassword(pwd)) {
+      db.isDecoyMode = true;
+      if (mounted) {
+        setState(() => _isAuthenticating = false);
+        AutoLockService.markUnlocked();
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
+      return;
+    }
+
     final valid = await sec.verifyMasterPassword(pwd);
 
     if (mounted) {
       setState(() => _isAuthenticating = false);
       if (valid) {
+        db.isDecoyMode = false;
         AutoLockService.markUnlocked();
         Navigator.of(context).pushReplacementNamed('/home');
       } else {

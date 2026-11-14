@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../services/autofill_bridge_service.dart';
 import '../services/auto_lock_service.dart';
@@ -24,6 +25,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObserver {
   bool _biometricEnabled = true;
+  bool _duressEnabled = false;
   bool _isAutofillEnabled = false;
   int _autoLockSeconds = 60;
   int _clipboardPurgeSeconds = 30;
@@ -69,11 +71,13 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   Future<void> _loadSettings() async {
     final sec = context.read<VaultSecurityService>();
     final bio = await sec.isBiometricEnabled();
+    final duress = await sec.isDuressEnabled();
     final lockSec = await AutoLockService.getAutoLockSeconds();
     final purgeSec = await ClipboardService.getPurgeSeconds();
     if (mounted) {
       setState(() {
         _biometricEnabled = bio;
+        _duressEnabled = duress;
         _autoLockSeconds = lockSec;
         _clipboardPurgeSeconds = purgeSec;
       });
@@ -391,6 +395,152 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     );
   }
 
+  Future<void> _showDuressPasswordDialog() async {
+    final sec = context.read<VaultSecurityService>();
+    final isEnabled = await sec.isDuressEnabled();
+
+    final pinCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    String? errorText;
+
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Row(
+            children: [
+              Icon(Icons.shield_outlined, color: Color(0xFFFF6F00)),
+              SizedBox(width: 8),
+              Text(
+                'Duress Decoy Vault',
+                style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 17),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'If coerced into unlocking TetherPass, entering this alternate Duress PIN will open a Decoy Vault with harmless dummy items.',
+                  style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFFEDD5)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded, color: Color(0xFFC2410C), size: 18),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Your real passwords, cards, and accounts remain completely hidden and locked. Cloud sync is permanently disabled in Decoy mode.',
+                          style: TextStyle(color: Color(0xFFC2410C), fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: pinCtrl,
+                  obscureText: true,
+                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  decoration: InputDecoration(
+                    labelText: isEnabled ? 'New Duress PIN / Password' : 'Set Duress PIN / Password',
+                    hintText: 'Must differ from Master Password',
+                    prefixIcon: const Icon(Icons.password_rounded, color: Color(0xFFFF6F00)),
+                    errorText: errorText,
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirmCtrl,
+                  obscureText: true,
+                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  decoration: InputDecoration(
+                    labelText: 'Confirm Duress PIN / Password',
+                    prefixIcon: const Icon(Icons.check_circle_outline_rounded, color: Color(0xFFFF6F00)),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (isEnabled)
+              TextButton(
+                onPressed: () async {
+                  await sec.disableDuress();
+                  setState(() => _duressEnabled = false);
+                  Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      const SnackBar(content: Text('Duress Decoy Vault disabled.')),
+                    );
+                  }
+                },
+                child: const Text('Disable Duress', style: TextStyle(color: Colors.redAccent)),
+              ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
+              onPressed: () async {
+                final p = pinCtrl.text.trim();
+                final c = confirmCtrl.text.trim();
+                if (p.length < 4) {
+                  setDlgState(() => errorText = 'PIN must be at least 4 characters');
+                  return;
+                }
+                if (p != c) {
+                  setDlgState(() => errorText = 'PINs do not match');
+                  return;
+                }
+
+                // Verify it is not identical to real Master Password
+                final isSameAsMaster = await sec.verifyMasterPassword(p);
+                if (isSameAsMaster) {
+                  setDlgState(() => errorText = 'Duress PIN cannot be identical to Master Password!');
+                  return;
+                }
+
+                await sec.setDuressPassword(p);
+                setState(() => _duressEnabled = true);
+                Navigator.pop(ctx);
+                if (mounted) {
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✓ Duress Decoy PIN activated successfully!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Save PIN'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _exportBackupFile() async {
     final sec = context.read<VaultSecurityService>();
     final db = context.read<DatabaseService>();
@@ -512,14 +662,21 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                '✓ Backup saved locally:\n${savedFile.path}',
+                                '✓ Backup saved:\n${savedFile.path}',
                                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                               ),
                             ),
                           ],
                         ),
+                        action: SnackBarAction(
+                          label: 'Share to Cloud',
+                          textColor: const Color(0xFFFFD54F),
+                          onPressed: () {
+                            Share.shareXFiles([XFile(savedFile!.path)], text: 'TetherPass Encrypted Vault Backup');
+                          },
+                        ),
                         backgroundColor: const Color(0xFF16A34A),
-                        duration: const Duration(seconds: 5),
+                        duration: const Duration(seconds: 6),
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
@@ -878,6 +1035,30 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
               title: 'View Recovery Key',
               subtitle: '16-character backup key for emergency reset',
               onTap: _viewOrRegenerateRecoveryKey,
+            ),
+
+            _buildSettingTile(
+              icon: Icons.shield_outlined,
+              title: 'Duress Decoy Vault',
+              subtitle: _duressEnabled
+                  ? 'Active (Alternate PIN opens harmless decoy vault)'
+                  : 'Disabled (Tap to set emergency decoy PIN)',
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _duressEnabled ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _duressEnabled ? 'Active' : 'Configure',
+                  style: TextStyle(
+                    color: _duressEnabled ? const Color(0xFF15803D) : const Color(0xFF64748B),
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              onTap: _showDuressPasswordDialog,
             ),
 
             _buildSettingTile(

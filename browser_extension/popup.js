@@ -1778,7 +1778,7 @@ function renderVaultList(query = '') {
         actionBtns.push(`<button class="copy-chip" data-copy="${escapeHtml(bank.cifNumber)}">Copy CIF</button>`);
       }
       if (webUrl) {
-        actionBtns.push(`<button class="copy-chip open-site" data-url="${escapeHtml(webUrl)}">Open Portal</button>`);
+        actionBtns.push(`<button class="copy-chip open-site" data-url="${escapeHtml(webUrl)}" data-userid="${escapeHtml(bank.userId || '')}">🌐 Open Portal</button>`);
       }
 
       tile.innerHTML = `
@@ -1956,7 +1956,7 @@ function renderVaultList(query = '') {
           ${bank.loginPassword ? `<button class="copy-chip" data-copy="${escapeHtml(bank.loginPassword)}">Copy Password</button>` : ''}
           ${bank.mpin ? `<button class="copy-chip" data-copy="${escapeHtml(bank.mpin)}">Copy MPIN</button>` : ''}
           ${bank.cifNumber ? `<button class="copy-chip" data-copy="${escapeHtml(bank.cifNumber)}">Copy CIF</button>` : ''}
-          ${webUrl ? `<button class="copy-chip open-site" data-url="${escapeHtml(webUrl)}">Open Portal</button>` : ''}
+          ${webUrl ? `<button class="copy-chip open-site" data-url="${escapeHtml(webUrl)}" data-userid="${escapeHtml(bank.userId || '')}">🌐 Open Portal</button>` : ''}
         </div>
       `;
       const fillBtn = tile.querySelector('.bank-fill-btn');
@@ -2079,11 +2079,20 @@ function renderVaultList(query = '') {
     });
   });
 
-  // Attach open-site listener
+  // Attach open-site listener with automatic credential staging
   list.querySelectorAll('.open-site').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const url = btn.getAttribute('data-url');
+      const userId = btn.getAttribute('data-userid');
+      if (userId) {
+        try {
+          await navigator.clipboard.writeText(userId);
+          const origText = btn.textContent;
+          btn.textContent = '✓ ID Copied!';
+          setTimeout(() => { btn.textContent = origText; }, 2500);
+        } catch (_) {}
+      }
       if (url) {
         chrome.tabs.create({ url });
       }

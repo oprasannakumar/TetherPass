@@ -16,6 +16,9 @@ class VaultSecurityService {
   static const _keyMasterPasswordEncrypted = 'vault_master_password_encrypted';
   static const _keyBiometricEnabled = 'vault_biometric_enabled';
   static const _keyHasSeenTour = 'vault_has_seen_tour';
+  static const _keyDuressEnabled = 'vault_duress_enabled';
+  static const _keyDuressPasswordSalt = 'vault_duress_password_salt';
+  static const _keyDuressPasswordHash = 'vault_duress_password_hash';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -158,6 +161,41 @@ class VaultSecurityService {
   /// Mark the app tour as seen
   Future<void> setTourSeen(bool seen) async {
     await _storage.write(key: _keyHasSeenTour, value: seen ? 'true' : 'false');
+  }
+
+  /// Check if Duress (Decoy Vault) mode is configured and enabled
+  Future<bool> isDuressEnabled() async {
+    final val = await _storage.read(key: _keyDuressEnabled);
+    return val == 'true';
+  }
+
+  /// Configure or update the Duress Password / PIN
+  Future<void> setDuressPassword(String duressPassword) async {
+    final salt = _generateRandomSalt(16);
+    final hash = _hashWithSalt(duressPassword, salt);
+    await _storage.write(key: _keyDuressPasswordSalt, value: salt);
+    await _storage.write(key: _keyDuressPasswordHash, value: hash);
+    await _storage.write(key: _keyDuressEnabled, value: 'true');
+  }
+
+  /// Verify if the entered password matches the Duress PIN
+  Future<bool> verifyDuressPassword(String password) async {
+    final enabled = await isDuressEnabled();
+    if (!enabled) return false;
+
+    final salt = await _storage.read(key: _keyDuressPasswordSalt);
+    final expectedHash = await _storage.read(key: _keyDuressPasswordHash);
+    if (salt == null || expectedHash == null) return false;
+
+    final actualHash = _hashWithSalt(password, salt);
+    return actualHash == expectedHash;
+  }
+
+  /// Disable the Duress Password feature
+  Future<void> disableDuress() async {
+    await _storage.write(key: _keyDuressEnabled, value: 'false');
+    await _storage.delete(key: _keyDuressPasswordSalt);
+    await _storage.delete(key: _keyDuressPasswordHash);
   }
 
   /// Wipes all sensitive security metadata from secure keystore

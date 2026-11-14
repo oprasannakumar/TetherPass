@@ -290,8 +290,74 @@
     }
   }
 
-  function requestSuggestionsForInput(target, fieldType) {
-    if (!target || isInputFilled(target)) {
+  var activeFloatingPill = null;
+
+  function removeFloatingPill() {
+    if (activeFloatingPill) {
+      activeFloatingPill.remove();
+      activeFloatingPill = null;
+    }
+  }
+
+  function showFloatingPill(target) {
+    if (!target) return;
+    const fieldType = classifyInput(target);
+    if (!fieldType) {
+      removeFloatingPill();
+      return;
+    }
+
+    if (activeFloatingPill && activeFloatingPill.dataset.targetId === (target.id || target.name)) {
+      positionFloatingPill(target);
+      return;
+    }
+
+    removeFloatingPill();
+
+    const pill = document.createElement('div');
+    pill.className = 'cv-floating-pill';
+    pill.dataset.targetId = target.id || target.name || '';
+    pill.title = 'TetherPass Autofill (Alt+V)';
+    pill.innerHTML = `
+      <span class="cv-pill-icon">🛡️</span>
+      <span class="cv-pill-text">Autofill</span>
+      <span class="cv-pill-kbd">Alt+V</span>
+    `;
+
+    pill.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      target.focus();
+      handleInputInteraction(target, true);
+    });
+
+    document.body.appendChild(pill);
+    activeFloatingPill = pill;
+    positionFloatingPill(target);
+  }
+
+  function positionFloatingPill(target) {
+    if (!activeFloatingPill || !target) return;
+    const rect = target.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      activeFloatingPill.style.display = 'none';
+      return;
+    }
+    activeFloatingPill.style.display = 'inline-flex';
+
+    const pillRect = activeFloatingPill.getBoundingClientRect();
+    const hasRoomInside = rect.width > 160;
+    const top = window.scrollY + rect.top + (rect.height - pillRect.height) / 2;
+    const left = hasRoomInside
+      ? window.scrollX + rect.right - pillRect.width - 6
+      : window.scrollX + rect.right + 6;
+
+    activeFloatingPill.style.top = `${Math.max(0, top)}px`;
+    activeFloatingPill.style.left = `${Math.max(0, left)}px`;
+  }
+
+  function requestSuggestionsForInput(target, fieldType, force = false) {
+    if (!target || (!force && isInputFilled(target))) {
       removeDropdown();
       return;
     }
@@ -304,19 +370,19 @@
                               (document.activeElement === target) ||
                               (target.matches && target.matches(':focus'));
         if (!isStillTarget) return;
-        if (isInputFilled(target)) {
+        if (!force && isInputFilled(target)) {
           removeDropdown();
           return;
         }
-        renderDropdown(target, fieldType, response);
+        renderDropdown(target, fieldType, response, force);
       }
     );
   }
 
-  function handleInputInteraction(target) {
+  function handleInputInteraction(target, force = false) {
     if (!target || target.tagName !== 'INPUT') return;
     clearInputFilledState(target);
-    if (isInputFilled(target)) {
+    if (!force && isInputFilled(target)) {
       removeDropdown();
       return;
     }
@@ -331,13 +397,50 @@
     suppressBrowserAutofill(target);
 
     activeInput = target;
-    requestSuggestionsForInput(target, fieldType);
+    requestSuggestionsForInput(target, fieldType, force);
   }
 
   // Handle focus on fields
   document.addEventListener('focusin', (e) => {
     handleInputInteraction(e.target);
+    showFloatingPill(e.target);
   });
+
+  document.addEventListener('focusout', (e) => {
+    setTimeout(() => {
+      if (document.activeElement !== e.target && (!activeDropdown || !activeDropdown.contains(document.activeElement))) {
+        removeFloatingPill();
+      }
+    }, 250);
+  });
+
+  // Global Keyboard Shortcut: Alt+V triggers TetherPass autofill anywhere
+  document.addEventListener('keydown', (e) => {
+    if (e.altKey && (e.key === 'v' || e.key === 'V')) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      let target = document.activeElement;
+      if (!target || target.tagName !== 'INPUT') {
+        const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"])'));
+        target = inputs.find(inp => classifyInput(inp) !== null) || inputs[0];
+      }
+
+      if (target) {
+        target.focus();
+        showFloatingPill(target);
+        handleInputInteraction(target, true);
+      }
+    }
+  }, true);
+
+  window.addEventListener('scroll', () => {
+    if (activeFloatingPill && activeInput) positionFloatingPill(activeInput);
+  }, { passive: true });
+
+  window.addEventListener('resize', () => {
+    if (activeFloatingPill && activeInput) positionFloatingPill(activeInput);
+  }, { passive: true });
 
   // Handle click on fields (triggers suggestions even if field was already focused)
   document.addEventListener('click', (e) => {
@@ -465,11 +568,11 @@
     }
   }
 
-  function renderDropdown(targetInput, fieldType, data) {
+  function renderDropdown(targetInput, fieldType, data, force = false) {
     removeDropdown();
 
-    // Guard: do not render if input already has credentials / value
-    if (!targetInput || isInputFilled(targetInput)) {
+    // Guard: do not render if input already has credentials / value unless explicitly forced
+    if (!targetInput || (!force && isInputFilled(targetInput))) {
       return;
     }
 

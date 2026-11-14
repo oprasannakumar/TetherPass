@@ -52,6 +52,9 @@ void main() async {
   unawaited(BinDatabaseService.init());
 
   await AutoLockService.init(appNavigatorKey);
+  AutoLockService.onLockCallback = () {
+    dbService.isDecoyMode = false;
+  };
 
   final isOnboarded = await securityService.isOnboarded();
   final autoLockSec = await AutoLockService.getAutoLockSeconds();

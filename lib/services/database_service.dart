@@ -18,6 +18,70 @@ class DatabaseService {
   final CryptoService cryptoService;
   Database? _db;
 
+  /// Duress (Decoy Vault) flag: When true, isolates execution strictly to in-memory dummy items
+  bool isDecoyMode = false;
+
+  final List<VaultItem> _decoyItems = [
+    VaultItem(
+      id: 'decoy_1',
+      type: VaultItemType.card,
+      bankName: 'Amazon Pay ICICI',
+      nickname: 'Amazon ICICI Credit',
+      cardHolder: 'BHASKAR',
+      cardNumber: '4315220019283412',
+      cardNetwork: 'Visa',
+      expiry: '08/29',
+      cvv: '419',
+      cardType: 'Credit',
+      cardTier: CardTier.platinum,
+      notes: 'Amazon Prime Cashback Card',
+      createdAt: DateTime.now().subtract(const Duration(days: 90)),
+      updatedAt: DateTime.now().subtract(const Duration(days: 10)),
+    ),
+    VaultItem(
+      id: 'decoy_2',
+      type: VaultItemType.card,
+      bankName: 'HDFC Bank',
+      nickname: 'HDFC EasyShop Debit',
+      cardHolder: 'BHASKAR',
+      cardNumber: '5241880091823719',
+      cardNetwork: 'Mastercard',
+      expiry: '11/28',
+      cvv: '821',
+      cardType: 'Debit',
+      cardTier: CardTier.standard,
+      notes: 'Daily ATM and POS debit card',
+      createdAt: DateTime.now().subtract(const Duration(days: 120)),
+      updatedAt: DateTime.now().subtract(const Duration(days: 15)),
+    ),
+    VaultItem(
+      id: 'decoy_3',
+      type: VaultItemType.netBanking,
+      bankName: 'State Bank of India',
+      nickname: 'SBI Primary Savings',
+      accountNumber: '30918274615',
+      ifscCode: 'SBIN0001824',
+      userId: 'bhaskar_sbi',
+      loginPassword: 'SbiPassword#2024',
+      website: 'https://onlinesbi.sbi',
+      notes: 'Branch savings account',
+      createdAt: DateTime.now().subtract(const Duration(days: 200)),
+      updatedAt: DateTime.now().subtract(const Duration(days: 20)),
+    ),
+    VaultItem(
+      id: 'decoy_4',
+      type: VaultItemType.password,
+      bankName: 'Flipkart',
+      nickname: 'Flipkart Online Store',
+      website: 'https://flipkart.com',
+      userId: 'bhaskar.user@gmail.com',
+      loginPassword: 'FlipkartPassword#9',
+      notes: 'Online shopping account',
+      createdAt: DateTime.now().subtract(const Duration(days: 60)),
+      updatedAt: DateTime.now().subtract(const Duration(days: 5)),
+    ),
+  ];
+
   DatabaseService({required this.cryptoService});
 
   Future<void> init() async {
@@ -137,6 +201,11 @@ class DatabaseService {
   // ─── CRUD ─────────────────────────────────────────────────────────────────
 
   Future<void> insertItem(VaultItem item) async {
+    if (isDecoyMode) {
+      _decoyItems.removeWhere((i) => i.id == item.id);
+      _decoyItems.add(item);
+      return;
+    }
     final map = _encryptItemMap(item);
     await _database.insert(
       _tableName,
@@ -146,6 +215,13 @@ class DatabaseService {
   }
 
   Future<void> updateItem(VaultItem item) async {
+    if (isDecoyMode) {
+      final idx = _decoyItems.indexWhere((i) => i.id == item.id);
+      if (idx >= 0) {
+        _decoyItems[idx] = item;
+      }
+      return;
+    }
     final map = _encryptItemMap(item);
     await _database.update(
       _tableName,
@@ -156,6 +232,10 @@ class DatabaseService {
   }
 
   Future<void> deleteItem(String id) async {
+    if (isDecoyMode) {
+      _decoyItems.removeWhere((i) => i.id == id);
+      return;
+    }
     await _database.delete(
       _tableName,
       where: 'id = ?',
@@ -165,10 +245,17 @@ class DatabaseService {
 
   /// Wipes all vault records from SQLite database
   Future<void> clearAllData() async {
+    if (isDecoyMode) {
+      _decoyItems.clear();
+      return;
+    }
     await _database.delete(_tableName);
   }
 
   Future<List<VaultItem>> getAllItems() async {
+    if (isDecoyMode) {
+      return List<VaultItem>.from(_decoyItems);
+    }
     final rows = await _database.query(
       _tableName,
       orderBy: 'bank_name COLLATE NOCASE ASC, nickname COLLATE NOCASE ASC',

@@ -112,6 +112,11 @@ class DriveService extends ChangeNotifier {
   }
 
   Future<void> backup({bool forceEmpty = false}) async {
+    // DURESS SAFEGUARD: Never overwrite or sync cloud backup when in Decoy Vault mode!
+    if (databaseService.isDecoyMode) {
+      throw Exception('BLOCKED_DECOY_MODE: Cloud backup is disabled in Decoy Vault mode.');
+    }
+
     final api = await _getDriveApi();
     final items = await databaseService.getAllItems();
     final existing = await _findBackupFile(api);

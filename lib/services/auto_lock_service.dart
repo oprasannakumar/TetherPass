@@ -30,6 +30,7 @@ class AutoLockService {
 
   static Timer? _inactivityCheckTimer;
   static GlobalKey<NavigatorState>? _navKey;
+  static VoidCallback? onLockCallback;
 
   /// Initializes the service with navigator key and loads timeout from storage.
   static Future<void> init(GlobalKey<NavigatorState> navKey) async {
@@ -74,6 +75,7 @@ class AutoLockService {
     if (isLocked) return;
     isLocked = true;
     _pausedAt = null;
+    onLockCallback?.call();
     AutofillBridgeService.syncVaultState(isUnlocked: false);
     _navKey?.currentState?.pushNamedAndRemoveUntil('/unlock', (route) => false);
   }

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/vault_item.dart';
 import '../services/card_detector.dart';
@@ -83,6 +84,39 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   void _copyToClipboard(String label, String value) {
     if (value.isEmpty) return;
     ClipboardService.copySecure(context, value, label: label);
+  }
+
+  Future<void> _launchPortal(String rawUrl) async {
+    String urlStr = rawUrl.trim();
+    if (urlStr.isEmpty) return;
+    if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
+      urlStr = 'https://$urlStr';
+    }
+    final uri = Uri.tryParse(urlStr);
+    if (uri != null) {
+      if (_item.userId.isNotEmpty) {
+        await Clipboard.setData(ClipboardData(text: _item.userId));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✓ User ID (${_item.userId}) copied! Launching portal...'),
+              backgroundColor: const Color(0xFF0F172A),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+      try {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not open portal: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
   }
 
   String _formatCardNumber(String raw) {
@@ -464,6 +498,19 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
                       icon: const Icon(Icons.copy_rounded, size: 18, color: Colors.white70),
                       tooltip: 'Copy URL',
                       onPressed: () => _copyToClipboard('Website URL', _item.website),
+                    ),
+                    const SizedBox(width: 4),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6366F1),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.open_in_new_rounded, size: 13),
+                      label: const Text('Open', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () => _launchPortal(_item.website),
                     ),
                   ],
                 ),
@@ -1284,6 +1331,19 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
                       icon: Icon(Icons.copy_rounded, size: 18, color: textColor.withValues(alpha: 0.7)),
                       tooltip: 'Copy Bank URL',
                       onPressed: () => _copyToClipboard('Bank Website URL', _item.website),
+                    ),
+                    const SizedBox(width: 4),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0284C7),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.open_in_new_rounded, size: 13),
+                      label: const Text('Open Portal', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () => _launchPortal(_item.website),
                     ),
                   ],
                 ),
