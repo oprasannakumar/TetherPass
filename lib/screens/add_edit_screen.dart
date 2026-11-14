@@ -89,6 +89,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
   // ── Bank controllers ──
   final _nbBankCtrl = TextEditingController();
   final _nbNicknameCtrl = TextEditingController();
+  final _nbWebsiteCtrl = TextEditingController();
   final List<BankAccountRowControllers> _accountRowControllers = [];
   final _nbUserIdCtrl = TextEditingController();
   final _nbLoginPasswordCtrl = TextEditingController();
@@ -100,6 +101,42 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
   DateTime? _loginPasswordExpiry;
   DateTime? _profilePasswordExpiry;
   DateTime? _mpinExpiry;
+
+  static const Map<String, String> _knownBankPortals = {
+    'HDFC': 'now.hdfc.bank.in',
+    'STATE BANK OF INDIA': 'onlinesbi.sbi',
+    'SBI': 'onlinesbi.sbi',
+    'ICICI': 'infinity.icicibank.com',
+    'AXIS': 'omni.axisbank.co.in',
+    'KOTAK': 'netbanking.kotak.com',
+    'RBL': 'rblbank.com',
+    'FEDERAL': 'fednetbank.com',
+    'PUNJAB NATIONAL BANK': 'netpnb.com',
+    'PNB': 'netpnb.com',
+    'BANK OF BARODA': 'bobibanking.com',
+    'BOB': 'bobibanking.com',
+    'CANARA': 'canarabank.com',
+    'INDUSIND': 'indusnet.indusind.com',
+    'YES BANK': 'yesbank.in',
+    'YES': 'yesbank.in',
+    'UNION BANK': 'unionbankonline.co.in',
+    'UNION': 'unionbankonline.co.in',
+    'IDBI': 'idbibank.in',
+    'DBS': 'dbs.com',
+    'STANDARD CHARTERED': 'sc.com',
+    'CITI': 'citibank.co.in',
+  };
+
+  String? _getSuggestedPortal(String bankInput) {
+    if (bankInput.trim().isEmpty) return null;
+    final upper = bankInput.trim().toUpperCase();
+    for (final entry in _knownBankPortals.entries) {
+      if (upper == entry.key || upper.contains(entry.key) || entry.key.contains(upper)) {
+        return entry.value;
+      }
+    }
+    return null;
+  }
 
   // ── Password Manager controllers ──
   final _pwdNicknameCtrl = TextEditingController();
@@ -119,6 +156,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
 
   String? _nbBankError;
   String? _nbNicknameError;
+  String? _nbWebsiteError;
   String? _nbUserIdError;
   String? _nbLoginPasswordError;
 
@@ -177,6 +215,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
       } else {
         _nbBankCtrl.text = it.bankName;
         _nbNicknameCtrl.text = it.nickname;
+        _nbWebsiteCtrl.text = it.website;
         _nbUserIdCtrl.text = it.userId;
         _nbLoginPasswordCtrl.text = it.loginPassword;
         _nbProfilePasswordCtrl.text = it.profilePassword;
@@ -252,6 +291,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
     _creditLimitCtrl.dispose();
     _nbBankCtrl.dispose();
     _nbNicknameCtrl.dispose();
+    _nbWebsiteCtrl.dispose();
     for (final row in _accountRowControllers) {
       row.dispose();
     }
@@ -1173,6 +1213,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           type: VaultItemType.netBanking,
           bankName: _nbBankCtrl.text.trim().toUpperCase(),
           nickname: _nbNicknameCtrl.text.trim().toUpperCase(),
+          website: _nbWebsiteCtrl.text.replaceAll(' ', '').trim(),
           notes: _nbNotesCtrl.text.trim(), // notes preserved as-is
           createdAt: widget.initialItem?.createdAt ?? now,
           updatedAt: now,
@@ -1778,6 +1819,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                   errorText: _nbBankError,
                   onChanged: (val) {
                     if (_nbBankError != null) setState(() => _nbBankError = null);
+                    if (_nbWebsiteCtrl.text.isEmpty) setState(() {});
                   },
                 ),
                 const SizedBox(height: 14),
@@ -1791,6 +1833,67 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                     if (_nbNicknameError != null) setState(() => _nbNicknameError = null);
                   },
                 ),
+                const SizedBox(height: 14),
+                // ── Bank Website / NetBanking URL ──
+                _buildTextField(
+                  _nbWebsiteCtrl,
+                  'Bank Website / Portal URL',
+                  'e.g. now.hdfc.bank.in, rblbank.com, onlinesbi.sbi',
+                  Icons.language_rounded,
+                  keyboardType: TextInputType.url,
+                  textCapitalization: TextCapitalization.none,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  errorText: _nbWebsiteError,
+                  onChanged: (val) {
+                    if (_nbWebsiteError != null) setState(() => _nbWebsiteError = null);
+                    setState(() {});
+                  },
+                ),
+                const Padding(
+                  padding: EdgeInsets.only(left: 4, top: 4),
+                  child: Text(
+                    'TetherPass uses this URL to automatically recognize the bank site and suggest your credentials.',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontStyle: FontStyle.italic),
+                  ),
+                ),
+                if (_nbWebsiteCtrl.text.isEmpty && _getSuggestedPortal(_nbBankCtrl.text) != null) ...[
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () {
+                      final suggested = _getSuggestedPortal(_nbBankCtrl.text);
+                      if (suggested != null) {
+                        setState(() {
+                          _nbWebsiteCtrl.text = suggested;
+                        });
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFF93C5FD)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.bolt_rounded, size: 14, color: Color(0xFF2563EB)),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Suggested: ${_getSuggestedPortal(_nbBankCtrl.text)} (Tap to apply)',
+                            style: const TextStyle(
+                              color: Color(0xFF1D4ED8),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

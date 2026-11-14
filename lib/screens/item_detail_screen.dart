@@ -1234,7 +1234,62 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
             ],
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+
+          // ── Bank Website / NetBanking Portal URL (if present) ──
+          if (_item.website.isNotEmpty) ...[
+            InkWell(
+              onTap: () => _copyToClipboard('Bank Website URL', _item.website),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: textColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: textColor.withValues(alpha: 0.12)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.language_rounded, size: 18, color: accentColor),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'BANK PORTAL / WEBSITE',
+                            style: TextStyle(
+                              color: hintColor,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _item.website,
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.copy_rounded, size: 18, color: textColor.withValues(alpha: 0.7)),
+                      tooltip: 'Copy Bank URL',
+                      onPressed: () => _copyToClipboard('Bank Website URL', _item.website),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
 
           // ── Bank Accounts (Account Number + IFSC Code on same row/card) ──
           if (_item.allAccounts.isNotEmpty) ...[
