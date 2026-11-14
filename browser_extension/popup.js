@@ -161,10 +161,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initDesktopDeviceName();
   await loadSavedGoogleAccount();
 
-  // Instant 0ms session recovery from local storage cache (ZERO delay, NO locked screen flicker)
+  // Instant 0ms session recovery from RAM session storage (Zero disk footprint, volatile memory only)
   try {
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      const data = await chrome.storage.local.get(['tetherpass_session']);
+    if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+      const data = await chrome.storage.session.get(['tetherpass_session']);
       const sess = data?.tetherpass_session;
       const now = Date.now();
       if (currentGoogleAccount && sess && sess.isAuthorized && sess.isUnlocked && (!sess.authExpiresAt || now < sess.authExpiresAt)) {
@@ -177,6 +177,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   } catch (_) {
     applyLockedUI(true);
+  }
+
+  // Security Enforcement: Ensure no leftover session or backup records remain in disk-backed storage
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    chrome.storage.local.remove(['tetherpass_session', 'cachedBackupPayload']).catch(() => {});
   }
 
   await refreshStatus();
@@ -282,7 +287,6 @@ async function loadSavedGoogleAccount() {
         'googleAccountEmail',
         'googleAccountPicture',
         'googleOAuthToken',
-        'cachedBackupPayload',
         'preferredAuthMethod'
       ]);
       if (data.googleOAuthToken && data.googleAccountEmail) {
@@ -306,11 +310,14 @@ async function loadSavedGoogleAccount() {
           linked.classList.add('hidden');
         }
       }
-      if (data.cachedBackupPayload) {
-        localBackupPayload = data.cachedBackupPayload;
-      }
       if (data.preferredAuthMethod) {
         setAuthMethod(data.preferredAuthMethod, false);
+      }
+    }
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+      const sessData = await chrome.storage.session.get('cachedBackupPayload');
+      if (sessData?.cachedBackupPayload) {
+        localBackupPayload = sessData.cachedBackupPayload;
       }
     }
   } catch (err) {
@@ -734,8 +741,8 @@ function handleFileSelected(e) {
   reader.onload = async (ev) => {
     localBackupPayload = ev.target.result;
     setConnectedGoogleAccount(`Local File: ${file.name}`);
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      await chrome.storage.local.set({ cachedBackupPayload: localBackupPayload });
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+      await chrome.storage.session.set({ cachedBackupPayload: localBackupPayload });
     }
   };
   reader.readAsText(file);

@@ -23,6 +23,13 @@ if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
   }
 }
 
+// Security Enforcement: Proactively purge any legacy decrypted or session records from disk-backed local storage
+if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+  chrome.storage.local.remove(['tetherpass_session', 'cachedBackupPayload'], () => {
+    console.log('[TetherPass Security] Disk-backed local storage sanitized of sensitive records.');
+  });
+}
+
 // In-memory cache (restored from chrome.storage.session across service worker restarts)
 let memoryVault = {
   isAuthorized: false,
@@ -127,9 +134,11 @@ function organizeVaultItems(rawItems) {
   return { cards, bankAccounts, passwords };
 }
 
-// ── Persistent Storage (Survives Service Worker Restarts & Inactivity for full 30 mins) ──
+// ── RAM-Only Session Storage (Kept exclusively in volatile memory; NEVER written to disk) ──
 async function persistSession() {
   const suggestions = organizeVaultItems(memoryVault.items);
+  // Master password and decrypted items must NEVER touch persistent disk storage.
+  // We keep session data exclusively in chrome.storage.session (RAM only).
   const sessionData = {
     isAuthorized: memoryVault.isAuthorized,
     isUnlocked: memoryVault.isUnlocked,
@@ -137,7 +146,6 @@ async function persistSession() {
     suggestions: suggestions,
     lastSyncedAt: memoryVault.lastSyncedAt,
     authExpiresAt: memoryVault.authExpiresAt,
-    masterPassword: memoryVault.masterPassword,
     authMode: memoryVault.authMode,
     sessionStartTime: memoryVault.sessionStartTime,
     activeRequestId: memoryVault.activeRequestId,
@@ -148,15 +156,18 @@ async function persistSession() {
     if (typeof chrome !== 'undefined' && chrome.storage?.session) {
       await chrome.storage.session.set({ tetherpass_session: sessionData });
     }
-  } catch (_) {}
+  } catch (err) {
+    console.warn('[TetherPass] Session storage write error:', err);
+  }
 
+  // Active Anti-Disk-Leak Safeguard:
+  // Ensure that under no condition does chrome.storage.local (LevelDB disk cache)
+  // hold any session records or decrypted payloads.
   try {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      await chrome.storage.local.set({ tetherpass_session: sessionData });
+      await chrome.storage.local.remove(['tetherpass_session', 'cachedBackupPayload']);
     }
-  } catch (err) {
-    console.warn('[TetherPass] Session persist warning:', err);
-  }
+  } catch (_) {}
 }
 
 async function restoreSessionIfNeeded() {
@@ -171,15 +182,11 @@ async function restoreSessionIfNeeded() {
     return true;
   }
 
-  // Restore session from chrome.storage.session or chrome.storage.local when service worker wakes up
+  // Restore session strictly from chrome.storage.session (volatile RAM only)
   try {
     let sess = null;
     if (typeof chrome !== 'undefined' && chrome.storage?.session) {
       const data = await chrome.storage.session.get('tetherpass_session');
-      sess = data?.tetherpass_session;
-    }
-    if (!sess && typeof chrome !== 'undefined' && chrome.storage?.local) {
-      const data = await chrome.storage.local.get('tetherpass_session');
       sess = data?.tetherpass_session;
     }
 
@@ -195,7 +202,7 @@ async function restoreSessionIfNeeded() {
         items: sess.items || [],
         lastSyncedAt: sess.lastSyncedAt || now,
         authExpiresAt: sess.authExpiresAt,
-        masterPassword: sess.masterPassword || null,
+        masterPassword: memoryVault.masterPassword || null,
         authMode: sess.authMode || null,
         sessionStartTime: sess.sessionStartTime || now,
         activeRequestId: sess.activeRequestId || null,
@@ -218,7 +225,7 @@ async function clearPersistedSession() {
   } catch (_) {}
   try {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      await chrome.storage.local.remove('tetherpass_session');
+      await chrome.storage.local.remove(['tetherpass_session', 'cachedBackupPayload']);
     }
   } catch (_) {}
 }
@@ -275,7 +282,7 @@ async function lockVault(reason = 'Vault locked') {
 
   if (!sessionIdToLock) {
     try {
-      const sessData = await chrome.storage.local.get('tetherpass_session');
+      const sessData = await chrome.storage.session.get('tetherpass_session');
       sessionIdToLock = sessData?.tetherpass_session?.sessionId || sessData?.tetherpass_session?.activeRequestId;
     } catch (_) {}
   }
@@ -945,9 +952,6 @@ async function handleSaveNewPassword({ website, username, password, nickname, to
   try {
     const encryptedPayload = await encryptTetherPassBackup(memoryVault.items, memoryVault.masterPassword);
     await driveClient.uploadOrUpdateFile(DRIVE_BACKUP_FILENAME, encryptedPayload);
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      await chrome.storage.local.set({ cachedBackupPayload: encryptedPayload });
-    }
   } catch (err) {
     console.warn('[TetherPass] Could not upload updated backup to Drive:', err);
   }
