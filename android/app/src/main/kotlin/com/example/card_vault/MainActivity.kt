@@ -79,19 +79,6 @@ class MainActivity: FlutterFragmentActivity() {
                         result.success(false)
                     }
                 }
-                "playUltrasonicChirp" -> {
-                    val token = call.argument<String>("token") ?: ""
-                    if (token.isNotEmpty()) {
-                        UltrasonicTransmitter.playToken(token) {
-                            runOnUiThread {
-                                // Optional callback
-                            }
-                        }
-                        result.success(true)
-                    } else {
-                        result.error("INVALID_TOKEN", "Token cannot be empty", null)
-                    }
-                }
                 else -> result.notImplemented()
             }
         }

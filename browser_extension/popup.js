@@ -13,8 +13,6 @@ let activePollingInterval = null;
 let activeCountdownInterval = null;
 let cachedDevices = [];
 let currentActiveTabDomain = '';
-let ultrasonicListener = null;
-let currentAudioNonce = 'TP88';
 
 async function detectActiveTabDomain() {
   try {
@@ -204,12 +202,10 @@ function initUI() {
   document.getElementById('requestPushApprovalBtn')?.addEventListener('click', handleRequestMobilePushApproval);
   document.getElementById('cancelApprovalRequestBtn')?.addEventListener('click', cancelApprovalPolling);
 
-  // Instant QR vs Audio Chirp vs Push Unlock Tabs
+  // Instant QR vs Push Unlock Tabs
   document.getElementById('tabModeQrBtn')?.addEventListener('click', () => switchUnlockTab('qr'));
-  document.getElementById('tabModeAudioBtn')?.addEventListener('click', () => switchUnlockTab('audio'));
   document.getElementById('tabModePushBtn')?.addEventListener('click', () => switchUnlockTab('push'));
   document.getElementById('refreshQrBtn')?.addEventListener('click', () => startDirectQrPairing(true));
-  document.getElementById('toggleAudioListenBtn')?.addEventListener('click', () => startUltrasonicListening());
 
   // ── Device Manager Modal ──
   document.getElementById('openDeviceManagerBtn')?.addEventListener('click', openDeviceManagerModal);
@@ -939,126 +935,27 @@ let directQrState = 'IDLE'; // 'IDLE' | 'GENERATING' | 'ACTIVE' | 'EXPIRED'
 
 function switchUnlockTab(tab) {
   const qrBtn = document.getElementById('tabModeQrBtn');
-  const audioBtn = document.getElementById('tabModeAudioBtn');
   const pushBtn = document.getElementById('tabModePushBtn');
   const qrContainer = document.getElementById('qrUnlockModeContainer');
-  const audioContainer = document.getElementById('audioUnlockModeContainer');
   const pushContainer = document.getElementById('pushModeContainer');
 
   if (tab === 'qr') {
     qrBtn?.classList.add('active');
-    audioBtn?.classList.remove('active');
     pushBtn?.classList.remove('active');
     if (qrContainer) qrContainer.style.display = 'block';
-    if (audioContainer) audioContainer.style.display = 'none';
     if (pushContainer) pushContainer.style.display = 'none';
 
-    stopUltrasonicListening();
     // Start direct QR pairing (only if not already running a valid session)
     if (directQrState === 'IDLE') {
       startDirectQrPairing(false);
     }
-  } else if (tab === 'audio') {
-    audioBtn?.classList.add('active');
-    qrBtn?.classList.remove('active');
-    pushBtn?.classList.remove('active');
-    if (qrContainer) qrContainer.style.display = 'none';
-    if (audioContainer) audioContainer.style.display = 'block';
-    if (pushContainer) pushContainer.style.display = 'none';
-
-    stopDirectQrPairing(true);
-    startUltrasonicListening();
   } else {
     pushBtn?.classList.add('active');
-    audioBtn?.classList.remove('active');
     qrBtn?.classList.remove('active');
     if (qrContainer) qrContainer.style.display = 'none';
-    if (audioContainer) audioContainer.style.display = 'none';
     if (pushContainer) pushContainer.style.display = 'block';
 
     stopDirectQrPairing(true);
-    stopUltrasonicListening();
-  }
-}
-
-function startUltrasonicListening() {
-  stopUltrasonicListening();
-
-  const statusText = document.getElementById('audioStatusText');
-  const nonceEl = document.getElementById('audioPairingNonce');
-  if (nonceEl && !currentAudioNonce) {
-    currentAudioNonce = 'TP88';
-    nonceEl.textContent = currentAudioNonce;
-  }
-
-  if (typeof UltrasonicHandshakeListener === 'undefined') {
-    if (statusText) statusText.textContent = 'Ultrasonic module not loaded';
-    return;
-  }
-
-  ultrasonicListener = new UltrasonicHandshakeListener(
-    (token) => handleUltrasonicTokenReceived(token),
-    (state) => {
-      if (statusText && state && state.message) {
-        statusText.textContent = state.message;
-      }
-    }
-  );
-
-  ultrasonicListener.startListening();
-}
-
-function stopUltrasonicListening() {
-  if (ultrasonicListener) {
-    ultrasonicListener.stopListening();
-    ultrasonicListener = null;
-  }
-}
-
-async function handleUltrasonicTokenReceived(token) {
-  const nonceEl = document.getElementById('audioPairingNonce');
-  const expectedNonce = (nonceEl?.textContent || currentAudioNonce || 'TP88').trim().toUpperCase();
-  const received = (token || '').trim().toUpperCase();
-
-  console.log('[Ultrasonic] Received:', received, 'Expected:', expectedNonce);
-
-  if (received === expectedNonce) {
-    stopUltrasonicListening();
-    hideMessages();
-
-    const anim = showTransitionAnimation({
-      mode: 'connect',
-      title: 'Acoustic Handshake Verified!',
-      subtitle: `Matched Air-Gapped Nonce [${received}]. Unlocking...`
-    });
-
-    const unlockRes = await sendExtensionMessage({
-      action: 'AUDIO_HANDSHAKE_VERIFIED',
-      payload: {
-        token: received,
-        oauthToken: currentOAuthToken
-      }
-    });
-
-    await new Promise(r => setTimeout(r, 650));
-    if (unlockRes && unlockRes.success) {
-      applyUnlockedUI(unlockRes);
-      await anim.finish({
-        title: 'Air-Gapped Acoustic Unlock Complete!',
-        subtitle: 'Ultrasonic tether active for 30 minutes.'
-      });
-    } else {
-      await anim.finish({
-        title: 'Unlock Failed',
-        subtitle: unlockRes?.error || 'Could not verify token.'
-      });
-      startUltrasonicListening();
-    }
-  } else {
-    const statusText = document.getElementById('audioStatusText');
-    if (statusText) {
-      statusText.textContent = `Nonce mismatch: received "${received}", expected "${expectedNonce}".`;
-    }
   }
 }
 
@@ -1479,7 +1376,6 @@ function applyUnlockedUI(data) {
   hideMessages();
   stopDirectQrPairing();
   cancelApprovalPolling();
-  stopUltrasonicListening();
   const statusBadge = document.getElementById('statusBadge');
   const statusText = document.getElementById('statusText');
   const lockedView = document.getElementById('lockedView');
@@ -1691,7 +1587,6 @@ function handleLock() {
 
   stopDirectQrPairing(true);
   cancelApprovalPolling();
-  stopUltrasonicListening();
   currentVaultItems = { cards: [], bankAccounts: [], passwords: [] };
 
   // Notify background script to clear in-memory credentials and update Drive
