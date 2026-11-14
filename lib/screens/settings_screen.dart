@@ -557,9 +557,9 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Row(
             children: [
-              Icon(Icons.file_upload_outlined, color: Color(0xFFFF6F00)),
+              Icon(Icons.cloud_upload_outlined, color: Color(0xFFFF6F00)),
               SizedBox(width: 8),
-              Text('Export Vault (JSON)', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
+              Text('Multi-Cloud & File Export', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
             ],
           ),
           content: Column(
@@ -567,7 +567,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Your vault will be securely encrypted with AES-256 PBKDF2 using your Master Password and saved directly to your device storage in JSON format.',
+                'Your vault will be encrypted with AES-256 PBKDF2 using your Master Password. You can upload to OneDrive, Dropbox, Google Drive, or save to Downloads.',
                 style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
               ),
               const SizedBox(height: 16),
@@ -594,9 +594,57 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
               child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
               onPressed: () => Navigator.pop(ctx),
             ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.share_rounded, size: 16, color: Color(0xFFFF6F00)),
+              label: const Text('Share to Cloud / Apps', style: TextStyle(color: Color(0xFFFF6F00), fontWeight: FontWeight.bold)),
+              onPressed: () async {
+                final pwd = passwordCtrl.text.trim();
+                if (pwd.length < 4) {
+                  setDlgState(() => errorText = 'Password must be at least 4 characters');
+                  return;
+                }
+                Navigator.pop(ctx);
+
+                try {
+                  final items = await db.getAllItems();
+                  if (items.isEmpty) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Your vault is empty. Nothing to export.'), backgroundColor: Colors.orange),
+                      );
+                    }
+                    return;
+                  }
+
+                  final encryptedPayload = SecureBackupExportService.exportVaultWithPassword(
+                    items: items,
+                    userPassword: pwd,
+                  );
+
+                  final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+                  final fileName = 'TetherPass_Backup_$timestamp.json';
+
+                  final tempDir = await getTemporaryDirectory();
+                  final tempFile = File('${tempDir.path}/$fileName');
+                  await tempFile.writeAsString(encryptedPayload, flush: true);
+
+                  await Share.shareXFiles(
+                    [XFile(tempFile.path)],
+                    text: 'TetherPass Encrypted Vault Backup (AES-256)',
+                    subject: 'TetherPass Vault Backup',
+                  );
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Cloud share error: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                }
+              },
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
-              child: const Text('Export JSON to Device'),
+              child: const Text('Save to Downloads'),
               onPressed: () async {
                 final pwd = passwordCtrl.text.trim();
                 if (pwd.length < 4) {
@@ -1135,26 +1183,28 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
 
             const SizedBox(height: 24),
 
-            // ── Local File Backup Section ──
+            // ── Multi-Cloud & Offline Backup Section ──
             const Text(
-              'OFFLINE / LOCAL BACKUP',
+              'MULTI-CLOUD & OFFLINE BACKUP',
               style: TextStyle(color: Color(0xFFFF6F00), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2),
             ),
             const SizedBox(height: 10),
 
             _buildSettingTile(
               key: _exportKey,
-              icon: Icons.file_upload_outlined,
-              title: 'Export Backup to File',
-              subtitle: 'Share encrypted vault text to file or messaging',
+              icon: Icons.cloud_upload_outlined,
+              title: 'Export to Any Cloud / Storage',
+              subtitle: 'Upload encrypted vault to OneDrive, Dropbox, Drive, or Downloads',
+              trailing: const Icon(Icons.share_rounded, size: 18, color: Color(0xFFFF6F00)),
               onTap: _exportBackupFile,
             ),
 
             _buildSettingTile(
               key: _importKey,
-              icon: Icons.file_download_outlined,
-              title: 'Import Backup from File',
-              subtitle: 'Restore from exported encrypted backup code',
+              icon: Icons.cloud_download_outlined,
+              title: 'Restore from Cloud or File',
+              subtitle: 'Import backup from OneDrive, Dropbox, Drive, or Downloads',
+              trailing: const Icon(Icons.folder_open_rounded, size: 18, color: Color(0xFF0284C7)),
               onTap: _importBackupFile,
             ),
 
