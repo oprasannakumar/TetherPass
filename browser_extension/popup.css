@@ -1577,3 +1577,46 @@ body {
   animation: none;
   transform: translateX(0);
 }
+
+/* ── Ultrasonic Acoustic Radar Animation ── */
+.audio-pulse-radar {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  margin: 10px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.radar-wave {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid #FF6F00;
+  opacity: 0;
+  animation: radarPulse 2.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+.radar-wave.wave-1 { width: 38px; height: 38px; animation-delay: 0s; }
+.radar-wave.wave-2 { width: 62px; height: 62px; animation-delay: 0.6s; }
+.radar-wave.wave-3 { width: 88px; height: 88px; animation-delay: 1.2s; }
+
+@keyframes radarPulse {
+  0% { transform: scale(0.6); opacity: 0.85; }
+  50% { opacity: 0.35; }
+  100% { transform: scale(1.15); opacity: 0; }
+}
+
+.radar-icon {
+  font-size: 24px;
+  background: #FFF7ED;
+  border: 2px solid #FFD8A8;
+  border-radius: 50%;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  box-shadow: 0 4px 14px rgba(255, 111, 0, 0.25);
+}

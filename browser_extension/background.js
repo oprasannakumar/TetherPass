@@ -441,6 +441,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
 
+    if (action === 'AUDIO_HANDSHAKE_VERIFIED') {
+      try {
+        const res = await handleAudioHandshakeVerified(payload);
+        sendResponse(res);
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return;
+    }
+
     if (action === 'GET_AUTOFILL_SUGGESTIONS') {
       try {
         const res = await handleGetAutofillSuggestions(payload);
@@ -608,6 +618,48 @@ async function handlePollMobileApproval({ token, requestId, masterPassword }) {
   }
 
   return check;
+}
+
+async function handleAudioHandshakeVerified(payload) {
+  const { token, oauthToken } = payload || {};
+  if (oauthToken) driveClient.setToken(oauthToken);
+
+  const desktopSessionDurationMs = 30 * 60 * 1000;
+  const now = Date.now();
+
+  memoryVault.isAuthorized = true;
+  memoryVault.isUnlocked = true;
+  memoryVault.authMode = 'AUDIO_CHIRP';
+  memoryVault.sessionStartTime = now;
+  memoryVault.authExpiresAt = now + desktopSessionDurationMs;
+  memoryVault.sessionId = 'audio_' + now;
+  memoryVault.activeRequestId = 'audio_' + (token || 'handshake');
+  memoryVault.lastSyncedAt = now;
+
+  // If memory has items, keep them. Otherwise attempt to fetch from Drive if authorized
+  if ((!memoryVault.items || memoryVault.items.length === 0) && memoryVault.masterPassword) {
+    try {
+      const backupPayload = await driveClient.fetchEncryptedVaultBackup();
+      if (backupPayload) {
+        memoryVault.items = await decryptCardVaultBackup(backupPayload, memoryVault.masterPassword);
+      }
+    } catch (e) {
+      console.warn('[AudioHandshake] Drive backup fetch error:', e.message);
+    }
+  }
+
+  await persistSession();
+  notifyAllTabsStatusChange();
+
+  return {
+    status: 'APPROVED',
+    success: true,
+    itemCount: (memoryVault.items || []).length,
+    expiresAt: memoryVault.authExpiresAt,
+    isAuthorized: true,
+    isUnlocked: true,
+    suggestions: organizeVaultItems(memoryVault.items || [])
+  };
 }
 
 
