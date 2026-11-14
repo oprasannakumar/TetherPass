@@ -163,10 +163,30 @@ class VaultSecurityService {
     await _storage.write(key: _keyHasSeenTour, value: seen ? 'true' : 'false');
   }
 
+  /// Stealth Duress Decoy state: Decoy option is only visible during the active
+  /// session when revealed by entering a password in the search box.
+  static bool isDecoySetupRevealed = false;
+
   /// Check if Duress (Decoy Vault) mode is configured and enabled
   Future<bool> isDuressEnabled() async {
     final val = await _storage.read(key: _keyDuressEnabled);
     return val == 'true';
+  }
+
+  /// Checks whether a query string matches the master password, duress PIN, or decoy trigger
+  Future<bool> isDecoyTriggerMatch(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.length < 4) return false;
+    if (trimmed.toLowerCase() == 'decoy' || trimmed.toLowerCase() == 'duress') {
+      return true;
+    }
+    if (await verifyMasterPassword(trimmed)) {
+      return true;
+    }
+    if (await verifyDuressPassword(trimmed)) {
+      return true;
+    }
+    return false;
   }
 
   /// Configure or update the Duress Password / PIN

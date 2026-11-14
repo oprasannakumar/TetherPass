@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'autofill_bridge_service.dart';
+import 'vault_security_service.dart';
 
 /// Manages dynamic auto-lock timer preference, in-app inactivity tracking,
 /// and background pause tracking without getting stuck in infinite unlock loops.
@@ -75,6 +76,7 @@ class AutoLockService {
     if (isLocked) return;
     isLocked = true;
     _pausedAt = null;
+    VaultSecurityService.isDecoySetupRevealed = false;
     onLockCallback?.call();
     AutofillBridgeService.syncVaultState(isUnlocked: false);
     _navKey?.currentState?.pushNamedAndRemoveUntil('/unlock', (route) => false);

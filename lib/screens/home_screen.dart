@@ -11,6 +11,7 @@ import '../services/database_service.dart';
 import '../services/device_identity_service.dart';
 import '../services/drive_service.dart';
 import '../services/vault_security_service.dart';
+import '../widgets/duress_decoy_dialog.dart';
 import '../widgets/tether_sync_dialog.dart';
 import 'add_edit_screen.dart';
 import 'item_detail_screen.dart';
@@ -28,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   bool _isSyncing = false;
   String _searchQuery = '';
+  final TextEditingController _searchCtrl = TextEditingController();
   int _selectedFilter = 0; // 0 = All, 1 = Credit, 2 = Debit, 3 = Bank
 
   // GlobalKeys for home screen elements
@@ -64,8 +66,30 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _searchCtrl.dispose();
     _accessRequestPollTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _handleSearchInput(String val) async {
+    final sec = context.read<VaultSecurityService>();
+    final isTrigger = await sec.isDecoyTriggerMatch(val);
+    if (isTrigger) {
+      _searchCtrl.clear();
+      HapticFeedback.heavyImpact();
+      setState(() {
+        _searchQuery = '';
+      });
+      VaultSecurityService.isDecoySetupRevealed = true;
+      if (mounted) {
+        await showDuressDecoySetupDialog(context, onStateChanged: () {
+          if (mounted) setState(() {});
+        });
+        if (mounted) setState(() {});
+      }
+      return;
+    }
+    setState(() => _searchQuery = val);
   }
 
   void _startApprovalPolling() {
@@ -901,7 +925,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               children: [
                 TextField(
-                  onChanged: (val) => setState(() => _searchQuery = val),
+                  controller: _searchCtrl,
+                  onChanged: _handleSearchInput,
                   style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
                   decoration: InputDecoration(
                     hintText: 'Search by bank or nickname...',
@@ -926,6 +951,67 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
+                if (VaultSecurityService.isDecoySetupRevealed) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFFFD8A8)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.shield_outlined, color: Color(0xFFFF6F00), size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Duress Decoy Vault (Stealth Unlocked)',
+                                style: TextStyle(color: Color(0xFF9A3412), fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                              FutureBuilder<bool>(
+                                future: context.read<VaultSecurityService>().isDuressEnabled(),
+                                builder: (ctx, snap) {
+                                  final active = snap.data == true;
+                                  return Text(
+                                    active ? 'Active • Alternate PIN configured' : 'Not configured • Tap to set PIN',
+                                    style: TextStyle(
+                                      color: active ? const Color(0xFF15803D) : const Color(0xFFC2410C),
+                                      fontSize: 10,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            await showDuressDecoySetupDialog(context, onStateChanged: () {
+                              if (mounted) setState(() {});
+                            });
+                          },
+                          child: const Text('Configure', style: TextStyle(color: Color(0xFFFF6F00), fontWeight: FontWeight.bold, fontSize: 12)),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.visibility_off_outlined, color: Color(0xFF9A3412), size: 16),
+                          tooltip: 'Hide Decoy Setup',
+                          onPressed: () {
+                            setState(() {
+                              VaultSecurityService.isDecoySetupRevealed = false;
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Decoy Vault setup is hidden again.')),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
