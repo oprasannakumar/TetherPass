@@ -19,6 +19,7 @@ export 'secure_backup_export_service.dart' show MasterPasswordRequiredException;
 /// Handles Google Drive App Data backup and restore.
 class DriveService extends ChangeNotifier {
   static const _backupFileName = 'card_vault_backup_v2.json';
+  static const _previousBackupFileName = 'card_vault_backup_previous.json';
   static const _scopes = ['https://www.googleapis.com/auth/drive.appdata'];
 
   final CryptoService cryptoService;
@@ -97,14 +98,46 @@ class DriveService extends ChangeNotifier {
 
   // ─── Backup ───────────────────────────────────────────────────────────────
 
-  Future<void> backup() async {
+  /// Checks if a valid cloud backup already exists on Google Drive.
+  Future<bool> hasExistingBackup() async {
+    try {
+      final api = await _getDriveApi();
+      final id = await _findBackupFile(api);
+      if (id != null) return true;
+      final prevId = await _findNamedFile(api, _previousBackupFileName);
+      return prevId != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> backup({bool forceEmpty = false}) async {
     final api = await _getDriveApi();
-    
+    final items = await databaseService.getAllItems();
+    final existing = await _findBackupFile(api);
+
+    // ANTI-DATA-LOSS SAFEGUARD:
+    // If local database is empty and a cloud backup already exists on Google Drive,
+    // refuse to silently overwrite unless explicitly confirmed by user.
+    if (items.isEmpty && existing != null && !forceEmpty) {
+      throw Exception('BLOCKED_EMPTY_BACKUP: Cannot overwrite existing cloud backup with 0 items. Please restore your vault instead.');
+    }
+
+    // CLOUD REVISION SNAPSHOT:
+    // Before overwriting the main backup file, preserve the existing backup as a fallback snapshot!
+    if (existing != null) {
+      try {
+        final previousContent = await _downloadDirectFileContent(api, existing);
+        if (previousContent.isNotEmpty && !previousContent.contains('"item_count":0')) {
+          await uploadTextFile(_previousBackupFileName, previousContent);
+        }
+      } catch (_) {}
+    }
+
     // Encrypt with Master Password if available so backup can be restored across devices
     String encryptedData;
     final masterPwd = await vaultSecurityService?.getMasterPassword();
     if (masterPwd != null && masterPwd.isNotEmpty) {
-      final items = await databaseService.getAllItems();
       encryptedData = SecureBackupExportService.exportVaultWithPassword(
         items: items,
         userPassword: masterPwd,
@@ -115,8 +148,6 @@ class DriveService extends ChangeNotifier {
 
     final bytes = utf8.encode(encryptedData);
     final stream = Stream.value(bytes);
-
-    final existing = await _findBackupFile(api);
 
     final fileMetadata = drive.File()
       ..name = _backupFileName
@@ -135,14 +166,7 @@ class DriveService extends ChangeNotifier {
     }
   }
 
-  // ─── Restore ──────────────────────────────────────────────────────────────
-
-  /// Downloads raw backup payload string from Google Drive without decrypting
-  Future<String> downloadRawBackupPayload() async {
-    final api = await _getDriveApi();
-    final fileId = await _findBackupFile(api);
-    if (fileId == null) throw Exception('No backup file found in Google Drive.');
-
+  Future<String> _downloadDirectFileContent(drive.DriveApi api, String fileId) async {
     final response = await api.files.get(
       fileId,
       downloadOptions: drive.DownloadOptions.fullMedia,
@@ -152,8 +176,40 @@ class DriveService extends ChangeNotifier {
     await for (final chunk in response.stream) {
       chunks.addAll(chunk);
     }
-
     return utf8.decode(chunks).trim();
+  }
+
+  // ─── Restore ──────────────────────────────────────────────────────────────
+
+  /// Downloads raw backup payload string from Google Drive without decrypting.
+  /// Automatically falls back to previous backup snapshot if main backup is empty or corrupted.
+  Future<String> downloadRawBackupPayload() async {
+    final api = await _getDriveApi();
+    var fileId = await _findBackupFile(api);
+
+    if (fileId == null) {
+      // Check if previous backup snapshot exists
+      fileId = await _findNamedFile(api, _previousBackupFileName);
+    }
+
+    if (fileId == null) throw Exception('No backup file found in Google Drive.');
+
+    var content = await _downloadDirectFileContent(api, fileId);
+
+    // If main backup was mistakenly overwritten with 0 items, check if previous snapshot has real data!
+    if (content.contains('"item_count":0')) {
+      final prevId = await _findNamedFile(api, _previousBackupFileName);
+      if (prevId != null && prevId != fileId) {
+        try {
+          final prevContent = await _downloadDirectFileContent(api, prevId);
+          if (prevContent.isNotEmpty && !prevContent.contains('"item_count":0')) {
+            return prevContent;
+          }
+        } catch (_) {}
+      }
+    }
+
+    return content;
   }
 
   Future<int> restore({String? masterPassword, String? rawPayload}) async {

@@ -503,6 +503,56 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
+    // ANTI-DATA LOSS PROTECTION:
+    // If local vault is empty, check if cloud backup exists and intercept accidental overwrite!
+    if (_items.isEmpty) {
+      final hasBackup = await drive.hasExistingBackup();
+      if (hasBackup) {
+        if (!mounted) return;
+        final shouldRestore = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text('Empty Vault Warning', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ],
+            ),
+            content: const Text(
+              'Your phone currently has 0 saved items, but Google Drive already contains your saved vault backup!\n\n'
+              'Backing up now would overwrite your cloud data. Did you mean to Restore your vault instead?',
+              style: TextStyle(color: Color(0xFF334155), fontSize: 13, height: 1.4),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+              ),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.cloud_download_rounded, size: 16),
+                label: const Text('Restore from Drive'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => Navigator.pop(ctx, true),
+              ),
+            ],
+          ),
+        );
+        if (shouldRestore == true) {
+          await _restoreFromGoogleDrive();
+        }
+        return;
+      }
+    }
+
     setState(() => _isSyncing = true);
     try {
       await drive.backup();
@@ -700,16 +750,30 @@ class _HomeScreenState extends State<HomeScreen> {
 
             // Backup Button
             ListTile(
+              enabled: _items.isNotEmpty,
               leading: Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: const Color(0xFFFF6F00).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.cloud_upload_rounded, color: Color(0xFFFF6F00)),
+                decoration: BoxDecoration(
+                  color: _items.isEmpty ? Colors.grey.withValues(alpha: 0.1) : const Color(0xFFFF6F00).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.cloud_upload_rounded, color: _items.isEmpty ? Colors.grey : const Color(0xFFFF6F00)),
               ),
-              title: const Text('Backup to Google Drive', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
-              subtitle: Text('Upload encrypted backup (${_items.length} items)', style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+              title: Text(
+                'Backup to Google Drive',
+                style: TextStyle(color: _items.isEmpty ? Colors.grey : const Color(0xFF0F172A), fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                _items.isEmpty ? 'Disabled: Vault is empty (Add items first)' : 'Upload encrypted backup (${_items.length} items)',
+                style: TextStyle(color: _items.isEmpty ? Colors.red.shade400 : const Color(0xFF64748B), fontSize: 12),
+              ),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Color(0xFFE2E8F0))),
               tileColor: const Color(0xFFF8F9FA),
-              onTap: () {
+              onTap: _items.isEmpty ? () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Cannot backup an empty vault. Did you mean to Restore?'), backgroundColor: Colors.orange),
+                );
+              } : () {
                 Navigator.pop(ctx);
                 _backupToGoogleDrive();
               },
