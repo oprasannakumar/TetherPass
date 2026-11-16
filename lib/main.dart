@@ -1,11 +1,9 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'services/auth_service.dart';
 import 'services/auto_lock_service.dart';
-import 'services/bin_database_service.dart';
 import 'services/crypto_service.dart';
 import 'services/database_service.dart';
 import 'services/drive_service.dart';
@@ -15,6 +13,7 @@ import 'screens/unlock_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/add_edit_screen.dart';
+import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,13 +32,9 @@ void main() async {
     systemNavigationBarIconBrightness: Brightness.dark,
   ));
 
-  // Initialise zero-knowledge encryption & local DB
+  // Initialize service singletons for dependency injection
   final cryptoService = CryptoService();
-  await cryptoService.init();
-
   final dbService = DatabaseService(cryptoService: cryptoService);
-  await dbService.init();
-
   final securityService = VaultSecurityService(cryptoService: cryptoService);
   final authService = AuthService();
   final driveService = DriveService(
@@ -47,21 +42,6 @@ void main() async {
     databaseService: dbService,
     vaultSecurityService: securityService,
   );
-
-  // Pre-load offline BIN database in background
-  unawaited(BinDatabaseService.init());
-
-  await AutoLockService.init(appNavigatorKey);
-  AutoLockService.onLockCallback = () {
-    dbService.isDecoyMode = false;
-  };
-
-  final isOnboarded = await securityService.isOnboarded();
-  final autoLockSec = await AutoLockService.getAutoLockSeconds();
-  final startAtHome = isOnboarded && autoLockSec < 0;
-  if (startAtHome) {
-    AutoLockService.markUnlocked();
-  }
 
   runApp(
     MultiProvider(
@@ -72,8 +52,8 @@ void main() async {
         Provider<AuthService>.value(value: authService),
         ChangeNotifierProvider<DriveService>.value(value: driveService),
       ],
-      child: TetherPassApp(
-        initialRoute: !isOnboarded ? '/onboarding' : (startAtHome ? '/home' : '/unlock'),
+      child: const TetherPassApp(
+        initialRoute: '/splash',
       ),
     ),
   );
@@ -149,7 +129,6 @@ class _TetherPassAppState extends State<TetherPassApp> with WidgetsBindingObserv
           primary: primaryColor,
           surface: surfaceColor,
           onSurface: textPrimary,
-          background: backgroundColor,
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: surfaceColor,
@@ -212,6 +191,7 @@ class _TetherPassAppState extends State<TetherPassApp> with WidgetsBindingObserv
       ),
       initialRoute: widget.initialRoute,
       routes: {
+        '/splash': (_) => const SplashScreen(),
         '/onboarding': (_) => const OnboardingScreen(),
         '/unlock': (_) => const UnlockScreen(),
         '/home': (_) => const HomeScreen(),
