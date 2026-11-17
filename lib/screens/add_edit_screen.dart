@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/vault_item.dart';
+import '../services/bank_directory_service.dart';
 import '../services/bin_database_service.dart';
 import '../services/card_detector.dart';
 import '../services/card_scanner_service.dart';
@@ -59,7 +60,9 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
   final _cardNotesCtrl = TextEditingController();
   final _creditLimitCtrl = TextEditingController();
 
-  // ── Focus Nodes for Auto Clipboard Detection on Cursor Landing ──
+  // ── Focus Nodes for Auto Clipboard Detection & Bank Autocomplete ──
+  final _cardBankFocusNode = FocusNode();
+  final _nbBankFocusNode = FocusNode();
   final _cardNumberFocusNode = FocusNode();
   final _cardHolderFocusNode = FocusNode();
   final _cardExpiryFocusNode = FocusNode();
@@ -272,10 +275,32 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
         _checkClipboardForCvv();
       }
     });
+
+    _cardBankFocusNode.addListener(() {
+      if (!_cardBankFocusNode.hasFocus && _cardBankCtrl.text.isNotEmpty) {
+        final normalized = BankDirectoryService.normalizeBankName(_cardBankCtrl.text);
+        if (normalized != _cardBankCtrl.text) {
+          _cardBankCtrl.text = normalized;
+          setState(() {});
+        }
+      }
+    });
+
+    _nbBankFocusNode.addListener(() {
+      if (!_nbBankFocusNode.hasFocus && _nbBankCtrl.text.isNotEmpty) {
+        final normalized = BankDirectoryService.normalizeBankName(_nbBankCtrl.text);
+        if (normalized != _nbBankCtrl.text) {
+          _nbBankCtrl.text = normalized;
+          setState(() {});
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
+    _cardBankFocusNode.dispose();
+    _nbBankFocusNode.dispose();
     _cardNumberCtrl.removeListener(_onCardNumberChanged);
     _cardNumberFocusNode.dispose();
     _cardHolderFocusNode.dispose();
@@ -1007,8 +1032,12 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
     bool hasError = false;
 
     if (isCardTab) {
+      final normalizedBank = BankDirectoryService.normalizeBankName(_cardBankCtrl.text.trim());
+      if (normalizedBank.isNotEmpty && normalizedBank != _cardBankCtrl.text.trim()) {
+        _cardBankCtrl.text = normalizedBank;
+      }
       final nickname = _cardNicknameCtrl.text.trim();
-      final bank = _cardBankCtrl.text.trim();
+      final bank = normalizedBank;
       final number = _cardNumberCtrl.text.replaceAll(' ', '').trim();
       final expiry = _cardExpiryCtrl.text.trim();
       final cvv = _cardCvvCtrl.text.trim();
@@ -1057,7 +1086,11 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
         _cardCvvError = cvvErr;
       });
     } else if (_tabController.index == 1) {
-      final bank = _nbBankCtrl.text.trim();
+      final normalizedNbBank = BankDirectoryService.normalizeBankName(_nbBankCtrl.text.trim());
+      if (normalizedNbBank.isNotEmpty && normalizedNbBank != _nbBankCtrl.text.trim()) {
+        _nbBankCtrl.text = normalizedNbBank;
+      }
+      final bank = normalizedNbBank;
       final nickname = _nbNicknameCtrl.text.trim();
       final userId = _nbUserIdCtrl.text.trim();
 
@@ -1510,15 +1543,21 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
             },
           ),
           const SizedBox(height: 14),
-          _buildTextField(
-            _cardBankCtrl,
-            'Bank Name',
-            'e.g. HDFC Bank, SBI, ICICI',
-            Icons.account_balance_rounded,
+          _buildBankAutocompleteField(
+            controller: _cardBankCtrl,
+            focusNode: _cardBankFocusNode,
+            label: 'Bank Name',
+            hint: 'e.g. State Bank of India, HDFC, PNB',
             errorText: _cardBankError,
             onChanged: (val) {
               _bankAutoDetected = false;
               if (_cardBankError != null) setState(() => _cardBankError = null);
+              setState(() {});
+            },
+            onSelected: () {
+              _bankAutoDetected = false;
+              if (_cardBankError != null) setState(() => _cardBankError = null);
+              setState(() {});
             },
           ),
           const SizedBox(height: 14),
@@ -1824,13 +1863,17 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildTextField(
-                  _nbBankCtrl,
-                  'Bank Name',
-                  'e.g. State Bank of India, HDFC, ICICI',
-                  Icons.account_balance_rounded,
+                _buildBankAutocompleteField(
+                  controller: _nbBankCtrl,
+                  focusNode: _nbBankFocusNode,
+                  label: 'Bank Name',
+                  hint: 'e.g. State Bank of India, HDFC, PNB',
                   errorText: _nbBankError,
                   onChanged: (val) {
+                    if (_nbBankError != null) setState(() => _nbBankError = null);
+                    if (_nbWebsiteCtrl.text.isEmpty) setState(() {});
+                  },
+                  onSelected: () {
                     if (_nbBankError != null) setState(() => _nbBankError = null);
                     if (_nbWebsiteCtrl.text.isEmpty) setState(() {});
                   },
@@ -2902,6 +2945,121 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Colors.redAccent, width: 2.0),
       ),
+    );
+  }
+
+  Widget _buildBankAutocompleteField({
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required String label,
+    required String hint,
+    required String? errorText,
+    required ValueChanged<String> onChanged,
+    VoidCallback? onSelected,
+  }) {
+    return RawAutocomplete<BankEntry>(
+      textEditingController: controller,
+      focusNode: focusNode,
+      displayStringForOption: (BankEntry option) => option.name,
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        final query = textEditingValue.text.trim();
+        if (query.isEmpty) {
+          return const Iterable<BankEntry>.empty();
+        }
+        return BankDirectoryService.search(query);
+      },
+      onSelected: (BankEntry selection) {
+        controller.text = selection.name;
+        onChanged(selection.name);
+        onSelected?.call();
+      },
+      optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<BankEntry> onSelectedOption, Iterable<BankEntry> options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 8,
+            shadowColor: Colors.black26,
+            borderRadius: BorderRadius.circular(14),
+            color: Colors.white,
+            child: Container(
+              width: MediaQuery.of(context).size.width - 40,
+              constraints: const BoxConstraints(maxHeight: 230),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                shrinkWrap: true,
+                itemCount: options.length,
+                separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                itemBuilder: (BuildContext context, int index) {
+                  final BankEntry option = options.elementAt(index);
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => onSelectedOption(option),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF6F00).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.account_balance_rounded, size: 16, color: Color(0xFFFF6F00)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  option.displayName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                                if (option.category != null)
+                                  Text(
+                                    option.category!,
+                                    style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.north_west_rounded, size: 14, color: Color(0xFF94A3B8)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+      fieldViewBuilder: (BuildContext context, TextEditingController fieldController, FocusNode fieldFocusNode, VoidCallback onFieldSubmitted) {
+        return TextField(
+          controller: fieldController,
+          focusNode: fieldFocusNode,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.next,
+          style: const TextStyle(color: Color(0xFF0F172A)),
+          onChanged: (val) {
+            onChanged(val);
+          },
+          decoration: _buildInputDecoration(
+            labelText: label,
+            hintText: hint,
+            prefixIcon: Icon(Icons.account_balance_rounded, color: errorText != null ? Colors.redAccent : const Color(0xFFFF6F00)),
+            errorText: errorText,
+          ),
+        );
+      },
     );
   }
 
