@@ -657,8 +657,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _promptDriveMasterPassword(String payload) async {
     final drive = context.read<DriveService>();
+    final sec = context.read<VaultSecurityService>();
+    final auth = AuthService();
+    final canBiometrics = await auth.isBiometricAvailable();
     final passwordCtrl = TextEditingController();
     String? errorText;
+    bool isUsingRecoveryKey = false;
+    bool isAuthenticating = false;
+
+    if (!mounted) return;
 
     await showDialog(
       context: context,
@@ -670,33 +677,116 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Icon(Icons.cloud_download_rounded, color: Color(0xFFFF6F00)),
               SizedBox(width: 8),
-              Text('Cloud Backup Password', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
+              Text('Restore Cloud Backup', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'This Google Drive backup is encrypted with a Master Password.\n\nEnter the password to decrypt:',
-                style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: passwordCtrl,
-                obscureText: true,
-                style: const TextStyle(color: Color(0xFF0F172A)),
-                decoration: InputDecoration(
-                  labelText: 'Master Password',
-                  hintText: 'Enter backup password',
-                  errorText: errorText,
-                  prefixIcon: const Icon(Icons.key_rounded, color: Color(0xFFFF6F00)),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (canBiometrics) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFFF6F00),
+                        side: const BorderSide(color: Color(0xFFFF6F00)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      icon: isAuthenticating
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF6F00)))
+                          : const Icon(Icons.fingerprint_rounded, size: 22),
+                      label: Text(
+                        isAuthenticating ? 'Verifying Biometrics...' : 'Unlock with Biometrics (Face / Touch)',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      onPressed: isAuthenticating
+                          ? null
+                          : () async {
+                              setDlgState(() => isAuthenticating = true);
+                              final authenticated = await auth.authenticate(reason: 'Verify face or fingerprint to restore backup');
+                              setDlgState(() => isAuthenticating = false);
+                              if (authenticated) {
+                                final cachedPwd = await sec.getMasterPassword();
+                                if (cachedPwd != null && cachedPwd.isNotEmpty) {
+                                  passwordCtrl.text = cachedPwd;
+                                  try {
+                                    final count = await drive.restore(masterPassword: cachedPwd, rawPayload: payload.isNotEmpty ? payload : null);
+                                    await _loadItems();
+                                    if (context.mounted) {
+                                      Navigator.pop(dlgCtx);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('✓ Biometric verified! Restored $count items from Google Drive!'),
+                                          backgroundColor: Colors.green.shade800,
+                                        ),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    setDlgState(() => errorText = 'Biometric key mismatch. Please enter password or Recovery Key.');
+                                  }
+                                } else {
+                                  setDlgState(() => errorText = 'No stored password on this device. Please enter password or Recovery Key.');
+                                }
+                              }
+                            },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Row(
+                    children: [
+                      Expanded(child: Divider()),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Text('OR USE KEY', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                      ),
+                      Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Text(
+                  isUsingRecoveryKey
+                      ? 'Enter your 16-character Emergency Recovery Key (XXXX-XXXX-XXXX-XXXX):'
+                      : 'Enter your Master Password to decrypt your cloud backup:',
+                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: passwordCtrl,
+                  obscureText: !isUsingRecoveryKey,
+                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  decoration: InputDecoration(
+                    labelText: isUsingRecoveryKey ? 'Recovery Key' : 'Master Password',
+                    hintText: isUsingRecoveryKey ? 'XXXX-XXXX-XXXX-XXXX' : 'Enter backup password',
+                    errorText: errorText,
+                    prefixIcon: Icon(isUsingRecoveryKey ? Icons.vpn_key_rounded : Icons.key_rounded, color: const Color(0xFFFF6F00)),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                    child: Text(
+                      isUsingRecoveryKey ? 'Use Master Password instead' : 'Forgot password? Use Recovery Key',
+                      style: const TextStyle(color: Color(0xFF0284C7), fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    onPressed: () {
+                      setDlgState(() {
+                        isUsingRecoveryKey = !isUsingRecoveryKey;
+                        errorText = null;
+                        passwordCtrl.clear();
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -709,18 +799,19 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () async {
                 final pwd = passwordCtrl.text.trim();
                 if (pwd.isEmpty) {
-                  setDlgState(() => errorText = 'Please enter password');
+                  setDlgState(() => errorText = isUsingRecoveryKey ? 'Please enter recovery key' : 'Please enter password');
                   return;
                 }
 
                 try {
                   final count = await drive.restore(masterPassword: pwd, rawPayload: payload.isNotEmpty ? payload : null);
                   try {
-                    final sec = context.read<VaultSecurityService>();
-                    await sec.saveMasterPassword(pwd);
+                    if (!isUsingRecoveryKey) {
+                      await sec.saveMasterPassword(pwd);
+                    }
                   } catch (_) {}
                   await _loadItems();
-                  if (mounted) {
+                  if (context.mounted) {
                     Navigator.pop(dlgCtx);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -730,7 +821,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   }
                 } catch (e) {
-                  setDlgState(() => errorText = 'Incorrect password. Please verify and try again.');
+                  setDlgState(() => errorText = isUsingRecoveryKey
+                      ? 'Invalid Recovery Key. Please check the 16 characters.'
+                      : 'Incorrect password. Please verify or use your Recovery Key.');
                 }
               },
             ),

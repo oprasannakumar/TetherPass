@@ -142,10 +142,12 @@ class DriveService extends ChangeNotifier {
     // Encrypt with Master Password if available so backup can be restored across devices
     String encryptedData;
     final masterPwd = await vaultSecurityService?.getMasterPassword();
+    final recoveryKey = await vaultSecurityService?.getRecoveryKey();
     if (masterPwd != null && masterPwd.isNotEmpty) {
       encryptedData = SecureBackupExportService.exportVaultWithPassword(
         items: items,
         userPassword: masterPwd,
+        recoveryKey: recoveryKey,
       );
     } else {
       encryptedData = await databaseService.exportEncryptedBackup();
@@ -222,8 +224,8 @@ class DriveService extends ChangeNotifier {
 
     // 1. If encrypted with Master Password via SecureBackupExportService
     final isMasterPasswordEncrypted = encryptedPayload.startsWith('{') &&
-        (encryptedPayload.contains('TETHERPASS_SECURE_BACKUP_V1') ||
-         encryptedPayload.contains('CARDVAULT_SECURE_BACKUP_V1'));
+        (encryptedPayload.contains('TETHERPASS_SECURE_BACKUP') ||
+         encryptedPayload.contains('CARDVAULT_SECURE_BACKUP'));
 
     if (isMasterPasswordEncrypted) {
       final pwd = masterPassword ?? await vaultSecurityService?.getMasterPassword();
