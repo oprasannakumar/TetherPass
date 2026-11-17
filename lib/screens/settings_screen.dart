@@ -6,7 +6,9 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../services/bin_database_service.dart';
 import '../services/autofill_bridge_service.dart';
 import '../services/auto_lock_service.dart';
 import '../services/clipboard_service.dart';
@@ -444,6 +446,169 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _showBinDatabaseDialog() async {
+    final stats = await BinDatabaseService.getStats();
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E293B),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        bool syncing = false;
+        return StatefulBuilder(
+          builder: (modalCtx, setModalState) {
+            final bundledFmt = NumberFormat.decimalPattern().format(stats['bundled'] ?? 458044);
+            final customCount = stats['custom'] ?? 0;
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF6F00).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.credit_card_rounded, color: Color(0xFFFF6F00), size: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Card BIN Registry',
+                                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                'Offline Detection & Self-Learning',
+                                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                          onPressed: () => Navigator.pop(modalCtx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'TetherPass includes $bundledFmt pre-packaged offline card issuer prefixes. Whenever you add or customize a card, TetherPass learns the prefix locally on your device for permanent zero-latency recognition.',
+                      style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13, height: 1.4),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F172A),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              children: [
+                                Text(
+                                  bundledFmt,
+                                  style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text('Bundled Offline', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                          Container(width: 1, height: 32, color: const Color(0xFF334155)),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                Text(
+                                  '$customCount',
+                                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 17, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text('Learned / Synced', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF6F00),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: syncing
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.cloud_sync_rounded, size: 20),
+                        label: Text(syncing ? 'Checking Updates...' : 'Check Community Updates (OTA)'),
+                        onPressed: syncing
+                            ? null
+                            : () async {
+                                setModalState(() => syncing = true);
+                                final count = await BinDatabaseService.syncOnlineDeltas();
+                                final updatedStats = await BinDatabaseService.getStats();
+                                setModalState(() {
+                                  syncing = false;
+                                  stats['bundled'] = updatedStats['bundled'] ?? 458044;
+                                  stats['custom'] = updatedStats['custom'] ?? 0;
+                                });
+                                if (!modalCtx.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      count >= 0
+                                          ? 'Sync complete! $count new card ranges updated.'
+                                          : 'Unable to reach community repository. Offline database is active.',
+                                    ),
+                                    backgroundColor: count >= 0 ? const Color(0xFF10B981) : Colors.amber.shade800,
+                                  ),
+                                );
+                              },
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Center(
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.open_in_new_rounded, size: 14, color: Color(0xFF38BDF8)),
+                        label: const Text(
+                          'Contribute unlisted card prefix on GitHub',
+                          style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                        ),
+                        onPressed: () {
+                          final url = BinDatabaseService.buildContributeUrl(binPrefix: '', bankName: '');
+                          launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1093,6 +1258,23 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   MaterialPageRoute(builder: (_) => const BrowserExtensionScreen()),
                 );
               },
+            ),
+
+            const SizedBox(height: 24),
+
+            // ── Card Intelligence & Offline BIN Registry ──
+            const Text(
+              'CARD INTELLIGENCE & OFFLINE REGISTRY',
+              style: TextStyle(color: Color(0xFFFF6F00), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+            ),
+            const SizedBox(height: 10),
+
+            _buildSettingTile(
+              icon: Icons.credit_card_rounded,
+              title: 'Global Card BIN Database',
+              subtitle: '458,000+ offline card ranges • Self-learning & OTA updates',
+              trailing: const Icon(Icons.sync_rounded, size: 20, color: Color(0xFFFF6F00)),
+              onTap: _showBinDatabaseDialog,
             ),
 
             const SizedBox(height: 24),

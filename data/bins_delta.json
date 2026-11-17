@@ -1,0 +1,42 @@
+[
+  {
+    "bin": "608032",
+    "brand": "RuPay",
+    "type": "Debit",
+    "tier": "Platinum",
+    "issuer": "Jupiter Federal Bank",
+    "country": "IN"
+  },
+  {
+    "bin": "608116",
+    "brand": "RuPay",
+    "type": "Credit",
+    "tier": "Select",
+    "issuer": "Fi Federal Bank",
+    "country": "IN"
+  },
+  {
+    "bin": "652150",
+    "brand": "RuPay",
+    "type": "Credit",
+    "tier": "Select",
+    "issuer": "Tata Neu HDFC Bank",
+    "country": "IN"
+  },
+  {
+    "bin": "438628",
+    "brand": "Visa",
+    "type": "Credit",
+    "tier": "Signature",
+    "issuer": "OneCard Federal Bank",
+    "country": "IN"
+  },
+  {
+    "bin": "416641",
+    "brand": "Visa",
+    "type": "Credit",
+    "tier": "Signature",
+    "issuer": "Scapia Federal Bank",
+    "country": "IN"
+  }
+]

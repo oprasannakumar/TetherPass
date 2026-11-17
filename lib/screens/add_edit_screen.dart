@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -1195,6 +1196,18 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           await db.insertItem(card);
         } else {
           await db.updateItem(card);
+        }
+
+        // On-device self-learning: store this card's BIN in local custom_bins
+        final cleanDigits = _cardNumberCtrl.text.replaceAll(RegExp(r'\D'), '');
+        if (cleanDigits.length >= 6 && _cardBankCtrl.text.trim().isNotEmpty) {
+          unawaited(BinDatabaseService.rememberBin(
+            bin: cleanDigits,
+            issuer: _cardBankCtrl.text.trim(),
+            brand: _cardNetwork,
+            cardType: _cardType,
+            tier: _cardTier.name,
+          ));
         }
       } else if (_tabController.index == 1) {
         final accounts = <BankAccount>[];
