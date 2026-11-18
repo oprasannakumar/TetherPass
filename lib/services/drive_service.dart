@@ -49,7 +49,6 @@ class DriveService extends ChangeNotifier {
   String? get userEmail => _currentUser?.email;
   String? get userDisplayName => _currentUser?.displayName;
   String? get userPhotoUrl => _currentUser?.photoUrl;
-  String? get googleAccountKey => _currentUser != null ? '${_currentUser!.id}_${_currentUser!.email}' : null;
   String? lastError;
 
   // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -145,13 +144,11 @@ class DriveService extends ChangeNotifier {
     String encryptedData;
     final masterPwd = await vaultSecurityService?.getMasterPassword();
     final recoveryKey = await vaultSecurityService?.getRecoveryKey();
-    final googleAccountKey = _currentUser != null ? '${_currentUser!.id}_${_currentUser!.email}' : null;
     if (masterPwd != null && masterPwd.isNotEmpty) {
       encryptedData = SecureBackupExportService.exportVaultWithPassword(
         items: items,
         userPassword: masterPwd,
         recoveryKey: recoveryKey,
-        googleAccountKey: googleAccountKey,
       );
     } else {
       encryptedData = await databaseService.exportEncryptedBackup();
@@ -226,7 +223,6 @@ class DriveService extends ChangeNotifier {
   Future<int> restore({
     String? masterPassword,
     String? rawPayload,
-    bool allowGoogleEscrow = false,
   }) async {
     final encryptedPayload = rawPayload ?? await downloadRawBackupPayload();
 
@@ -237,16 +233,14 @@ class DriveService extends ChangeNotifier {
 
     if (isMasterPasswordEncrypted) {
       final pwd = masterPassword ?? await vaultSecurityService?.getMasterPassword();
-      final googleKey = (_currentUser != null && allowGoogleEscrow) ? '${_currentUser!.id}_${_currentUser!.email}' : null;
 
-      if ((pwd == null || pwd.isEmpty) && googleKey == null) {
+      if (pwd == null || pwd.isEmpty) {
         throw MasterPasswordRequiredException(encryptedPayload);
       }
       try {
         final items = SecureBackupExportService.importVaultWithPassword(
           backupPayload: encryptedPayload,
           userPassword: pwd,
-          googleAccountKey: googleKey,
         );
         int count = 0;
         for (final item in items) {

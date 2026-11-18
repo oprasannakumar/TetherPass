@@ -3,7 +3,7 @@ import 'package:card_vault/models/vault_item.dart';
 import 'package:card_vault/services/secure_backup_export_service.dart';
 
 void main() {
-  test('V2 Backup can be decrypted by Password, Recovery Key, AND Google Account Key', () {
+  test('V2 Backup can be decrypted by Password AND Recovery Key', () {
     final sampleItems = [
       VaultItem(
         id: '1',
@@ -24,18 +24,17 @@ void main() {
 
     const masterPassword = 'MySecretMasterPassword123!';
     const recoveryKey = 'ABCD-EFGH-JKLM-NPQR';
-    const googleAccountKey = '109283749281739_user@gmail.com';
 
-    // 1. Export with password, recovery key, and Google Account Escrow
+    // 1. Export with password and recovery key
     final payload = SecureBackupExportService.exportVaultWithPassword(
       items: sampleItems,
       userPassword: masterPassword,
       recoveryKey: recoveryKey,
-      googleAccountKey: googleAccountKey,
     );
 
     expect(payload.contains('TETHERPASS_SECURE_BACKUP_V2'), isTrue);
-    expect(payload.contains('wrapped_key_google'), isTrue);
+    expect(payload.contains('wrapped_key_pwd'), isTrue);
+    expect(payload.contains('wrapped_key_rec'), isTrue);
 
     // 2. Decrypt using Master Password
     final restoredViaPassword = SecureBackupExportService.importVaultWithPassword(
@@ -51,20 +50,21 @@ void main() {
       userPassword: 'ABCD-EFGH-JKLM-NPQR',
     );
     expect(restoredViaRecovery.length, 1);
+    expect(restoredViaRecovery.first.cardNumber, '4567890123456789');
 
-    // 4. Decrypt using Google Account Key (NO password and NO recovery key - simulates wiped app data!)
-    final restoredViaGoogleEscrow = SecureBackupExportService.importVaultWithPassword(
+    // 4. Decrypt using lowercase/unspaced Recovery Key
+    final restoredViaCleanKey = SecureBackupExportService.importVaultWithPassword(
       backupPayload: payload,
-      googleAccountKey: googleAccountKey,
+      userPassword: 'abcd efgh jklm npqr',
     );
-    expect(restoredViaGoogleEscrow.length, 1);
-    expect(restoredViaGoogleEscrow.first.cardNumber, '4567890123456789');
+    expect(restoredViaCleanKey.length, 1);
+    expect(restoredViaCleanKey.first.cardNumber, '4567890123456789');
 
-    // 5. Wrong Google Account Key should fail
+    // 5. Wrong password should fail with FormatException
     expect(
       () => SecureBackupExportService.importVaultWithPassword(
         backupPayload: payload,
-        googleAccountKey: 'wrong_account_id@gmail.com',
+        userPassword: 'WrongPassword999!',
       ),
       throwsA(isA<FormatException>()),
     );

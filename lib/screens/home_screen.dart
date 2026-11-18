@@ -658,14 +658,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _promptDriveMasterPassword(String payload) async {
     final drive = context.read<DriveService>();
     final sec = context.read<VaultSecurityService>();
-    final auth = AuthService();
-    final cachedPwd = await sec.getMasterPassword();
-    final hasGoogleEscrow = drive.currentUser != null && payload.contains('wrapped_key_google');
-    final canBiometrics = await auth.isBiometricAvailable() && ((cachedPwd != null && cachedPwd.isNotEmpty) || hasGoogleEscrow);
     final passwordCtrl = TextEditingController();
     String? errorText;
     bool isUsingRecoveryKey = false;
-    bool isAuthenticating = false;
 
     if (!mounted) return;
 
@@ -687,88 +682,6 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (canBiometrics) ...[
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFFF6F00),
-                        side: const BorderSide(color: Color(0xFFFF6F00)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                      ),
-                      icon: isAuthenticating
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF6F00)))
-                          : const Icon(Icons.fingerprint_rounded, size: 22),
-                      label: Text(
-                        isAuthenticating
-                            ? 'Verifying Biometrics...'
-                            : (hasGoogleEscrow && (cachedPwd == null || cachedPwd.isEmpty)
-                                ? 'Restore via Google Escrow (Face/Touch)'
-                                : 'Unlock with Biometrics (Face / Touch)'),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                      onPressed: isAuthenticating
-                          ? null
-                          : () async {
-                              setDlgState(() => isAuthenticating = true);
-                              final authenticated = await auth.authenticate(reason: 'Verify face or fingerprint to restore backup');
-                              setDlgState(() => isAuthenticating = false);
-                              if (authenticated) {
-                                final currentCachedPwd = await sec.getMasterPassword();
-                                if (currentCachedPwd != null && currentCachedPwd.isNotEmpty) {
-                                  passwordCtrl.text = currentCachedPwd;
-                                  try {
-                                    final count = await drive.restore(masterPassword: currentCachedPwd, rawPayload: payload.isNotEmpty ? payload : null);
-                                    await _loadItems();
-                                    if (context.mounted) {
-                                      Navigator.pop(dlgCtx);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('✓ Biometric verified! Restored $count items from Google Drive!'),
-                                          backgroundColor: Colors.green.shade800,
-                                        ),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    setDlgState(() => errorText = 'Biometric key mismatch. Please enter password or Recovery Key.');
-                                  }
-                                } else if (hasGoogleEscrow) {
-                                  try {
-                                    final count = await drive.restore(allowGoogleEscrow: true, rawPayload: payload.isNotEmpty ? payload : null);
-                                    await _loadItems();
-                                    if (context.mounted) {
-                                      Navigator.pop(dlgCtx);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('✓ Google Cloud Escrow verified! Restored $count items from Google Drive!'),
-                                          backgroundColor: Colors.green.shade800,
-                                        ),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    setDlgState(() => errorText = 'Google Account escrow mismatch. Please enter password or Recovery Key.');
-                                  }
-                                } else {
-                                  setDlgState(() => errorText = 'No stored password on this device. Please enter password or Recovery Key.');
-                                }
-                              }
-                            },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Row(
-                    children: [
-                      Expanded(child: Divider()),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Text('OR USE KEY', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
-                      ),
-                      Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
                 Text(
                   isUsingRecoveryKey
                       ? 'Enter your 16-character Emergency Recovery Key (XXXX-XXXX-XXXX-XXXX):'

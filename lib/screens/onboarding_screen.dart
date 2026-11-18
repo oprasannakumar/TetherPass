@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/drive_service.dart';
 import '../services/secure_backup_export_service.dart';
@@ -573,15 +572,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _showMasterPasswordPromptForDrive(String payload) async {
     final sec = context.read<VaultSecurityService>();
     final db = context.read<DatabaseService>();
-    final drive = context.read<DriveService>();
-    final auth = AuthService();
-    final cachedPwd = await sec.getMasterPassword();
-    final hasGoogleEscrow = drive.currentUser != null && payload.contains('wrapped_key_google');
-    final canBiometrics = await auth.isBiometricAvailable() && ((cachedPwd != null && cachedPwd.isNotEmpty) || hasGoogleEscrow);
     final passwordCtrl = TextEditingController();
     String? errorText;
     bool isUsingRecoveryKey = false;
-    bool isAuthenticating = false;
 
     await showDialog(
       context: context,
@@ -602,110 +595,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (canBiometrics) ...[
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFFF6F00),
-                        side: const BorderSide(color: Color(0xFFFF6F00)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                      ),
-                      icon: isAuthenticating
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF6F00)))
-                          : const Icon(Icons.fingerprint_rounded, size: 22),
-                      label: Text(
-                        isAuthenticating
-                            ? 'Verifying Biometrics...'
-                            : (hasGoogleEscrow && (cachedPwd == null || cachedPwd.isEmpty)
-                                ? 'Restore via Google Escrow (Face/Touch)'
-                                : 'Unlock with Biometrics (Face / Touch)'),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                      onPressed: isAuthenticating
-                          ? null
-                          : () async {
-                              setDlgState(() => isAuthenticating = true);
-                              final authenticated = await auth.authenticate(reason: 'Verify face or fingerprint to restore backup');
-                              setDlgState(() => isAuthenticating = false);
-                              if (authenticated) {
-                                final currentCachedPwd = await sec.getMasterPassword();
-                                final googleKey = hasGoogleEscrow ? drive.googleAccountKey : null;
-
-                                if (currentCachedPwd != null && currentCachedPwd.isNotEmpty) {
-                                  passwordCtrl.text = currentCachedPwd;
-                                  try {
-                                    int count = 0;
-                                    if (payload.contains('TETHERPASS_SECURE_BACKUP') || payload.contains('CARDVAULT_SECURE_BACKUP')) {
-                                      final items = SecureBackupExportService.importVaultWithPassword(
-                                        backupPayload: payload,
-                                        userPassword: currentCachedPwd,
-                                      );
-                                      for (final item in items) {
-                                        await db.insertItem(item);
-                                      }
-                                      count = items.length;
-                                    } else {
-                                      count = await db.importEncryptedBackup(payload, masterPassword: currentCachedPwd);
-                                    }
-                                    await sec.setupVault(masterPassword: currentCachedPwd, biometricEnabled: true);
-                                    if (context.mounted) {
-                                      Navigator.pop(dlgCtx);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('✓ Biometric verified! Restored $count items from Google Drive!'),
-                                          backgroundColor: Colors.green,
-                                        ),
-                                      );
-                                      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-                                    }
-                                  } catch (e) {
-                                    setDlgState(() => errorText = 'Biometric key mismatch. Please enter password or Recovery Key.');
-                                  }
-                                } else if (googleKey != null) {
-                                  // Restore via Google Cloud Escrow
-                                  try {
-                                    final items = SecureBackupExportService.importVaultWithPassword(
-                                      backupPayload: payload,
-                                      googleAccountKey: googleKey,
-                                    );
-                                    for (final item in items) {
-                                      await db.insertItem(item);
-                                    }
-                                    if (context.mounted) {
-                                      Navigator.pop(dlgCtx);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('✓ Cloud Escrow verified! Restored ${items.length} items. Please create your Master Password:'),
-                                          backgroundColor: Colors.green,
-                                        ),
-                                      );
-                                      _pageController.animateToPage(1, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                                    }
-                                  } catch (e) {
-                                    setDlgState(() => errorText = 'Google Account escrow mismatch. Please enter password or Recovery Key.');
-                                  }
-                                } else {
-                                  setDlgState(() => errorText = 'No stored password on this device. Please enter password or Recovery Key.');
-                                }
-                              }
-                            },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Row(
-                    children: [
-                      Expanded(child: Divider()),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Text('OR USE KEY', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
-                      ),
-                      Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
                 Text(
                   isUsingRecoveryKey
                       ? 'Enter your 16-character Emergency Recovery Key (XXXX-XXXX-XXXX-XXXX):'
@@ -836,13 +725,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
       final sec = context.read<VaultSecurityService>();
       final db = context.read<DatabaseService>();
-      final auth = AuthService();
-      final cachedPwd = await sec.getMasterPassword();
-      final canBiometrics = await auth.isBiometricAvailable() && cachedPwd != null && cachedPwd.isNotEmpty;
       final passwordCtrl = TextEditingController();
       String? errorText;
       bool isUsingRecoveryKey = false;
-      bool isAuthenticating = false;
 
       await showDialog(
         context: context,
@@ -863,75 +748,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (canBiometrics) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFFF6F00),
-                          side: const BorderSide(color: Color(0xFFFF6F00)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                        ),
-                        icon: isAuthenticating
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF6F00)))
-                            : const Icon(Icons.fingerprint_rounded, size: 22),
-                        label: Text(
-                          isAuthenticating ? 'Verifying Biometrics...' : 'Unlock with Biometrics (Face / Touch)',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                        onPressed: isAuthenticating
-                            ? null
-                            : () async {
-                                setDlgState(() => isAuthenticating = true);
-                                final authenticated = await auth.authenticate(reason: 'Verify face or fingerprint to restore backup');
-                                setDlgState(() => isAuthenticating = false);
-                                if (authenticated) {
-                                  final cachedPwd = await sec.getMasterPassword();
-                                  if (cachedPwd != null && cachedPwd.isNotEmpty) {
-                                    passwordCtrl.text = cachedPwd;
-                                    try {
-                                      final items = SecureBackupExportService.importVaultWithPassword(
-                                        backupPayload: fileContent,
-                                        userPassword: cachedPwd,
-                                      );
-                                      for (final item in items) {
-                                        await db.insertItem(item);
-                                      }
-                                      await sec.setupVault(masterPassword: cachedPwd, biometricEnabled: true);
-                                      if (context.mounted) {
-                                        Navigator.pop(dlgCtx);
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('✓ Biometric verified! Restored ${items.length} items from $fileName!'),
-                                            backgroundColor: Colors.green,
-                                          ),
-                                        );
-                                        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-                                      }
-                                    } catch (_) {
-                                      setDlgState(() => errorText = 'Biometric key mismatch. Please enter password or Recovery Key.');
-                                    }
-                                  } else {
-                                    setDlgState(() => errorText = 'No stored password on this device. Please enter password or Recovery Key.');
-                                  }
-                                }
-                              },
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Row(
-                      children: [
-                        Expanded(child: Divider()),
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8),
-                          child: Text('OR USE KEY', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
-                        ),
-                        Expanded(child: Divider()),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                  ],
                   Text(
                     'Selected: $fileName\n\n${isUsingRecoveryKey ? 'Enter your 16-character Emergency Recovery Key:' : 'Enter the Master Password used when this backup was created:'}',
                     style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
