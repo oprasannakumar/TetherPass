@@ -331,12 +331,14 @@ async function lockVault(reason = 'Vault locked') {
 }
 
 function notifyAllTabsStatusChange() {
+  const isUnlocked = !!(memoryVault.isAuthorized && memoryVault.isUnlocked && (!memoryVault.authExpiresAt || Date.now() < memoryVault.authExpiresAt));
   chrome.tabs.query({}, (tabs) => {
     for (const tab of tabs) {
       if (tab.id) {
         chrome.tabs.sendMessage(tab.id, {
           action: 'VAULT_STATUS_CHANGED',
-          isAuthorized: memoryVault.isAuthorized && memoryVault.isUnlocked
+          isAuthorized: isUnlocked,
+          isUnlocked: isUnlocked
         }).catch(() => {});
       }
     }

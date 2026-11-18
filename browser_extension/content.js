@@ -10,9 +10,66 @@
   var selectedItemIndex = -1;
   var managedInput = null;
   var originalAutocomplete = null;
+  var isVaultUnlocked = false;
+
+  function purgeAllTetherPassElements() {
+    isVaultUnlocked = false;
+    restoreBrowserAutofill();
+    if (activeDropdown) {
+      activeDropdown.remove();
+      activeDropdown = null;
+    }
+    if (activeFloatingPill) {
+      activeFloatingPill.remove();
+      activeFloatingPill = null;
+    }
+    if (activePromptCard) {
+      activePromptCard.remove();
+      activePromptCard = null;
+    }
+    document.querySelectorAll('.cv-floating-pill, .cv-autofill-dropdown, .cv-save-prompt-card').forEach(el => el.remove());
+  }
+
+  function updateVaultStatus(status) {
+    if (status && status.isAuthorized && status.isUnlocked) {
+      const now = Date.now();
+      if (!status.authExpiresAt || now < status.authExpiresAt) {
+        isVaultUnlocked = true;
+        return;
+      }
+    }
+    purgeAllTetherPassElements();
+  }
+
+  function queryVaultStatus() {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({ action: 'GET_STATUS' }, (status) => {
+          if (typeof chrome !== 'undefined' && chrome.runtime?.lastError) {
+            purgeAllTetherPassElements();
+            return;
+          }
+          updateVaultStatus(status);
+        });
+      } else {
+        purgeAllTetherPassElements();
+      }
+    } catch (_) {
+      purgeAllTetherPassElements();
+    }
+  }
+
+  // Initial status check: by default, extension acts completely DEAD until confirmed unlocked
+  queryVaultStatus();
+
+  // Re-verify status on tab visibility or window focus
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) queryVaultStatus();
+  });
+  window.addEventListener('focus', queryVaultStatus);
 
   function suppressBrowserAutofill(input) {
-    if (!input) return;
+    if (!isVaultUnlocked || !input) return;
     managedInput = input;
     if (input.getAttribute('autocomplete') !== 'off' && (!input.dataset || !input.dataset.tpOrigAc)) {
       originalAutocomplete = input.getAttribute('autocomplete');
@@ -300,7 +357,10 @@
   }
 
   function showFloatingPill(target) {
-    if (!target) return;
+    if (!isVaultUnlocked || !target) {
+      removeFloatingPill();
+      return;
+    }
     const fieldType = classifyInput(target);
     if (!fieldType) {
       removeFloatingPill();
@@ -327,6 +387,10 @@
     pill.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if (!isVaultUnlocked) {
+        removeFloatingPill();
+        return;
+      }
       target.focus();
       handleInputInteraction(target, true);
     });
@@ -337,7 +401,10 @@
   }
 
   function positionFloatingPill(target) {
-    if (!activeFloatingPill || !target) return;
+    if (!isVaultUnlocked || !activeFloatingPill || !target) {
+      removeFloatingPill();
+      return;
+    }
     const rect = target.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) {
       activeFloatingPill.style.display = 'none';
@@ -357,7 +424,7 @@
   }
 
   function requestSuggestionsForInput(target, fieldType, force = false) {
-    if (!target || (!force && isInputFilled(target))) {
+    if (!isVaultUnlocked || !target || (!force && isInputFilled(target))) {
       removeDropdown();
       return;
     }
@@ -365,7 +432,10 @@
     chrome.runtime.sendMessage(
       { action: 'GET_AUTOFILL_SUGGESTIONS', payload: { fieldType, domain: window.location.hostname } },
       (response) => {
-        if (!response) return;
+        if (!isVaultUnlocked || !response || !response.authorized) {
+          removeDropdown();
+          return;
+        }
         const isStillTarget = (target === activeInput) ||
                               (document.activeElement === target) ||
                               (target.matches && target.matches(':focus'));
@@ -380,7 +450,11 @@
   }
 
   function handleInputInteraction(target, force = false) {
-    if (!target || target.tagName !== 'INPUT') return;
+    if (!isVaultUnlocked || !target || target.tagName !== 'INPUT') {
+      removeDropdown();
+      removeFloatingPill();
+      return;
+    }
     clearInputFilledState(target);
     if (!force && isInputFilled(target)) {
       removeDropdown();
@@ -402,11 +476,17 @@
 
   // Handle focus on fields
   document.addEventListener('focusin', (e) => {
+    if (!isVaultUnlocked) return;
     handleInputInteraction(e.target);
     showFloatingPill(e.target);
   });
 
   document.addEventListener('focusout', (e) => {
+    if (!isVaultUnlocked) {
+      removeFloatingPill();
+      removeDropdown();
+      return;
+    }
     setTimeout(() => {
       if (document.activeElement !== e.target && (!activeDropdown || !activeDropdown.contains(document.activeElement))) {
         removeFloatingPill();
@@ -414,9 +494,13 @@
     }, 250);
   });
 
-  // Global Keyboard Shortcut: Alt+V triggers TetherPass autofill anywhere
+  // Global Keyboard Shortcut: Alt+V triggers TetherPass autofill anywhere ONLY WHEN UNLOCKED
   document.addEventListener('keydown', (e) => {
     if (e.altKey && (e.key === 'v' || e.key === 'V')) {
+      if (!isVaultUnlocked) {
+        // ACT AS COMPLETELY DEAD: do not intercept, do not prevent default, do not show any UI
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
 
@@ -435,15 +519,24 @@
   }, true);
 
   window.addEventListener('scroll', () => {
+    if (!isVaultUnlocked) {
+      removeFloatingPill();
+      return;
+    }
     if (activeFloatingPill && activeInput) positionFloatingPill(activeInput);
   }, { passive: true });
 
   window.addEventListener('resize', () => {
+    if (!isVaultUnlocked) {
+      removeFloatingPill();
+      return;
+    }
     if (activeFloatingPill && activeInput) positionFloatingPill(activeInput);
   }, { passive: true });
 
   // Handle click on fields (triggers suggestions even if field was already focused)
   document.addEventListener('click', (e) => {
+    if (!isVaultUnlocked) return;
     const target = e.target;
     if (target && target.tagName === 'INPUT') {
       clearInputFilledState(target);
@@ -458,6 +551,7 @@
   // Handle typing, clearing, cut, change, and pasting in fields
   ['input', 'change', 'cut', 'paste'].forEach(evtName => {
     document.addEventListener(evtName, (e) => {
+      if (!isVaultUnlocked) return;
       const target = e.target;
       if (!target || target.tagName !== 'INPUT') return;
 
@@ -479,6 +573,7 @@
 
   // Listen for Backspace/Delete clearing
   document.addEventListener('keyup', (e) => {
+    if (!isVaultUnlocked) return;
     const target = e.target;
     if (!target || target.tagName !== 'INPUT') return;
 
@@ -498,7 +593,7 @@
   });
 
   // If a field is autofocused on page load (e.g. GitHub username or 2FA):
-  if (document.activeElement && document.activeElement.tagName === 'INPUT' && !isInputFilled(document.activeElement)) {
+  if (isVaultUnlocked && document.activeElement && document.activeElement.tagName === 'INPUT' && !isInputFilled(document.activeElement)) {
     handleInputInteraction(document.activeElement);
   }
 
@@ -514,7 +609,7 @@
   // Intercept ArrowDown, ArrowUp, Enter, and Escape in capture phase
   // so browser native password manager (Google Password Manager) DOES NOT hijack!
   document.addEventListener('keydown', (e) => {
-    if (!activeDropdown) return;
+    if (!isVaultUnlocked || !activeDropdown) return;
 
     const rows = activeDropdown.querySelectorAll('.cv-item-row');
     if (!rows || rows.length === 0) return;
@@ -1259,7 +1354,17 @@
   if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message && message.action === 'VAULT_STATUS_CHANGED') {
-        if (!message.isAuthorized) removeDropdown();
+        const unlocked = !!(message.isAuthorized && message.isUnlocked);
+        if (unlocked) {
+          isVaultUnlocked = true;
+        } else {
+          purgeAllTetherPassElements();
+        }
+      }
+
+      if (!isVaultUnlocked) {
+        if (sendResponse) sendResponse({ success: false, error: 'Vault is locked' });
+        return;
       }
 
       if (message && message.action === 'FILL_CARD_NOW' && message.card) {
@@ -1402,8 +1507,9 @@
     }, 2200);
   }
 
-  // Intercept form submissions to offer saving new credentials
+  // Intercept form submissions to offer saving new credentials ONLY WHEN UNLOCKED
   document.addEventListener('submit', (e) => {
+    if (!isVaultUnlocked) return;
     try {
       const form = e.target;
       if (!form || !form.querySelector) return;
