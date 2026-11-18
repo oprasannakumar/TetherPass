@@ -160,6 +160,7 @@ async function deriveKeyStandardPBKDF2(masterPassword, saltBytes) {
 
 /**
  * Decrypts CardVault cloud/offline backup payload with the user's master password.
+ * Supports both V2 Envelope Encryption (TETHERPASS_SECURE_BACKUP_V2) and V1 Direct Encryption.
  * @param {string|object} rawPayload JSON string or object containing header, salt, iv, and data
  * @param {string} masterPassword Master password configured on mobile app
  * @returns {Promise<Array>} Array of decrypted vault items
@@ -177,6 +178,100 @@ async function decryptCardVaultBackup(rawPayload, masterPassword) {
     return payload.items;
   }
 
+  const dec = new TextDecoder();
+
+  // ─── Case 1: V2 Envelope Encryption (TETHERPASS_SECURE_BACKUP_V2) ───
+  if (payload.header === 'TETHERPASS_SECURE_BACKUP_V2' || payload.version === 2 || payload.wrapped_key_pwd) {
+    if (!payload.wrapped_key_pwd || !payload.iv_pwd || !payload.salt_pwd || !payload.iv_data || !payload.data) {
+      throw new Error('Invalid V2 backup format: missing envelope encryption metadata.');
+    }
+
+    let dataKeyBytes = null;
+
+    // A. Attempt unwrapping dataKey using masterPassword
+    try {
+      const saltPwdBytes = base64ToUint8Array(payload.salt_pwd);
+      const ivPwdBytes = base64ToUint8Array(payload.iv_pwd);
+      const wrappedKeyBytes = base64ToUint8Array(payload.wrapped_key_pwd);
+
+      const pwdAesKey = await deriveKeyCardVaultDart(masterPassword, saltPwdBytes);
+      const unwrappedBuffer = await crypto.subtle.decrypt(
+        { name: 'AES-CBC', iv: ivPwdBytes },
+        pwdAesKey,
+        wrappedKeyBytes
+      );
+      if (unwrappedBuffer.byteLength === 32) {
+        dataKeyBytes = new Uint8Array(unwrappedBuffer);
+      }
+    } catch (errPwd) {
+      console.warn('[CardVault] Password unwrap attempt notice:', errPwd.message);
+      try {
+        const saltPwdBytes = base64ToUint8Array(payload.salt_pwd);
+        const ivPwdBytes = base64ToUint8Array(payload.iv_pwd);
+        const wrappedKeyBytes = base64ToUint8Array(payload.wrapped_key_pwd);
+        const pwdAesKeyStd = await deriveKeyStandardPBKDF2(masterPassword, saltPwdBytes);
+        const unwrappedBuffer = await crypto.subtle.decrypt(
+          { name: 'AES-CBC', iv: ivPwdBytes },
+          pwdAesKeyStd,
+          wrappedKeyBytes
+        );
+        if (unwrappedBuffer.byteLength === 32) {
+          dataKeyBytes = new Uint8Array(unwrappedBuffer);
+        }
+      } catch (_) {}
+    }
+
+    // B. If masterPassword failed, attempt recovery key unwrapping if present
+    if (!dataKeyBytes && payload.wrapped_key_rec && payload.salt_rec && payload.iv_rec) {
+      try {
+        const cleanRecovery = String(masterPassword).replace(/[\s\-]/g, '').toUpperCase();
+        const saltRecBytes = base64ToUint8Array(payload.salt_rec);
+        const ivRecBytes = base64ToUint8Array(payload.iv_rec);
+        const wrappedRecBytes = base64ToUint8Array(payload.wrapped_key_rec);
+
+        const recAesKey = await deriveKeyCardVaultDart(cleanRecovery, saltRecBytes);
+        const unwrappedBuffer = await crypto.subtle.decrypt(
+          { name: 'AES-CBC', iv: ivRecBytes },
+          recAesKey,
+          wrappedRecBytes
+        );
+        if (unwrappedBuffer.byteLength === 32) {
+          dataKeyBytes = new Uint8Array(unwrappedBuffer);
+        }
+      } catch (errRec) {
+        console.warn('[CardVault] Recovery key unwrap attempt notice:', errRec.message);
+      }
+    }
+
+    if (!dataKeyBytes) {
+      throw new Error('Failed to decrypt vault: Incorrect Master Password or Recovery Key.');
+    }
+
+    // C. Decrypt the actual data payload with the recovered 256-bit symmetric key
+    try {
+      const dataKey = await crypto.subtle.importKey(
+        'raw',
+        dataKeyBytes,
+        { name: 'AES-CBC' },
+        false,
+        ['decrypt']
+      );
+      const ivDataBytes = base64ToUint8Array(payload.iv_data);
+      const cipherBytes = base64ToUint8Array(payload.data);
+      const decryptedDataBuffer = await crypto.subtle.decrypt(
+        { name: 'AES-CBC', iv: ivDataBytes },
+        dataKey,
+        cipherBytes
+      );
+      const jsonString = dec.decode(decryptedDataBuffer);
+      const parsed = JSON.parse(jsonString);
+      return parsed.items || [];
+    } catch (errData) {
+      throw new Error('Failed to decrypt vault payload: corrupted data.');
+    }
+  }
+
+  // ─── Case 2: V1 / Legacy Direct Encryption ───
   if (!payload.salt || !payload.iv || !payload.data) {
     throw new Error('Invalid CardVault backup file: missing encryption metadata.');
   }
@@ -184,8 +279,6 @@ async function decryptCardVaultBackup(rawPayload, masterPassword) {
   const saltBytes = base64ToUint8Array(payload.salt);
   const ivBytes = base64ToUint8Array(payload.iv);
   const cipherBytes = base64ToUint8Array(payload.data);
-
-  const dec = new TextDecoder();
 
   // 1. Primary Attempt: Match Dart's SecureBackupExportService key derivation
   try {
