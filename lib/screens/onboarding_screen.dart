@@ -573,8 +573,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _showMasterPasswordPromptForDrive(String payload) async {
     final sec = context.read<VaultSecurityService>();
     final db = context.read<DatabaseService>();
+    final drive = context.read<DriveService>();
     final auth = AuthService();
-    final canBiometrics = await auth.isBiometricAvailable();
+    final cachedPwd = await sec.getMasterPassword();
+    final hasGoogleEscrow = drive.currentUser != null && payload.contains('wrapped_key_google');
+    final canBiometrics = await auth.isBiometricAvailable() && ((cachedPwd != null && cachedPwd.isNotEmpty) || hasGoogleEscrow);
     final passwordCtrl = TextEditingController();
     String? errorText;
     bool isUsingRecoveryKey = false;
@@ -613,7 +616,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF6F00)))
                           : const Icon(Icons.fingerprint_rounded, size: 22),
                       label: Text(
-                        isAuthenticating ? 'Verifying Biometrics...' : 'Unlock with Biometrics (Face / Touch)',
+                        isAuthenticating
+                            ? 'Verifying Biometrics...'
+                            : (hasGoogleEscrow && (cachedPwd == null || cachedPwd.isEmpty)
+                                ? 'Restore via Google Escrow (Face/Touch)'
+                                : 'Unlock with Biometrics (Face / Touch)'),
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                       onPressed: isAuthenticating
@@ -623,24 +630,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               final authenticated = await auth.authenticate(reason: 'Verify face or fingerprint to restore backup');
                               setDlgState(() => isAuthenticating = false);
                               if (authenticated) {
-                                final cachedPwd = await sec.getMasterPassword();
-                                if (cachedPwd != null && cachedPwd.isNotEmpty) {
-                                  passwordCtrl.text = cachedPwd;
+                                final currentCachedPwd = await sec.getMasterPassword();
+                                final googleKey = hasGoogleEscrow ? drive.googleAccountKey : null;
+
+                                if (currentCachedPwd != null && currentCachedPwd.isNotEmpty) {
+                                  passwordCtrl.text = currentCachedPwd;
                                   try {
                                     int count = 0;
                                     if (payload.contains('TETHERPASS_SECURE_BACKUP') || payload.contains('CARDVAULT_SECURE_BACKUP')) {
                                       final items = SecureBackupExportService.importVaultWithPassword(
                                         backupPayload: payload,
-                                        userPassword: cachedPwd,
+                                        userPassword: currentCachedPwd,
                                       );
                                       for (final item in items) {
                                         await db.insertItem(item);
                                       }
                                       count = items.length;
                                     } else {
-                                      count = await db.importEncryptedBackup(payload, masterPassword: cachedPwd);
+                                      count = await db.importEncryptedBackup(payload, masterPassword: currentCachedPwd);
                                     }
-                                    await sec.setupVault(masterPassword: cachedPwd, biometricEnabled: true);
+                                    await sec.setupVault(masterPassword: currentCachedPwd, biometricEnabled: true);
                                     if (context.mounted) {
                                       Navigator.pop(dlgCtx);
                                       ScaffoldMessenger.of(context).showSnackBar(
@@ -653,6 +662,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                     }
                                   } catch (e) {
                                     setDlgState(() => errorText = 'Biometric key mismatch. Please enter password or Recovery Key.');
+                                  }
+                                } else if (googleKey != null) {
+                                  // Restore via Google Cloud Escrow
+                                  try {
+                                    final items = SecureBackupExportService.importVaultWithPassword(
+                                      backupPayload: payload,
+                                      googleAccountKey: googleKey,
+                                    );
+                                    for (final item in items) {
+                                      await db.insertItem(item);
+                                    }
+                                    if (context.mounted) {
+                                      Navigator.pop(dlgCtx);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('✓ Cloud Escrow verified! Restored ${items.length} items. Please create your Master Password:'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                      _pageController.animateToPage(1, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                                    }
+                                  } catch (e) {
+                                    setDlgState(() => errorText = 'Google Account escrow mismatch. Please enter password or Recovery Key.');
                                   }
                                 } else {
                                   setDlgState(() => errorText = 'No stored password on this device. Please enter password or Recovery Key.');
@@ -805,7 +837,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final sec = context.read<VaultSecurityService>();
       final db = context.read<DatabaseService>();
       final auth = AuthService();
-      final canBiometrics = await auth.isBiometricAvailable();
+      final cachedPwd = await sec.getMasterPassword();
+      final canBiometrics = await auth.isBiometricAvailable() && cachedPwd != null && cachedPwd.isNotEmpty;
       final passwordCtrl = TextEditingController();
       String? errorText;
       bool isUsingRecoveryKey = false;

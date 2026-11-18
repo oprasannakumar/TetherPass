@@ -659,7 +659,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final drive = context.read<DriveService>();
     final sec = context.read<VaultSecurityService>();
     final auth = AuthService();
-    final canBiometrics = await auth.isBiometricAvailable();
+    final cachedPwd = await sec.getMasterPassword();
+    final hasGoogleEscrow = drive.currentUser != null && payload.contains('wrapped_key_google');
+    final canBiometrics = await auth.isBiometricAvailable() && ((cachedPwd != null && cachedPwd.isNotEmpty) || hasGoogleEscrow);
     final passwordCtrl = TextEditingController();
     String? errorText;
     bool isUsingRecoveryKey = false;
@@ -699,7 +701,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF6F00)))
                           : const Icon(Icons.fingerprint_rounded, size: 22),
                       label: Text(
-                        isAuthenticating ? 'Verifying Biometrics...' : 'Unlock with Biometrics (Face / Touch)',
+                        isAuthenticating
+                            ? 'Verifying Biometrics...'
+                            : (hasGoogleEscrow && (cachedPwd == null || cachedPwd.isEmpty)
+                                ? 'Restore via Google Escrow (Face/Touch)'
+                                : 'Unlock with Biometrics (Face / Touch)'),
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                       onPressed: isAuthenticating
@@ -709,11 +715,11 @@ class _HomeScreenState extends State<HomeScreen> {
                               final authenticated = await auth.authenticate(reason: 'Verify face or fingerprint to restore backup');
                               setDlgState(() => isAuthenticating = false);
                               if (authenticated) {
-                                final cachedPwd = await sec.getMasterPassword();
-                                if (cachedPwd != null && cachedPwd.isNotEmpty) {
-                                  passwordCtrl.text = cachedPwd;
+                                final currentCachedPwd = await sec.getMasterPassword();
+                                if (currentCachedPwd != null && currentCachedPwd.isNotEmpty) {
+                                  passwordCtrl.text = currentCachedPwd;
                                   try {
-                                    final count = await drive.restore(masterPassword: cachedPwd, rawPayload: payload.isNotEmpty ? payload : null);
+                                    final count = await drive.restore(masterPassword: currentCachedPwd, rawPayload: payload.isNotEmpty ? payload : null);
                                     await _loadItems();
                                     if (context.mounted) {
                                       Navigator.pop(dlgCtx);
@@ -726,6 +732,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                     }
                                   } catch (e) {
                                     setDlgState(() => errorText = 'Biometric key mismatch. Please enter password or Recovery Key.');
+                                  }
+                                } else if (hasGoogleEscrow) {
+                                  try {
+                                    final count = await drive.restore(allowGoogleEscrow: true, rawPayload: payload.isNotEmpty ? payload : null);
+                                    await _loadItems();
+                                    if (context.mounted) {
+                                      Navigator.pop(dlgCtx);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('✓ Google Cloud Escrow verified! Restored $count items from Google Drive!'),
+                                          backgroundColor: Colors.green.shade800,
+                                        ),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    setDlgState(() => errorText = 'Google Account escrow mismatch. Please enter password or Recovery Key.');
                                   }
                                 } else {
                                   setDlgState(() => errorText = 'No stored password on this device. Please enter password or Recovery Key.');

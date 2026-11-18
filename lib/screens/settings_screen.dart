@@ -903,7 +903,8 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       // 3. Fallback prompt for password if different or not cached
       if (!mounted) return;
       final auth = AuthService();
-      final canBiometrics = await auth.isBiometricAvailable();
+      final cachedPwd = await sec.getMasterPassword();
+      final canBiometrics = await auth.isBiometricAvailable() && cachedPwd != null && cachedPwd.isNotEmpty;
       final passwordCtrl = TextEditingController();
       String? errorText;
       bool isUsingRecoveryKey = false;
