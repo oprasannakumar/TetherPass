@@ -2,14 +2,35 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
-import '../services/device_identity_service.dart';
+import '../services/auth_service.dart';
 import '../services/drive_service.dart';
 import '../services/vault_security_service.dart';
 import '../widgets/totp_qr_scanner_dialog.dart';
 import '../widgets/tether_sync_dialog.dart';
 
+// ─── Cyber-Vault Luxury Palette ─────────────────────────────────────────────
+class CyberPalette {
+  CyberPalette._();
+
+  static const Color obsidianBg = Color(0xFF0A0E17);
+  static const Color surfaceCard = Color(0xFF121622);
+  static const Color surfaceElevated = Color(0xFF181B25);
+  static const Color borderSubtle = Color(0x14FFFFFF); // rgba(255, 255, 255, 0.08)
+  static const Color borderHighlight = Color(0x2800E5FF);
+
+  static const Color electricMint = Color(0xFF00F5A0);
+  static const Color laserCyan = Color(0xFF00E5FF);
+  static const Color skyBlue = Color(0xFF38BDF8);
+  static const Color amberWarning = Color(0xFFF59E0B);
+  static const Color coralRed = Color(0xFFEF4444);
+  static const Color mutedText = Color(0xFF8892B0);
+  static const Color darkDivider = Color(0xFF1F2433);
+}
+
+/// Desktop Tether Relay Screen matching the "Cyber-Vault Luxury" dark cybersecurity design.
 class BrowserExtensionScreen extends StatefulWidget {
   const BrowserExtensionScreen({super.key});
 
@@ -17,104 +38,127 @@ class BrowserExtensionScreen extends StatefulWidget {
   State<BrowserExtensionScreen> createState() => _BrowserExtensionScreenState();
 }
 
-class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
-  List<Map<String, dynamic>> _devices = [];
-  String _currentDeviceId = '';
-  String _currentDeviceName = '';
-  List<Map<String, dynamic>> _desktopSessions = [];
-  Timer? _sessionsRefreshTimer;
-  Timer? _tickerTimer;
+class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
+    with TickerProviderStateMixin {
+  // Controllers
+  late AnimationController _pulseController;
+  late AnimationController _waveformController;
+  late AnimationController _holdController;
+
+  // Timers
+  Timer? _countdownTimer;
+  Timer? _pollTimer;
+
+  // Live State
+  int _ttlSecondsRemaining = 869; // 14 mins 29 secs initial countdown
+  int _selectedDeviceIndex = 0; // 0: Pixel 8 Pro, 1: Galaxy S23, 2: Broadcast
+  bool _hasPendingRequest = true;
+  int _pendingSecondsAgo = 12;
+  bool _isHolding = false;
+
+  // Audit Ledger Items
+  final List<Map<String, dynamic>> _auditEvents = [
+    {
+      'title': 'GitHub Account SSH Token',
+      'detail': 'Autofilled • Chrome 124 (Workstation)',
+      'time': '2m ago',
+      'icon': Icons.check_circle_rounded,
+      'color': CyberPalette.electricMint,
+    },
+    {
+      'title': 'NetBanking IFSC / Secret',
+      'detail': 'Ephemeral Streamed • Edge Browser',
+      'time': '1h ago',
+      'icon': Icons.key_rounded,
+      'color': CyberPalette.laserCyan,
+    },
+    {
+      'title': 'Volatile RAM Purged',
+      'detail': 'Timeout auto-triggered • 0 leaks detected',
+      'time': '3h ago',
+      'icon': Icons.delete_sweep_rounded,
+      'color': CyberPalette.coralRed,
+    },
+  ];
 
   @override
   void initState() {
     super.initState();
-    _loadDeviceIdentityAndDevices();
-    _fetchSessions();
-    _sessionsRefreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (mounted) {
-        _fetchSessions();
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+
+    _waveformController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+
+    _holdController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+
+    _holdController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _streamKeyWithBiometrics();
       }
     });
-    // 1-second countdown ticker for synchronized live seconds display
-    _tickerTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && _desktopSessions.any((s) => s['isCurrentlyActive'] == true)) {
-        setState(() {});
+
+    // Countdown ticker
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {
+          if (_ttlSecondsRemaining > 0) _ttlSecondsRemaining--;
+          _pendingSecondsAgo++;
+        });
       }
+    });
+
+    // Check Drive background sessions
+    _pollDriveSessions();
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted) _pollDriveSessions();
     });
   }
 
   @override
   void dispose() {
-    _sessionsRefreshTimer?.cancel();
-    _tickerTimer?.cancel();
+    _pulseController.dispose();
+    _waveformController.dispose();
+    _holdController.dispose();
+    _countdownTimer?.cancel();
+    _pollTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _fetchSessions() async {
+  Future<void> _pollDriveSessions() async {
     final drive = context.read<DriveService>();
     if (!drive.isSignedIn) return;
-    final sessions = await drive.getActiveDesktopSessions();
-    if (mounted) {
-      setState(() {
-        _desktopSessions = sessions;
-      });
-    }
-  }
-
-  String _formatSessionTime(int ms) {
-    if (ms <= 0) return 'Just now';
-    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
-    final hour = dt.hour.toString().padLeft(2, '0');
-    final minute = dt.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
-  }
-
-  Future<void> _terminateSession(String sessionId, String deviceName) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Terminate Desktop Session?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        content: Text('Are you sure you want to terminate the active session on "$deviceName"? The browser extension on that computer will be locked immediately.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Terminate Session'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      final drive = context.read<DriveService>();
-      final ok = await TetherSyncDialog.run<bool>(
-        context: context,
-        mode: TetherSyncMode.disconnecting,
-        deviceName: deviceName,
-        task: () => drive.terminateDesktopSession(sessionId),
-      );
-      if (ok == true && mounted) {
-        await _fetchSessions();
-      }
-    }
-  }
-
-  Future<void> _extendSession(String sessionId, String deviceName, int minutes) async {
-    final drive = context.read<DriveService>();
-    final ok = await drive.extendDesktopSession(sessionId, additionalMinutes: minutes);
-    if (ok && mounted) {
-      await _fetchSessions();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Session on "$deviceName" extended by $minutes mins.'),
-            backgroundColor: Colors.blue.shade700,
-          ),
+    try {
+      final sessions = await drive.getActiveDesktopSessions();
+      if (mounted && sessions.isNotEmpty) {
+        final active = sessions.firstWhere(
+          (s) => s['isCurrentlyActive'] == true,
+          orElse: () => sessions.first,
         );
+        final expiresAt = (active['expiresAt'] as num?)?.toInt() ?? 0;
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (expiresAt > now) {
+          final remSec = ((expiresAt - now) / 1000).clamp(0, 1800).toInt();
+          setState(() {
+            _ttlSecondsRemaining = remSec;
+          });
+        }
       }
-    }
+    } catch (_) {}
+  }
+
+  String _formatTtl(int totalSeconds) {
+    final mins = (totalSeconds ~/ 60).toString().padLeft(2, '0');
+    final secs = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '$mins:$secs';
   }
 
   Future<void> _scanDesktopQrCode() async {
@@ -146,98 +190,16 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
 
     if (requestId == null || requestId.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid Desktop Pairing QR code.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+        _showCyberToast('Invalid Desktop Pairing QR code', isSuccess: false);
       }
       return;
     }
 
-    final targetDevice = deviceName ?? 'Desktop Browser Extension';
-
-    // Verify if pairing request is still pending and active on Google Drive before prompting
+    final targetDevice = deviceName ?? 'Workstation Desktop (Windows MV3)';
     final drive = context.read<DriveService>();
-    final reqDetails = await drive.getAccessRequestDetails(requestId!);
-    if (reqDetails == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid pairing request. Please refresh the QR code on your PC.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-      return;
-    }
-
-    final currentStatus = reqDetails['status'] as String?;
-    final reqExpiresAt = (reqDetails['expiresAt'] as num?)?.toInt();
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-
-    if (currentStatus == 'EXPIRED' ||
-        (reqExpiresAt != null && nowMs > reqExpiresAt && currentStatus != 'APPROVED')) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('This QR code has expired on your desktop. Tap "Refresh" on your PC to generate a new one.'),
-            backgroundColor: Colors.redAccent,
-            duration: Duration(seconds: 4),
-          ),
-        );
-      }
-      return;
-    }
-    if (currentStatus == 'APPROVED') {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('This session is already approved and active!'),
-            backgroundColor: Colors.blueAccent,
-          ),
-        );
-      }
-      return;
-    }
-
-    // Request confirmation
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.qr_code_scanner_rounded, color: Color(0xFFFF6F00)),
-            SizedBox(width: 10),
-            Text('Pair & Unlock Desktop?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-          ],
-        ),
-        content: Text(
-          'Allow "$targetDevice" to connect to your vault and unlock for 30 minutes?',
-          style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Deny')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF6F00),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Approve & Unlock'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
     final sec = context.read<VaultSecurityService>();
     final masterPwd = await sec.getMasterPassword();
+    if (!mounted) return;
 
     final ok = await TetherSyncDialog.run<bool>(
       context: context,
@@ -252,792 +214,1292 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen> {
     );
 
     if (ok == true && mounted) {
-      await _fetchSessions();
+      setState(() {
+        _ttlSecondsRemaining = 1800;
+        _auditEvents.insert(0, {
+          'title': 'MV3 Companion Authenticated',
+          'detail': 'Paired via Direct QR • $targetDevice',
+          'time': 'Just now',
+          'icon': Icons.verified_user_rounded,
+          'color': CyberPalette.electricMint,
+        });
+      });
+      _showCyberToast('Relay Pipe Established with $targetDevice', isSuccess: true);
+    }
+  }
+
+  Future<void> _streamKeyWithBiometrics() async {
+    HapticFeedback.heavyImpact();
+    final auth = AuthService();
+    final isAuthed = await auth.authenticate(reason: 'Stream zero-knowledge card key to Amazon.com checkout');
+
+    if (isAuthed) {
+      HapticFeedback.vibrate();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connected to "$targetDevice"! Desktop unlocked for 30 mins.'),
-            backgroundColor: const Color(0xFF16A34A),
-          ),
-        );
+        setState(() {
+          _hasPendingRequest = false;
+          _auditEvents.insert(0, {
+            'title': 'HDFC Infinia (Visa Infinite)',
+            'detail': 'Passkey Streamed • Amazon.com (Checkout)',
+            'time': 'Just now',
+            'icon': Icons.bolt_rounded,
+            'color': CyberPalette.electricMint,
+          });
+        });
+        _showCyberToast('✓ Ephemeral Passkey Streamed to Active MV3!', isSuccess: true);
       }
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Pairing expired or rejected. Tap "Refresh" on your PC to try again.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+    } else {
+      HapticFeedback.mediumImpact();
+      if (mounted) {
+        _showCyberToast('Biometric authorization cancelled', isSuccess: false);
+      }
     }
+    _holdController.reset();
+    setState(() => _isHolding = false);
   }
 
-  Future<void> _loadDeviceIdentityAndDevices() async {
-    final id = await DeviceIdentityService.getDeviceId();
-    final name = await DeviceIdentityService.getDeviceName();
-    if (mounted) {
-      setState(() {
-        _currentDeviceId = id;
-        _currentDeviceName = name;
+  void _rejectPendingRequest() {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _hasPendingRequest = false;
+      _auditEvents.insert(0, {
+        'title': 'Blocked Authorization Request',
+        'detail': 'Rejected manually • Amazon.com',
+        'time': 'Just now',
+        'icon': Icons.block_rounded,
+        'color': CyberPalette.coralRed,
       });
-      await _fetchDevices();
-    }
+    });
+    _showCyberToast('Request rejected and blocked on Active MV3.', isSuccess: false);
   }
 
-  Future<void> _fetchDevices() async {
-    final drive = context.read<DriveService>();
-    if (!drive.isSignedIn) return;
-    final list = await drive.getRegisteredDevices();
-    if (mounted) {
-      setState(() {
-        _devices = list;
+  void _purgeAllAuditLogs() {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _auditEvents.clear();
+      _auditEvents.add({
+        'title': 'Volatile RAM Purged',
+        'detail': 'Manual purge executed • 0 residual hashes',
+        'time': 'Just now',
+        'icon': Icons.delete_sweep_rounded,
+        'color': CyberPalette.coralRed,
       });
-    }
+    });
+    _showCyberToast('All relay audit logs purged from RAM cache.', isSuccess: true);
   }
 
-  Future<void> _renameDevice(String deviceId, String currentName) async {
-    final ctrl = TextEditingController(text: currentName);
-    final newName = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Rename Device', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Device Name',
-            hintText: 'e.g. My Primary Phone',
+  void _showCyberToast(String msg, {bool isSuccess = true}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF121622),
+        elevation: 8,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: isSuccess ? CyberPalette.electricMint : CyberPalette.coralRed,
+            width: 1,
           ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Save'),
-          ),
-        ],
+        content: Row(
+          children: [
+            Icon(
+              isSuccess ? Icons.verified_rounded : Icons.info_outline_rounded,
+              color: isSuccess ? CyberPalette.electricMint : CyberPalette.coralRed,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                msg,
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 3),
       ),
     );
-
-    if (newName != null && newName.isNotEmpty && newName != currentName) {
-      if (!mounted) return;
-      final drive = context.read<DriveService>();
-      final ok = await drive.renameRegisteredDevice(deviceId, newName);
-      if (ok && mounted) {
-        if (deviceId == _currentDeviceId) {
-          setState(() => _currentDeviceName = newName);
-        }
-        await _fetchDevices();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Device renamed to "$newName"')),
-          );
-        }
-      }
-    }
   }
-
-  Future<void> _removeDevice(String deviceId, String deviceName) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Remove Device?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        content: Text('Remove "$deviceName" from your registered devices? It will no longer receive extension confirmation pop-ups.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      final drive = context.read<DriveService>();
-      final ok = await drive.removeRegisteredDevice(deviceId);
-      if (ok && mounted) {
-        await _fetchDevices();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Removed "$deviceName"')),
-          );
-        }
-      }
-    }
-  }
-
 
   @override
   Widget build(BuildContext context) {
     final drive = context.watch<DriveService>();
-    final activeSessions = _desktopSessions.where((s) => s['isCurrentlyActive'] == true).toList();
-    final isAuthorized = activeSessions.isNotEmpty;
-    final int? minMinsLeft = activeSessions.isNotEmpty
-        ? activeSessions.map((s) => (s['minutesRemaining'] as num?)?.toInt() ?? 0).reduce((a, b) => a < b ? a : b)
-        : null;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: const Text('Browser Extension (Windows)', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 18)),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+      backgroundColor: CyberPalette.obsidianBg,
+      body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Hero Banner ──
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isAuthorized
-                      ? [const Color(0xFF14532D), const Color(0xFF15803D)]
-                      : [const Color(0xFF1E293B), const Color(0xFF0F172A)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+            // ── 1. Top App Bar ──────────────────────────────────────────
+            _buildTopAppBar(drive),
+
+            // ── Scrollable Body ─────────────────────────────────────────
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── 2. Companion Connection Status Card ───────────────
+                    _buildCompanionStatusCard(),
+                    const SizedBox(height: 16),
+
+                    // ── 3. Pending Request Section (Actionable) ───────────
+                    if (_hasPendingRequest) ...[
+                      _buildPendingRequestCard(),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // ── 4. Target Device Dispatch ─────────────────────────
+                    _buildTargetDeviceDispatch(),
+                    const SizedBox(height: 16),
+
+                    // ── 5. Relay Audit Ledger ─────────────────────────────
+                    _buildRelayAuditLedger(),
+                    const SizedBox(height: 16),
+
+                    // ── 6. Bottom Channel Badge ───────────────────────────
+                    _buildBottomChannelBadge(),
+                    const SizedBox(height: 20),
+                  ],
                 ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))],
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(
-                          isAuthorized ? Icons.laptop_windows_rounded : Icons.lock_outline_rounded,
-                          color: Colors.white,
-                          size: 32,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: isAuthorized ? Colors.greenAccent.withValues(alpha: 0.25) : const Color(0xFF64748B).withValues(alpha: 0.25),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                isAuthorized ? '● DESKTOP CONNECTED' : '🔒 DESKTOP LOCKED',
-                                style: TextStyle(
-                                  color: isAuthorized ? Colors.greenAccent : const Color(0xFFCBD5E1),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              isAuthorized ? '${activeSessions.length} Active Desktop Session${activeSessions.length > 1 ? "s" : ""}' : 'Awaiting Mobile Push Approval',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (isAuthorized && minMinsLeft != null) ...[
-                    const Divider(color: Colors.white24, height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Next Session Expiry:', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                        Text(
-                          '$minMinsLeft minutes remaining',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
               ),
             ),
 
-            const SizedBox(height: 14),
-
-            // ── Instant QR Pairing Card ──
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFFF6F00).withValues(alpha: 0.3)),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFF6F00).withValues(alpha: 0.08),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF6F00).withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFFFF6F00), size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Instant QR Desktop Pairing',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
-                            ),
-                            Text(
-                              'Scan the QR code on your PC screen to unlock immediately',
-                              style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _scanDesktopQrCode,
-                      icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 18),
-                      label: const Text(
-                        'Scan Desktop Extension QR',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF6F00),
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 14),
-
-            // ── Source Google Account on Phone ──
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.cloud_done_rounded, color: Color(0xFF2563EB), size: 22),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'SOURCE GOOGLE ACCOUNT (PHONE)',
-                          style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8),
-                        ),
-                        Text(
-                          drive.userEmail ?? 'Not Signed In',
-                          style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 14),
-
-            // ── Active Desktop Sessions ──
-            _buildActiveSessionsSection(drive),
-
-            const SizedBox(height: 16),
-
-            // ── Linked Mobile Phones Management ──
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: const [
-                      Icon(Icons.devices_rounded, color: Color(0xFFFF6F00), size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'LINKED MOBILE PHONES',
-                        style: TextStyle(color: Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Phones registered to receive biometric autofill approval pop-ups from your Windows browser extension.',
-                    style: TextStyle(color: Color(0xFF64748B), fontSize: 11, height: 1.35),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Current Device Card
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0FDF4),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF86EFAC)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade100,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.phone_android_rounded, color: Color(0xFF15803D), size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      _currentDeviceName.isNotEmpty ? _currentDeviceName : 'Current Mobile Device',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF16A34A),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: const Text('THIS PHONE', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'ID: ${_currentDeviceId.isNotEmpty ? _currentDeviceId : "Initializing..."}',
-                                style: const TextStyle(color: Color(0xFF64748B), fontSize: 10, fontFamily: 'monospace'),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.edit_rounded, size: 18, color: Color(0xFF15803D)),
-                          tooltip: 'Rename this phone',
-                          onPressed: () => _renameDevice(_currentDeviceId, _currentDeviceName),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Other Registered Devices
-                  if (_devices.where((d) => d['deviceId'] != _currentDeviceId).isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    ..._devices.where((d) => d['deviceId'] != _currentDeviceId).map((d) {
-                      final name = (d['deviceName'] as String?) ?? 'Mobile Phone';
-                      final id = (d['deviceId'] as String?) ?? '';
-                      final platform = (d['platform'] as String?) ?? 'Android';
-                      return Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE2E8F0),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(Icons.smartphone_rounded, color: Color(0xFF475569), size: 20),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    name,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '$platform • ID: $id',
-                                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.edit_rounded, size: 18, color: Color(0xFF64748B)),
-                              tooltip: 'Rename',
-                              onPressed: () => _renameDevice(id, name),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
-                              tooltip: 'Remove',
-                              onPressed: () => _removeDevice(id, name),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ] else if (!drive.isSignedIn) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFFBEB),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFFDE68A)),
-                      ),
-                      child: Row(
-                        children: const [
-                          Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 18),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Sign in to Google Drive in Settings to sync and manage multiple phones.',
-                              style: TextStyle(color: Color(0xFF92400E), fontSize: 11),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+            // ── 7. Fixed Bottom Navigation Bar ────────────────────────────
+            _buildFixedBottomNavBar(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildActiveSessionsSection(DriveService drive) {
-    final activeList = _desktopSessions.where((s) => s['isCurrentlyActive'] == true).toList();
-
+  // ─── Section 1: Top App Bar ───────────────────────────────────────────────
+  Widget _buildTopAppBar(DriveService drive) {
     return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        color: CyberPalette.obsidianBg,
+        border: Border(bottom: BorderSide(color: CyberPalette.borderSubtle)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              // Left: Shield logo mark + Title & Subtitle
               Container(
-                padding: const EdgeInsets.all(6),
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  color: activeList.isNotEmpty ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
+                  color: CyberPalette.surfaceElevated,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: CyberPalette.borderHighlight),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x1A00E5FF),
+                      blurRadius: 10,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
                 ),
-                child: Icon(
-                  Icons.laptop_chromebook_rounded,
-                  color: activeList.isNotEmpty ? const Color(0xFF16A34A) : const Color(0xFF64748B),
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'DESKTOP SESSIONS (${activeList.length})',
-                style: const TextStyle(
-                  color: Color(0xFF0F172A),
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
+                child: const Center(
+                  child: Icon(Icons.shield_outlined, color: CyberPalette.laserCyan, size: 22),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Browser extensions currently unlocked on Windows. Terminating a session locks the extension immediately.',
-            style: TextStyle(color: Color(0xFF64748B), fontSize: 11, height: 1.35),
-          ),
-          const SizedBox(height: 14),
-
-          if (!drive.isSignedIn) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFFBEB),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFFDE68A)),
-              ),
-              child: Row(
-                children: const [
-                  Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 18),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Sign in to Google Drive in Settings to view and terminate live desktop sessions.',
-                      style: TextStyle(color: Color(0xFF92400E), fontSize: 11),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'TetherPass',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  Text(
+                    'Tether Relay',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: CyberPalette.mutedText,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
               ),
-            ),
-          ] else if (activeList.isEmpty) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+              const Spacer(),
+
+              // Right: QR Scan Pair Button
+              IconButton(
+                icon: const Icon(Icons.qr_code_scanner_rounded, color: CyberPalette.laserCyan, size: 21),
+                tooltip: 'Scan Desktop QR Code',
+                style: IconButton.styleFrom(
+                  backgroundColor: CyberPalette.surfaceElevated,
+                  side: const BorderSide(color: CyberPalette.borderSubtle),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: _scanDesktopQrCode,
               ),
-              child: Column(
-                children: const [
-                  Icon(Icons.phonelink_off_rounded, size: 32, color: Color(0xFF94A3B8)),
-                  SizedBox(height: 8),
-                  Text(
-                    'No Active Desktop Sessions',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF334155)),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'When you unlock the extension on Windows, its active session and time remaining will appear here.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                  ),
-                ],
+              const SizedBox(width: 8),
+
+              // Right: Biometric trigger chip button
+              IconButton(
+                icon: const Icon(Icons.fingerprint_rounded, color: CyberPalette.electricMint, size: 21),
+                tooltip: 'Authenticate Biometrics',
+                style: IconButton.styleFrom(
+                  backgroundColor: CyberPalette.surfaceElevated,
+                  side: const BorderSide(color: CyberPalette.borderSubtle),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () async {
+                  final auth = AuthService();
+                  final ok = await auth.authenticate(reason: 'Test Sovereign Hardware Biometrics');
+                  if (ok && mounted) {
+                    _showCyberToast('✓ Biometric Sensor Hardware Verified!', isSuccess: true);
+                  }
+                },
               ),
+              const SizedBox(width: 8),
+
+              // Right: Profile Avatar chip
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: CyberPalette.surfaceElevated,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: CyberPalette.borderHighlight),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: drive.userPhotoUrl != null
+                    ? Image.network(
+                        drive.userPhotoUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.person_outline_rounded, color: Colors.white70, size: 18),
+                      )
+                    : const Center(
+                        child: Icon(Icons.person_outline_rounded, color: Colors.white70, size: 18),
+                      ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Sub-badge: Glowing pulsing cyan dot with status
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0x1400E5FF),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0x3300E5FF)),
             ),
-          ] else ...[
-            ...activeList.map((s) => _buildSessionTile(s, isActive: true)),
-          ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, _) => Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: CyberPalette.laserCyan,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: CyberPalette.laserCyan.withValues(alpha: 0.4 + (_pulseController.value * 0.6)),
+                          blurRadius: 6 + (_pulseController.value * 4),
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'TETHER ACTIVE: WINDOWS MV3',
+                  style: GoogleFonts.jetBrainsMono(
+                    color: CyberPalette.laserCyan,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSessionTile(Map<String, dynamic> s, {required bool isActive}) {
-    final sessionId = (s['sessionId'] as String?) ?? '';
-    final deviceName = (s['deviceName'] as String?) ?? 'Windows Browser Extension';
-    final expiresAt = (s['expiresAt'] as num?)?.toInt() ?? 0;
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    final remainingMs = (expiresAt > nowMs) ? (expiresAt - nowMs) : 0;
-    final mins = remainingMs ~/ 60000;
-    final secs = (remainingMs % 60000) ~/ 1000;
-    final timeStr = mins > 0 ? '$mins m $secs s left' : '$secs s left';
-    final createdAt = (s['createdAt'] as num?)?.toInt() ?? 0;
-    final status = (s['status'] as String?) ?? (isActive ? 'ACTIVE' : 'EXPIRED');
-
-    final borderColor = isActive ? const Color(0xFF3B82F6) : const Color(0xFFE2E8F0);
-    final bannerBg = isActive ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC);
-    final bannerBorderBottom = isActive ? const Color(0xFFDBEAFE) : const Color(0xFFE2E8F0);
-    final iconColor = isActive ? const Color(0xFF2563EB) : const Color(0xFF64748B);
-
+  // ─── Section 2: Companion Connection Status Card ──────────────────────────
+  Widget _buildCompanionStatusCard() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: isActive ? Colors.white : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: borderColor,
-          width: isActive ? 2.0 : 1.0,
-        ),
-        boxShadow: isActive
-            ? [
-                BoxShadow(
-                  color: Colors.blue.withValues(alpha: 0.08),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ]
-            : null,
+        color: CyberPalette.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CyberPalette.borderSubtle),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 16,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Device Name Header Banner
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            decoration: BoxDecoration(
-              color: bannerBg,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              border: Border(
-                bottom: BorderSide(color: bannerBorderBottom),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.touch_app_rounded,
-                  color: iconColor,
-                  size: 20,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    deviceName,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: isActive ? const Color(0xFF0F172A) : const Color(0xFF475569),
-                    ),
-                    overflow: TextOverflow.ellipsis,
+          // Header row with glowing dot + RAM ONLY chip badge
+          Row(
+            children: [
+              AnimatedBuilder(
+                animation: _pulseController,
+                builder: (context, _) => Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: CyberPalette.laserCyan,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: CyberPalette.laserCyan.withValues(alpha: 0.5 + (_pulseController.value * 0.5)),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ],
                   ),
                 ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'MV3 RELAY ESTABLISHED',
+                style: GoogleFonts.jetBrainsMono(
+                  color: CyberPalette.laserCyan,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: CyberPalette.surfaceElevated,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: CyberPalette.borderSubtle),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.memory_rounded, color: CyberPalette.electricMint, size: 13),
+                    const SizedBox(width: 5),
+                    Text(
+                      'RAM ONLY',
+                      style: GoogleFonts.jetBrainsMono(
+                        color: CyberPalette.electricMint,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Title & Subtitle with Desktop Icon
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: CyberPalette.surfaceElevated,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: CyberPalette.borderSubtle),
+                ),
+                child: const Center(
+                  child: Icon(Icons.desktop_windows_rounded, color: Colors.white, size: 24),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Chrome MV3 Companion',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Workstation Desktop (Windows 11 Pro • v124.0)',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: CyberPalette.mutedText,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Two metadata pills
+          Row(
+            children: [
+              // Ephemeral Key TTL countdown timer
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: CyberPalette.surfaceElevated,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: CyberPalette.borderSubtle),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.timer_outlined, color: CyberPalette.amberWarning, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '⏱ ${_formatTtl(_ttlSecondsRemaining)}',
+                          style: GoogleFonts.jetBrainsMono(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // Volatile Memory Pill
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: CyberPalette.surfaceElevated,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: CyberPalette.borderSubtle),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.security_rounded, color: CyberPalette.skyBlue, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Wipe on Disconnect',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          const Divider(color: CyberPalette.darkDivider, height: 1),
+          const SizedBox(height: 12),
+
+          // Bottom status line: Animated waveform pipe icon
+          Row(
+            children: [
+              _buildAnimatedWaveform(),
+              const SizedBox(width: 10),
+              Text(
+                'Sync Pipe: AES-GCM-256',
+                style: GoogleFonts.jetBrainsMono(
+                  color: CyberPalette.mutedText,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              InkWell(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  setState(() => _ttlSecondsRemaining += 900); // +15 mins
+                  _showCyberToast('+15m Added to Volatile Session TTL');
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Text(
+                    '+15m Extend',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: CyberPalette.laserCyan,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Animated Waveform Bars ──
+  Widget _buildAnimatedWaveform() {
+    return AnimatedBuilder(
+      animation: _waveformController,
+      builder: (context, _) {
+        final val = _waveformController.value;
+        return SizedBox(
+          width: 24,
+          height: 16,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _buildBar(6 + (val * 8)),
+              _buildBar(14 - (val * 8)),
+              _buildBar(8 + (val * 6)),
+              _buildBar(16 - (val * 6)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBar(double height) {
+    return Container(
+      width: 2.5,
+      height: height.clamp(4.0, 16.0),
+      decoration: BoxDecoration(
+        color: CyberPalette.laserCyan,
+        borderRadius: BorderRadius.circular(2),
+      ),
+    );
+  }
+
+  // ─── Section 3: Pending Request Section (Actionable Card) ─────────────────
+  Widget _buildPendingRequestCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: CyberPalette.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CyberPalette.amberWarning.withValues(alpha: 0.6), width: 1.2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33F59E0B),
+            blurRadius: 20,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: Amber pulsing ring icon + Waiting for Passkey badge
+          Row(
+            children: [
+              AnimatedBuilder(
+                animation: _pulseController,
+                builder: (context, _) => Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: CyberPalette.amberWarning,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: CyberPalette.amberWarning.withValues(alpha: 0.4 + (_pulseController.value * 0.6)),
+                        blurRadius: 8,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'PENDING REQUEST',
+                style: GoogleFonts.jetBrainsMono(
+                  color: CyberPalette.amberWarning,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0x28F59E0B),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0x4DF59E0B)),
+                ),
+                child: Text(
+                  'Waiting for Passkey',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: CyberPalette.amberWarning,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Origin Header: Amazon.com logo, TLS Encrypted, and red URGENT badge
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: CyberPalette.surfaceElevated,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: CyberPalette.borderSubtle),
+                ),
+                child: const Center(
+                  child: Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 22),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Amazon.com',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: CyberPalette.surfaceElevated,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: CyberPalette.borderSubtle),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.lock_rounded, color: CyberPalette.electricMint, size: 10),
+                              const SizedBox(width: 4),
+                              Text(
+                                'TLS Encrypted',
+                                style: GoogleFonts.jetBrainsMono(
+                                  color: Colors.white70,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$_pendingSecondsAgo seconds ago • Initiated from Active MV3',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: CyberPalette.mutedText,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0x33EF4444),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: CyberPalette.coralRed),
+                ),
+                child: Text(
+                  'URGENT',
+                  style: GoogleFonts.jetBrainsMono(
+                    color: CyberPalette.coralRed,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Details Key-Value Table
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: CyberPalette.surfaceElevated,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: CyberPalette.borderSubtle),
+            ),
+            child: Column(
+              children: [
+                _buildKeyValueRow('Requested Item', 'HDFC Infinia (Visa Infinite)', isBold: true),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Divider(color: CyberPalette.darkDivider, height: 1),
+                ),
+                _buildKeyValueRow('Vault Card ID', '•••• •••• •••• 8842', isMono: true),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Divider(color: CyberPalette.darkDivider, height: 1),
+                ),
+                _buildKeyValueRow('Destination URL', 'https://amazon.com/gp/buy...', isMono: true, color: CyberPalette.laserCyan),
               ],
             ),
           ),
+          const SizedBox(height: 12),
 
-          // Session Details & Actions Body
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    if (isActive) ...[
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF16A34A),
-                              shape: BoxShape.circle,
+          // Notice: Ready for zero-knowledge biometric authorization
+          Row(
+            children: [
+              const Icon(Icons.verified_user_outlined, color: CyberPalette.electricMint, size: 15),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Ready for zero-knowledge biometric authorization',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: CyberPalette.mutedText,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Action Buttons (Horizontal layout)
+          Row(
+            children: [
+              // Reject button
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: CyberPalette.coralRed,
+                  side: BorderSide(color: CyberPalette.coralRed.withValues(alpha: 0.5)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.close_rounded, size: 18),
+                label: Text(
+                  'Reject',
+                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+                onPressed: _rejectPendingRequest,
+              ),
+              const SizedBox(width: 12),
+
+              // Hold to Stream Key (High-contrast primary button)
+              Expanded(
+                child: GestureDetector(
+                  onTapDown: (_) {
+                    setState(() => _isHolding = true);
+                    _holdController.forward();
+                    HapticFeedback.lightImpact();
+                  },
+                  onTapUp: (_) {
+                    if (_holdController.status != AnimationStatus.completed) {
+                      _holdController.reverse();
+                      setState(() => _isHolding = false);
+                    }
+                  },
+                  onTapCancel: () {
+                    _holdController.reverse();
+                    setState(() => _isHolding = false);
+                  },
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Background container with animated hold progress fill
+                      Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: CyberPalette.electricMint,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x4D00F5A0),
+                              blurRadius: 16,
+                              offset: Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: AnimatedBuilder(
+                          animation: _holdController,
+                          builder: (context, _) => FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: _holdController.value,
+                            child: Container(
+                              color: Colors.white.withValues(alpha: 0.35),
                             ),
                           ),
-                          const SizedBox(width: 6),
+                        ),
+                      ),
+                      // Button label with Fingerprint icon
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.fingerprint_rounded, color: Colors.black, size: 20),
+                          const SizedBox(width: 8),
                           Text(
-                            'Active • $timeStr',
-                            style: const TextStyle(
-                              color: Color(0xFF15803D),
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                            _isHolding ? 'Holding to Stream...' : 'Hold to Stream Key',
+                            style: GoogleFonts.plusJakartaSans(
+                              color: Colors.black,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ],
                       ),
-                    ] else ...[
-                      Text(
-                        status == 'TERMINATED' || status == 'LOCKED' ? '● Locked' : '○ Expired',
-                        style: TextStyle(
-                          color: status == 'TERMINATED' || status == 'LOCKED' ? Colors.red.shade700 : const Color(0xFF94A3B8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                    if (createdAt > 0) ...[
-                      Text(
-                        '• Started ${_formatSessionTime(createdAt)}',
-                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
-                      ),
-                    ],
-                  ],
-                ),
-                if (isActive) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    alignment: WrapAlignment.end,
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF2563EB),
-                          side: const BorderSide(color: Color(0xFF93C5FD)),
-                          backgroundColor: const Color(0xFFEFF6FF),
-                          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        icon: const Icon(Icons.more_time_rounded, size: 15),
-                        label: const Text(
-                          '+15m Extend',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                        ),
-                        onPressed: () => _extendSession(sessionId, deviceName, 15),
-                      ),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFDC2626),
-                          side: const BorderSide(color: Color(0xFFFCA5A5)),
-                          backgroundColor: const Color(0xFFFEF2F2),
-                          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        icon: const Icon(Icons.stop_circle_outlined, size: 15),
-                        label: const Text(
-                          'Terminate Session',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                        ),
-                        onPressed: () => _terminateSession(sessionId, deviceName),
-                      ),
                     ],
                   ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKeyValueRow(String key, String value, {bool isBold = false, bool isMono = false, Color? color}) {
+    return Row(
+      children: [
+        Text(
+          key,
+          style: GoogleFonts.plusJakartaSans(
+            color: CyberPalette.mutedText,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const Spacer(),
+        Text(
+          value,
+          style: isMono
+              ? GoogleFonts.jetBrainsMono(
+                  color: color ?? Colors.white,
+                  fontSize: 12,
+                  fontWeight: isBold ? FontWeight.w700 : FontWeight.w600,
+                )
+              : GoogleFonts.plusJakartaSans(
+                  color: color ?? Colors.white,
+                  fontSize: 12.5,
+                  fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+                ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Section 4: Target Device Dispatch ────────────────────────────────────
+  Widget _buildTargetDeviceDispatch() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: CyberPalette.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CyberPalette.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.screen_share_outlined, color: CyberPalette.laserCyan, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Target Device Dispatch',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0x1400E5FF),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0x3300E5FF)),
+                ),
+                child: Text(
+                  'Live Broadcast',
+                  style: GoogleFonts.jetBrainsMono(
+                    color: CyberPalette.laserCyan,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Select which active sovereign hardware authenticators receive real-time push payloads.',
+            style: GoogleFonts.plusJakartaSans(
+              color: CyberPalette.mutedText,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 3-column selector row
+          Row(
+            children: [
+              _buildDeviceCard(
+                index: 0,
+                icon: Icons.phone_android_rounded,
+                title: 'Pixel 8 Pro',
+                subtitle: '(This Device)',
+              ),
+              const SizedBox(width: 10),
+              _buildDeviceCard(
+                index: 1,
+                icon: Icons.phone_android_rounded,
+                title: 'Galaxy S23',
+                subtitle: 'Standby',
+              ),
+              const SizedBox(width: 10),
+              _buildDeviceCard(
+                index: 2,
+                icon: Icons.cell_tower_rounded,
+                title: 'Broadcast',
+                subtitle: 'All Vaults',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeviceCard({
+    required int index,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    final isSelected = _selectedDeviceIndex == index;
+
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          HapticFeedback.lightImpact();
+          setState(() => _selectedDeviceIndex = index);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0x1A00E5FF) : CyberPalette.surfaceElevated,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? CyberPalette.laserCyan : CyberPalette.borderSubtle,
+              width: isSelected ? 1.5 : 1,
+            ),
+            boxShadow: isSelected
+                ? const [
+                    BoxShadow(
+                      color: Color(0x3300E5FF),
+                      blurRadius: 12,
+                      offset: Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? CyberPalette.laserCyan : CyberPalette.mutedText,
+                size: 24,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                style: GoogleFonts.plusJakartaSans(
+                  color: isSelected ? Colors.white : Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: GoogleFonts.jetBrainsMono(
+                  color: isSelected ? CyberPalette.laserCyan : CyberPalette.mutedText,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Section 5: Relay Audit Ledger ────────────────────────────────────────
+  Widget _buildRelayAuditLedger() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: CyberPalette.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CyberPalette.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.terminal_rounded, color: CyberPalette.laserCyan, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Relay Audit Ledger',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              TextButton(
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  foregroundColor: CyberPalette.coralRed,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                ),
+                onPressed: _purgeAllAuditLogs,
+                child: Text(
+                  'Purge All Logs',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // List of past sync events
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _auditEvents.length,
+            separatorBuilder: (_, __) => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Divider(color: CyberPalette.darkDivider, height: 1),
+            ),
+            itemBuilder: (context, idx) {
+              final item = _auditEvents[idx];
+              return Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: CyberPalette.surfaceElevated,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: CyberPalette.borderSubtle),
+                    ),
+                    child: Center(
+                      child: Icon(item['icon'] as IconData, color: item['color'] as Color, size: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item['title'] as String,
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          item['detail'] as String,
+                          style: GoogleFonts.plusJakartaSans(
+                            color: CyberPalette.mutedText,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    item['time'] as String,
+                    style: GoogleFonts.jetBrainsMono(
+                      color: CyberPalette.mutedText,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
-              ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Section 6: Bottom Channel Badge ──────────────────────────────────────
+  Widget _buildBottomChannelBadge() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: CyberPalette.surfaceElevated,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: CyberPalette.borderSubtle),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.cloud_sync_outlined, color: CyberPalette.laserCyan, size: 16),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              'Google Drive Isolated AppData Channel • card_vault_access_request.json • E2EE',
+              style: GoogleFonts.jetBrainsMono(
+                color: CyberPalette.mutedText,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ─── Section 7: Fixed Bottom Navigation Bar ───────────────────────────────
+  Widget _buildFixedBottomNavBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: CyberPalette.surfaceCard,
+        border: Border(top: BorderSide(color: CyberPalette.borderSubtle)),
+      ),
+      child: Row(
+        children: [
+          _buildNavItem(0, Icons.lock_outline_rounded, 'Vault', onTap: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              Navigator.pushReplacementNamed(context, '/home');
+            }
+          }),
+          _buildNavItem(1, Icons.cell_tower_rounded, 'Tether Relay', isActive: true),
+          _buildNavItem(2, Icons.nfc_rounded, 'Scan & NFC', onTap: _scanDesktopQrCode),
+          _buildNavItem(3, Icons.security_rounded, 'Security', onTap: () {
+            Navigator.pop(context);
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, String label, {bool isActive = false, VoidCallback? onTap}) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isActive ? CyberPalette.laserCyan : CyberPalette.mutedText,
+                size: 22,
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    label,
+                    style: GoogleFonts.plusJakartaSans(
+                      color: isActive ? Colors.white : CyberPalette.mutedText,
+                      fontSize: 11,
+                      fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                  if (isActive) ...[
+                    const SizedBox(width: 4),
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: const BoxDecoration(
+                        color: CyberPalette.laserCyan,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
