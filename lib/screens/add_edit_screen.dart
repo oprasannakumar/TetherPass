@@ -2752,33 +2752,6 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                   ],
                 ),
                 const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _scanTotpQrCode,
-                        icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.black, size: 18),
-                        label: Text(
-                          'SCAN 2FA SETUP QR MATRIX',
-                          style: GoogleFonts.rajdhani(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: CyberColors.laserCyan,
-                          foregroundColor: Colors.black,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
                 TextField(
                   controller: _pwdTotpCtrl,
                   textCapitalization: TextCapitalization.characters,
@@ -2800,17 +2773,17 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                     fillColor: CyberColors.obsidianBg.withValues(alpha: 0.6),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: CyberColors.laserCyan, width: 1.5)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: CyberColors.electricMint, width: 1.5)),
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.qr_code_scanner_rounded, color: CyberColors.laserCyan, size: 20),
+                          icon: const Icon(Icons.qr_code_scanner_rounded, color: CyberColors.electricMint, size: 20),
                           tooltip: 'Scan QR Code',
                           onPressed: _scanTotpQrCode,
                         ),
                         IconButton(
-                          icon: const Icon(Icons.paste_rounded, color: CyberColors.laserCyan, size: 20),
+                          icon: const Icon(Icons.paste_rounded, color: CyberColors.electricMint, size: 20),
                           tooltip: 'Paste 2FA Secret Key',
                           onPressed: () async {
                             final data = await Clipboard.getData(Clipboard.kTextPlain);
