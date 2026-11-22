@@ -241,7 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.computer_rounded, size: 16, color: CyberColors.laserCyan),
+                        const Icon(Icons.computer_rounded, size: 16, color: CyberColors.electricMint),
                         const SizedBox(width: 6),
                         Text(
                           'REQUESTING DEVICE:',
@@ -249,7 +249,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.5,
-                            color: CyberColors.laserCyan,
+                            color: CyberColors.electricMint,
                           ),
                         ),
                       ],
@@ -422,7 +422,7 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: CyberColors.cardSurface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: CyberColors.laserCyan, width: 1.2),
+            side: const BorderSide(color: Color(0xFF1E293B), width: 1.2),
           ),
           title: Text(
             'VERIFY MASTER PASSWORD',
@@ -444,14 +444,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: CyberTypography.body(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: 'Master Password',
-                  labelStyle: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 12),
+                  labelStyle: CyberTypography.mono(color: CyberColors.electricMint, fontSize: 12),
                   errorText: errorText,
                   errorStyle: CyberTypography.mono(color: CyberColors.crimsonAlert, fontSize: 10),
                   filled: true,
                   fillColor: CyberColors.elevatedSurface,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: CyberColors.glassBorderMuted)),
                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: CyberColors.glassBorderMuted)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: CyberColors.laserCyan, width: 1.4)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: CyberColors.electricMint, width: 1.4)),
                 ),
               ),
             ],
@@ -463,7 +463,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: CyberColors.laserCyan,
+                backgroundColor: CyberColors.electricMint,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: () async {

@@ -240,11 +240,11 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
 
     return Container(
       height: size.height * 0.85,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: CyberColors.cardSurface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         border: Border(
-          top: BorderSide(color: CyberColors.laserCyan.withValues(alpha: 0.4), width: 1.5),
+          top: BorderSide(color: Color(0xFF1E293B), width: 1.5),
         ),
       ),
       child: Column(
@@ -255,7 +255,7 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
             width: 44,
             height: 4,
             decoration: BoxDecoration(
-              color: CyberColors.laserCyan.withValues(alpha: 0.4),
+              color: CyberColors.glassBorderMuted,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -268,12 +268,12 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: CyberColors.laserCyan.withValues(alpha: 0.15),
+                    color: CyberColors.electricMint.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
                     Icons.qr_code_scanner_rounded,
-                    color: CyberColors.laserCyan,
+                    color: CyberColors.electricMint,
                     size: 22,
                   ),
                 ),

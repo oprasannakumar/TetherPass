@@ -267,7 +267,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
         backgroundColor: CyberColors.cardSurface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: CyberColors.laserCyan, width: 1.2),
+          side: const BorderSide(color: Color(0xFF1E293B), width: 1.2),
         ),
         title: Text(
           'RENAME DEVICE',
@@ -279,7 +279,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
           style: CyberTypography.body(color: Colors.white),
           decoration: InputDecoration(
             labelText: 'Device Name',
-            labelStyle: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 12),
+            labelStyle: CyberTypography.mono(color: CyberColors.electricMint, fontSize: 12),
             hintText: 'e.g. Workstation or Personal Phone',
             hintStyle: CyberTypography.mono(color: CyberColors.textDim, fontSize: 11),
             filled: true,
@@ -294,7 +294,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: CyberColors.laserCyan,
+              backgroundColor: CyberColors.electricMint,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
@@ -637,7 +637,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
     return CyberGlassCard(
       padding: const EdgeInsets.all(16),
       borderRadius: 16,
-      borderColor: CyberColors.laserCyan,
+      borderColor: const Color(0xFF1E293B),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -646,11 +646,11 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
               Container(
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: CyberColors.laserCyan.withValues(alpha: 0.12),
+                  color: CyberColors.electricMint.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: CyberColors.laserCyan),
+                  border: Border.all(color: CyberColors.electricMint.withValues(alpha: 0.35)),
                 ),
-                child: const Icon(Icons.qr_code_scanner_rounded, color: CyberColors.laserCyan, size: 22),
+                child: const Icon(Icons.qr_code_scanner_rounded, color: CyberColors.electricMint, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -681,7 +681,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
             child: CyberNeonButton(
               label: 'SCAN DESKTOP EXTENSION QR',
               icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.black, size: 18),
-              primaryColor: CyberColors.laserCyan,
+              primaryColor: CyberColors.electricMint,
               onPressed: _scanDesktopQrCode,
             ),
           ),
@@ -703,9 +703,9 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
             decoration: BoxDecoration(
               color: CyberColors.elevatedSurface,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.3)),
+              border: Border.all(color: CyberColors.glassBorderMuted),
             ),
-            child: const Icon(Icons.cloud_sync_rounded, color: CyberColors.laserCyan, size: 20),
+            child: Icon(Icons.cloud_sync_rounded, color: drive.isSignedIn ? CyberColors.electricMint : CyberColors.textMuted, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -897,7 +897,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
             ),
             child: Row(
               children: [
-                const Icon(Icons.laptop_windows_rounded, color: CyberColors.laserCyan, size: 18),
+                const Icon(Icons.laptop_windows_rounded, color: CyberColors.electricMint, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -969,8 +969,8 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
                     Expanded(
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: CyberColors.laserCyan,
-                          side: BorderSide(color: CyberColors.laserCyan.withValues(alpha: 0.5)),
+                          foregroundColor: CyberColors.electricMint,
+                          side: BorderSide(color: CyberColors.electricMint.withValues(alpha: 0.5)),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           padding: const EdgeInsets.symmetric(vertical: 8),
                         ),
@@ -978,7 +978,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
                         label: Text(
                           '+15m EXTEND',
                           style: CyberTypography.mono(
-                            color: CyberColors.laserCyan,
+                            color: CyberColors.electricMint,
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
                           ),
@@ -1031,10 +1031,10 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: CyberColors.laserCyan.withValues(alpha: 0.15),
+                  color: CyberColors.electricMint.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.devices_rounded, color: CyberColors.laserCyan, size: 18),
+                child: const Icon(Icons.devices_rounded, color: CyberColors.electricMint, size: 18),
               ),
               const SizedBox(width: 10),
               Text(

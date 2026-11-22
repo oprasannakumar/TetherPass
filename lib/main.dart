@@ -151,10 +151,12 @@ class _TetherPassAppState extends State<TetherPassApp> with WidgetsBindingObserv
           ),
           dialogTheme: DialogThemeData(
             backgroundColor: CyberColors.cardSurface,
-            elevation: 16,
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              side: const BorderSide(color: CyberColors.glassBorder, width: 1.2),
+              side: const BorderSide(color: Color(0xFF1E293B), width: 1.0),
             ),
           ),
           inputDecorationTheme: InputDecorationTheme(

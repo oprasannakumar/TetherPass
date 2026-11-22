@@ -31,10 +31,11 @@ class TetherSyncDialog extends StatefulWidget {
   }) async {
     final GlobalKey<_TetherSyncDialogState> dialogKey = GlobalKey<_TetherSyncDialogState>();
 
-    // Show non-dismissible dialog
+    // Show non-dismissible dialog with deep obsidian barrier
     showDialog(
       context: context,
       barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.88),
       builder: (ctx) => PopScope(
         canPop: false,
         child: TetherSyncDialog(
@@ -158,6 +159,9 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(side: BorderSide.none),
       insetPadding: const EdgeInsets.symmetric(horizontal: 32),
       child: Center(
         child: Container(
