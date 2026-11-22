@@ -1223,8 +1223,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 key: _accountKey,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 borderRadius: 16,
-                borderColor: CyberColors.glassBorder,
-                showCornerBrackets: true,
+                borderColor: CyberColors.glassBorderMuted,
                 child: Row(
                   children: [
                     Container(

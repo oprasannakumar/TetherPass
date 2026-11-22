@@ -136,7 +136,7 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
   @override
   Widget build(BuildContext context) {
     final isConnecting = widget.mode == TetherSyncMode.connecting;
-    final primaryColor = isConnecting ? CyberColors.laserCyan : CyberColors.crimsonAlert;
+    final primaryColor = isConnecting ? CyberColors.electricMint : CyberColors.crimsonAlert;
 
     final title = _isFinished
         ? (_isSuccess
@@ -164,17 +164,17 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
           width: 320,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
           decoration: BoxDecoration(
-            color: CyberColors.cardSurface.withValues(alpha: 0.95),
-            borderRadius: BorderRadius.circular(24),
+            color: CyberColors.cardSurface,
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: primaryColor.withValues(alpha: 0.35),
-              width: 1.2,
+              color: primaryColor,
+              width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
                 color: primaryColor.withValues(alpha: 0.2),
-                blurRadius: 30,
-                spreadRadius: 2,
+                blurRadius: 24,
+                spreadRadius: 1,
               ),
             ],
           ),
@@ -183,49 +183,13 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
             children: [
               // ── Animated Cyber Radar Waves & Center Icon ──
               SizedBox(
-                height: 120,
-                width: 120,
+                height: 110,
+                width: 110,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     if (!_isFinished) ...[
-                      // Expanding ripple wave 1
-                      AnimatedBuilder(
-                        animation: _pulseController,
-                        builder: (context, child) {
-                          final progress = _pulseController.value;
-                          return Container(
-                            width: 60 + (progress * 55),
-                            height: 60 + (progress * 55),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: primaryColor.withValues(alpha: (1.0 - progress) * 0.5),
-                                width: 2,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      // Expanding ripple wave 2
-                      AnimatedBuilder(
-                        animation: _pulseController,
-                        builder: (context, child) {
-                          final progress = (_pulseController.value + 0.5) % 1.0;
-                          return Container(
-                            width: 60 + (progress * 55),
-                            height: 60 + (progress * 55),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: primaryColor.withValues(alpha: (1.0 - progress) * 0.4),
-                                width: 1.5,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      // Rotating cyan spinner ring
+                      // Rotating neon spinner ring
                       AnimatedBuilder(
                         animation: _rotationController,
                         builder: (context, child) {
@@ -236,9 +200,7 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
                               height: 86,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2.5,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  primaryColor.withValues(alpha: 0.85),
-                                ),
+                                valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                               ),
                             ),
                           );
@@ -250,29 +212,16 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
                     ScaleTransition(
                       scale: _scaleController,
                       child: Container(
-                        width: 68,
-                        height: 68,
+                        width: 66,
+                        height: 66,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: _isFinished
-                                ? (_isSuccess
-                                    ? [CyberColors.electricMint, const Color(0xFF00B377)]
-                                    : [CyberColors.crimsonAlert, const Color(0xFFB91C1C)])
-                                : (isConnecting
-                                    ? [CyberColors.laserCyan, const Color(0xFF0284C7)]
-                                    : [CyberColors.crimsonAlert, const Color(0xFFB91C1C)]),
-                          ),
+                          color: CyberColors.elevatedSurface,
+                          border: Border.all(color: primaryColor, width: 1.5),
                           boxShadow: [
                             BoxShadow(
-                              color: (_isFinished
-                                      ? (_isSuccess ? CyberColors.electricMint : CyberColors.crimsonAlert)
-                                      : primaryColor)
-                                  .withValues(alpha: 0.4),
-                              blurRadius: 18,
-                              offset: const Offset(0, 4),
+                              color: primaryColor.withValues(alpha: 0.3),
+                              blurRadius: 14,
                             ),
                           ],
                         ),
@@ -284,8 +233,8 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
                               : (isConnecting
                                   ? Icons.wifi_tethering_rounded
                                   : Icons.phonelink_erase_rounded),
-                          color: isConnecting && !_isFinished ? Colors.black : Colors.white,
-                          size: 34,
+                          color: primaryColor,
+                          size: 32,
                         ),
                       ),
                     ),
@@ -328,13 +277,13 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: CyberColors.obsidianBg.withValues(alpha: 0.7),
+                  color: CyberColors.elevatedSurface,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: _isFinished
-                        ? (_isSuccess ? CyberColors.electricMint.withValues(alpha: 0.5) : CyberColors.crimsonAlert.withValues(alpha: 0.5))
-                        : primaryColor.withValues(alpha: 0.5),
-                    width: 1,
+                        ? (_isSuccess ? CyberColors.electricMint : CyberColors.crimsonAlert)
+                        : primaryColor,
+                    width: 1.2,
                   ),
                 ),
                 child: Row(

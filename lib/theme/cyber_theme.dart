@@ -15,8 +15,8 @@ class CyberColors {
   // Glassmorphic Surface Tints
   static const Color glassFill = Color(0x1A142038); // 10% translucent
   static const Color glassFillLight = Color(0x281B2B4C); // 16% translucent
-  static const Color glassBorder = Color(0x2E00E5FF); // subtle cyan neon border
-  static const Color glassBorderMuted = Color(0x1AFFFFFF); // subtle white border
+  static const Color glassBorder = Color(0xFF1E293B); // sleek dark graphite border
+  static const Color glassBorderMuted = Color(0x24FFFFFF); // crisp subtle border
 
   // Robotic Neon Accents
   static const Color laserCyan = Color(0xFF00E5FF);
@@ -156,7 +156,7 @@ class CyberGlassCard extends StatelessWidget {
                 ),
             border: Border.all(
               color: effectiveBorderColor,
-              width: 1.0,
+              width: 1.2,
             ),
             boxShadow: glowColor != null
                 ? [
@@ -174,57 +174,7 @@ class CyberGlassCard extends StatelessWidget {
                     ),
                   ],
           ),
-          child: Stack(
-            children: [
-              child,
-              if (showCornerBrackets) ...[
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  child: CustomPaint(
-                    size: const Size(10, 10),
-                    painter: _HudCornerPainter(
-                      color: borderColor ?? CyberColors.laserCyan,
-                      corner: CornerPosition.topLeft,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: CustomPaint(
-                    size: const Size(10, 10),
-                    painter: _HudCornerPainter(
-                      color: borderColor ?? CyberColors.laserCyan,
-                      corner: CornerPosition.topRight,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  child: CustomPaint(
-                    size: const Size(10, 10),
-                    painter: _HudCornerPainter(
-                      color: borderColor ?? CyberColors.laserCyan,
-                      corner: CornerPosition.bottomLeft,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: CustomPaint(
-                    size: const Size(10, 10),
-                    painter: _HudCornerPainter(
-                      color: borderColor ?? CyberColors.laserCyan,
-                      corner: CornerPosition.bottomRight,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
+          child: child,
         ),
       ),
     );
@@ -250,47 +200,6 @@ class CyberGlassCard extends StatelessWidget {
       child: content,
     );
   }
-}
-
-enum CornerPosition { topLeft, topRight, bottomLeft, bottomRight }
-
-class _HudCornerPainter extends CustomPainter {
-  final Color color;
-  final CornerPosition corner;
-
-  _HudCornerPainter({required this.color, required this.corner});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.8
-      ..style = PaintingStyle.stroke;
-
-    final path = Path();
-    switch (corner) {
-      case CornerPosition.topLeft:
-        path.moveTo(0, size.height);
-        path.lineTo(0, 0);
-        path.lineTo(size.width, 0);
-      case CornerPosition.topRight:
-        path.moveTo(0, 0);
-        path.lineTo(size.width, 0);
-        path.lineTo(size.width, size.height);
-      case CornerPosition.bottomLeft:
-        path.moveTo(0, 0);
-        path.lineTo(0, size.height);
-        path.lineTo(size.width, size.height);
-      case CornerPosition.bottomRight:
-        path.moveTo(size.width, 0);
-        path.lineTo(size.width, size.height);
-        path.lineTo(0, size.height);
-    }
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// Cybernetic Background with subtle glowing radial ambient orbs and scanlines

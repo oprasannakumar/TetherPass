@@ -508,8 +508,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
     return CyberGlassCard(
       padding: const EdgeInsets.all(18),
       borderRadius: 16,
-      borderColor: isAuthorized ? CyberColors.electricMint : CyberColors.glassBorder,
-      showCornerBrackets: true,
+      borderColor: isAuthorized ? CyberColors.electricMint : const Color(0xFF1E293B),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -527,7 +526,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
                           : CyberColors.elevatedSurface,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: isAuthorized ? CyberColors.electricMint : CyberColors.glassBorderMuted,
+                        color: isAuthorized ? CyberColors.electricMint : const Color(0xFF1E293B),
                         width: 1.4,
                       ),
                       boxShadow: isAuthorized
@@ -638,8 +637,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
     return CyberGlassCard(
       padding: const EdgeInsets.all(16),
       borderRadius: 16,
-      borderColor: CyberColors.laserCyan.withValues(alpha: 0.4),
-      showCornerBrackets: true,
+      borderColor: CyberColors.laserCyan,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -650,7 +648,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
                 decoration: BoxDecoration(
                   color: CyberColors.laserCyan.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.3)),
+                  border: Border.all(color: CyberColors.laserCyan),
                 ),
                 child: const Icon(Icons.qr_code_scanner_rounded, color: CyberColors.laserCyan, size: 22),
               ),
@@ -758,8 +756,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
     return CyberGlassCard(
       padding: const EdgeInsets.all(16),
       borderRadius: 16,
-      borderColor: activeList.isNotEmpty ? CyberColors.laserCyan.withValues(alpha: 0.3) : CyberColors.glassBorderMuted,
-      showCornerBrackets: true,
+      borderColor: activeList.isNotEmpty ? CyberColors.electricMint : const Color(0xFF1E293B),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -878,11 +875,11 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
       decoration: BoxDecoration(
         color: CyberColors.cardSurface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.4), width: 1.2),
+        border: Border.all(color: CyberColors.electricMint, width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: CyberColors.laserCyan.withValues(alpha: 0.08),
-            blurRadius: 8,
+            color: CyberColors.electricMint.withValues(alpha: 0.12),
+            blurRadius: 10,
             offset: const Offset(0, 3),
           ),
         ],
@@ -1025,8 +1022,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
     return CyberGlassCard(
       padding: const EdgeInsets.all(16),
       borderRadius: 16,
-      borderColor: CyberColors.glassBorderMuted,
-      showCornerBrackets: true,
+      borderColor: const Color(0xFF1E293B),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

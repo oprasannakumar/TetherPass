@@ -194,22 +194,27 @@ class _HomeScreenState extends State<HomeScreen> {
         });
 
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: CyberColors.cardSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: CyberColors.electricMint, width: 1.5),
+          ),
           title: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF7ED),
+                  color: CyberColors.elevatedSurface,
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: CyberColors.electricMint.withValues(alpha: 0.5)),
                 ),
-                child: const Icon(Icons.laptop_windows_rounded, color: Color(0xFFFF6F00), size: 24),
+                child: const Icon(Icons.laptop_windows_rounded, color: CyberColors.electricMint, size: 24),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Desktop Authorization',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  'DESKTOP AUTHORIZATION',
+                  style: CyberTypography.hudTitle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ),
             ],
@@ -218,33 +223,33 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'A desktop computer is requesting access to decrypt your TetherPass credentials.',
-                style: TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.4),
+              Text(
+                'A desktop browser extension is requesting access to decrypt your vault credentials.',
+                style: CyberTypography.body(fontSize: 13, color: CyberColors.textMuted),
               ),
               const SizedBox(height: 14),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
+                  color: CyberColors.elevatedSurface,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFFFD8A8), width: 1.5),
+                  border: Border.all(color: CyberColors.glassBorderMuted, width: 1.2),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
-                        Icon(Icons.computer_rounded, size: 16, color: Color(0xFFFF6F00)),
-                        SizedBox(width: 6),
+                        const Icon(Icons.computer_rounded, size: 16, color: CyberColors.laserCyan),
+                        const SizedBox(width: 6),
                         Text(
                           'REQUESTING DEVICE:',
-                          style: TextStyle(
-                            fontSize: 11,
+                          style: CyberTypography.mono(
+                            fontSize: 10,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.5,
-                            color: Color(0xFFFF6F00),
+                            color: CyberColors.laserCyan,
                           ),
                         ),
                       ],
@@ -252,28 +257,29 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 6),
                     Text(
                       deviceName,
-                      style: const TextStyle(
+                      style: CyberTypography.hudTitle(
                         fontWeight: FontWeight.w900,
                         fontSize: 15,
-                        color: Color(0xFF0F172A),
+                        color: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3C7),
+                        color: CyberColors.cardSurface,
                         borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: CyberColors.plasmaAmber.withValues(alpha: 0.5)),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.shield_outlined, size: 13, color: Color(0xFFD97706)),
-                          SizedBox(width: 4),
+                          const Icon(Icons.shield_outlined, size: 13, color: CyberColors.plasmaAmber),
+                          const SizedBox(width: 4),
                           Flexible(
                             child: Text(
                               'Verify this matches your browser screen',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF92400E)),
+                              style: CyberTypography.mono(fontSize: 10.5, fontWeight: FontWeight.w600, color: CyberColors.plasmaAmber),
                             ),
                           ),
                         ],
@@ -283,9 +289,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 'If you did not initiate this request, tap Deny to protect your account.',
-                style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                style: CyberTypography.mono(fontSize: 10.5, color: CyberColors.textDim),
               ),
             ],
           ),
@@ -295,23 +301,23 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 1. Centered Horizontally: Approve with Biometrics
+                // 1. Approve with Biometrics
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF6F00),
-                    foregroundColor: Colors.white,
+                    backgroundColor: CyberColors.electricMint,
+                    foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 2,
+                    elevation: 0,
                   ),
                   onPressed: () {
                     multiDeviceSyncTimer?.cancel();
                     Navigator.of(ctx).pop(true);
                   },
-                  icon: const Icon(Icons.fingerprint_rounded, size: 22),
-                  label: const Text(
-                    'Approve with Biometrics',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  icon: const Icon(Icons.fingerprint_rounded, size: 22, color: Colors.black),
+                  label: Text(
+                    'APPROVE WITH BIOMETRICS',
+                    style: CyberTypography.mono(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -324,9 +330,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     multiDeviceSyncTimer?.cancel();
                     Navigator.of(ctx).pop(false);
                   },
-                  child: const Text(
-                    'Deny',
-                    style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 13),
+                  child: Text(
+                    'DENY REQUEST',
+                    style: CyberTypography.mono(color: CyberColors.crimsonAlert, fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                 ),
               ],
@@ -413,20 +419,39 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDlgState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Verify Master Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          backgroundColor: CyberColors.cardSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: CyberColors.laserCyan, width: 1.2),
+          ),
+          title: Text(
+            'VERIFY MASTER PASSWORD',
+            style: CyberTypography.hudTitle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Enter Master Password to confirm desktop access.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-              const SizedBox(height: 12),
+              Text(
+                'Enter Master Password to confirm desktop access payload.',
+                style: CyberTypography.body(fontSize: 12, color: CyberColors.textMuted),
+              ),
+              const SizedBox(height: 14),
               TextField(
                 controller: ctrl,
                 obscureText: true,
                 autofocus: true,
+                style: CyberTypography.body(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: 'Master Password',
+                  labelStyle: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 12),
                   errorText: errorText,
+                  errorStyle: CyberTypography.mono(color: CyberColors.crimsonAlert, fontSize: 10),
+                  filled: true,
+                  fillColor: CyberColors.elevatedSurface,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: CyberColors.glassBorderMuted)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: CyberColors.glassBorderMuted)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: CyberColors.laserCyan, width: 1.4)),
                 ),
               ),
             ],
@@ -434,9 +459,13 @@ class _HomeScreenState extends State<HomeScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel'),
+              child: Text('CANCEL', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
             ),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: CyberColors.laserCyan,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
               onPressed: () async {
                 final valid = await sec.verifyMasterPassword(ctrl.text.trim());
                 if (!ctx.mounted) return;
@@ -446,7 +475,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   setDlgState(() => errorText = 'Incorrect Master Password');
                 }
               },
-              child: const Text('Confirm'),
+              child: Text('CONFIRM', style: CyberTypography.mono(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
             ),
           ],
         ),
@@ -1070,8 +1099,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   CyberGlassCard(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                     borderRadius: 14,
-                    borderColor: CyberColors.glassBorder,
-                    showCornerBrackets: true,
+                    borderColor: CyberColors.glassBorderMuted,
                     child: TextField(
                       controller: _searchCtrl,
                       onChanged: _handleSearchInput,
@@ -1372,7 +1400,6 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: 16,
         borderColor: tileBorderColor,
         glowColor: glowColor,
-        showCornerBrackets: isExpired || isExpiringSoon,
         onTap: () async {
           await Navigator.push(
             context,
