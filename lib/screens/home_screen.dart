@@ -1479,7 +1479,7 @@ class _HomeScreenState extends State<HomeScreen> {
           item.isPassword
               ? '${item.website.isNotEmpty ? "${item.website}  •  " : ""}${item.userId.isNotEmpty ? item.userId : "Password Encrypted"}'
               : (item.isCard
-                  ? '${item.isDebit ? "Debit" : "Credit"}  •  ${item.cardNetwork}  •  ${item.maskedCardNumber}'
+                  ? '${item.cardNetwork.isNotEmpty ? "${item.cardNetwork}  •  " : ""}${item.isDebit ? "Debit" : "Credit"}${item.expiry.isNotEmpty ? "  •  Exp ${item.expiry}" : ""}'
                   : (item.allAccounts.isNotEmpty
                       ? (item.allAccounts.length > 1
                           ? '${item.allAccounts.length} Accounts  •  Primary: ${item.allAccounts.first.maskedAccountNumber}'
@@ -1498,6 +1498,57 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     ),
   ),
+  if (item.isCard && item.last4CardNumber.isNotEmpty) ...[
+    const SizedBox(width: 8),
+    Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: CyberColors.elevatedSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isExpired
+              ? CyberColors.crimsonAlert.withValues(alpha: 0.6)
+              : (isExpiringSoon
+                  ? CyberColors.plasmaAmber.withValues(alpha: 0.6)
+                  : CyberColors.electricMint.withValues(alpha: 0.4)),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (isExpired
+                    ? CyberColors.crimsonAlert
+                    : (isExpiringSoon ? CyberColors.plasmaAmber : CyberColors.electricMint))
+                .withValues(alpha: 0.15),
+            blurRadius: 6,
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '•••• ',
+            style: CyberTypography.mono(
+              color: CyberColors.textMuted,
+              fontSize: 10,
+              letterSpacing: 0.5,
+            ),
+          ),
+          Text(
+            item.last4CardNumber,
+            style: CyberTypography.mono(
+              color: isExpired
+                  ? CyberColors.crimsonAlert
+                  : (isExpiringSoon ? CyberColors.plasmaAmber : CyberColors.electricMint),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.0,
+            ),
+          ),
+        ],
+      ),
+    ),
+  ],
   const SizedBox(width: 6),
   Icon(
     Icons.chevron_right_rounded,

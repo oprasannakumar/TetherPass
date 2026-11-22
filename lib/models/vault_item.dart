@@ -213,6 +213,20 @@ class VaultItem {
 
   bool get isCredit => isCard && !isDebit;
 
+  /// Returns only the last 4 digits of the card (e.g. "1234")
+  String get last4CardNumber {
+    final clean = cardNumber.replaceAll(RegExp(r'\D'), '');
+    if (clean.length >= 4) {
+      return clean.substring(clean.length - 4);
+    }
+    if (clean.isNotEmpty) return clean;
+    final matches = RegExp(r'\d{4}$').firstMatch(cardNumber.trim());
+    if (matches != null) {
+      return matches.group(0)!;
+    }
+    return '';
+  }
+
   /// Returns masked card number (e.g. •••• •••• •••• 1234)
   String get maskedCardNumber {
     final clean = cardNumber.replaceAll(' ', '');
