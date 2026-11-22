@@ -114,6 +114,42 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     return 'After $sec seconds';
   }
 
+  InputDecoration _cyberInputDecoration({
+    required String labelText,
+    String? hintText,
+    String? errorText,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+    String? helperText,
+  }) {
+    return InputDecoration(
+      labelText: labelText,
+      labelStyle: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 12),
+      hintText: hintText,
+      hintStyle: CyberTypography.mono(color: CyberColors.textDim, fontSize: 11),
+      errorText: errorText,
+      errorStyle: CyberTypography.mono(color: CyberColors.crimsonAlert, fontSize: 10),
+      helperText: helperText,
+      helperStyle: CyberTypography.mono(color: CyberColors.electricMint, fontSize: 10),
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: CyberColors.elevatedSurface,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: CyberColors.glassBorderMuted),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: CyberColors.glassBorderMuted),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: CyberColors.laserCyan, width: 1.4),
+      ),
+    );
+  }
+
   Future<void> _showAutoLockDialog() async {
     final options = <int, String>{
       0: 'Immediately upon switching apps',
@@ -127,29 +163,58 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     final selected = await showDialog<int>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        backgroundColor: CyberColors.cardSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: CyberColors.laserCyan, width: 1.2),
+        ),
+        title: Row(
           children: [
-            Icon(Icons.timer_outlined, color: Color(0xFFFF6F00)),
-            SizedBox(width: 10),
-            Text('Auto-Lock Vault', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+            const Icon(Icons.timer_outlined, color: CyberColors.laserCyan, size: 22),
+            const SizedBox(width: 10),
+            Text(
+              'AUTO-LOCK VAULT',
+              style: CyberTypography.hudTitle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: options.entries.map((e) {
-            return RadioListTile<int>(
-              value: e.key,
-              groupValue: _autoLockSeconds,
-              activeColor: const Color(0xFFFF6F00),
-              title: Text(e.value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              onChanged: (val) => Navigator.pop(ctx, val),
+            final isSelected = _autoLockSeconds == e.key;
+            return Container(
+              margin: const EdgeInsets.symmetric(vertical: 3),
+              decoration: BoxDecoration(
+                color: isSelected ? CyberColors.elevatedSurface : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                border: isSelected ? Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.4)) : null,
+              ),
+              child: RadioListTile<int>(
+                value: e.key,
+                groupValue: _autoLockSeconds,
+                activeColor: CyberColors.laserCyan,
+                title: Text(
+                  e.value,
+                  style: CyberTypography.body(
+                    color: isSelected ? CyberColors.laserCyan : Colors.white,
+                    fontSize: 13,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  ),
+                ),
+                onChanged: (val) => Navigator.pop(ctx, val),
+              ),
             );
           }).toList(),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('CANCEL', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
+          ),
         ],
       ),
     );
@@ -171,29 +236,58 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     final selected = await showDialog<int>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        backgroundColor: CyberColors.cardSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: CyberColors.laserCyan, width: 1.2),
+        ),
+        title: Row(
           children: [
-            Icon(Icons.content_paste_go_rounded, color: Color(0xFFFF6F00)),
-            SizedBox(width: 10),
-            Text('Auto-Clear Clipboard', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+            const Icon(Icons.content_paste_go_rounded, color: CyberColors.laserCyan, size: 22),
+            const SizedBox(width: 10),
+            Text(
+              'AUTO-CLEAR CLIPBOARD',
+              style: CyberTypography.hudTitle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: options.entries.map((e) {
-            return RadioListTile<int>(
-              value: e.key,
-              groupValue: _clipboardPurgeSeconds,
-              activeColor: const Color(0xFFFF6F00),
-              title: Text(e.value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              onChanged: (val) => Navigator.pop(ctx, val),
+            final isSelected = _clipboardPurgeSeconds == e.key;
+            return Container(
+              margin: const EdgeInsets.symmetric(vertical: 3),
+              decoration: BoxDecoration(
+                color: isSelected ? CyberColors.elevatedSurface : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                border: isSelected ? Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.4)) : null,
+              ),
+              child: RadioListTile<int>(
+                value: e.key,
+                groupValue: _clipboardPurgeSeconds,
+                activeColor: CyberColors.laserCyan,
+                title: Text(
+                  e.value,
+                  style: CyberTypography.body(
+                    color: isSelected ? CyberColors.laserCyan : Colors.white,
+                    fontSize: 13,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  ),
+                ),
+                onChanged: (val) => Navigator.pop(ctx, val),
+              ),
             );
           }).toList(),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('CANCEL', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
+          ),
         ],
       ),
     );
@@ -221,9 +315,21 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text('Change Master Password', style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold)),
+            backgroundColor: CyberColors.cardSurface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: CyberColors.laserCyan, width: 1.2),
+            ),
+            title: Row(
+              children: [
+                const Icon(Icons.password_rounded, color: CyberColors.laserCyan, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'CHANGE MASTER PASSWORD',
+                  style: CyberTypography.hudTitle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -231,44 +337,53 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   TextField(
                     controller: oldCtrl,
                     obscureText: true,
-                    style: const TextStyle(color: Color(0xFF0F172A)),
-                    decoration: const InputDecoration(
+                    style: CyberTypography.body(color: Colors.white),
+                    decoration: _cyberInputDecoration(
                       labelText: 'Current Master Password',
+                      hintText: 'Enter current password',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded, color: CyberColors.laserCyan, size: 18),
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: newCtrl,
                     obscureText: true,
-                    style: const TextStyle(color: Color(0xFF0F172A)),
-                    decoration: const InputDecoration(
+                    style: CyberTypography.body(color: Colors.white),
+                    decoration: _cyberInputDecoration(
                       labelText: 'New Master Password (min 4 chars)',
+                      hintText: 'Enter new password',
+                      prefixIcon: const Icon(Icons.lock_rounded, color: CyberColors.laserCyan, size: 18),
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: confirmCtrl,
                     obscureText: true,
-                    style: const TextStyle(color: Color(0xFF0F172A)),
-                    decoration: const InputDecoration(
+                    style: CyberTypography.body(color: Colors.white),
+                    decoration: _cyberInputDecoration(
                       labelText: 'Confirm New Password',
+                      hintText: 'Re-enter new password',
+                      prefixIcon: const Icon(Icons.check_circle_outline_rounded, color: CyberColors.laserCyan, size: 18),
                     ),
                   ),
                   if (err != null) ...[
                     const SizedBox(height: 10),
-                    Text(err!, style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600)),
+                    Text(err!, style: CyberTypography.mono(color: CyberColors.crimsonAlert, fontSize: 11, fontWeight: FontWeight.w600)),
                   ],
                 ],
               ),
             ),
             actions: [
               TextButton(
-                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                child: Text('CANCEL', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
                 onPressed: () => Navigator.pop(ctx),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
-                child: const Text('Save'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: CyberColors.laserCyan,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text('SAVE', style: CyberTypography.mono(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
                 onPressed: () async {
                   final sec = context.read<VaultSecurityService>();
                   final oldP = oldCtrl.text.trim();
@@ -292,7 +407,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   await sec.resetMasterPassword(newP);
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(this.context).showSnackBar(
-                    const SnackBar(content: Text('Master Password changed successfully!')),
+                    SnackBar(
+                      content: Text('✓ Master Password updated successfully!'),
+                      backgroundColor: CyberColors.cardSurface,
+                    ),
                   );
                 },
               ),
@@ -313,31 +431,37 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            backgroundColor: CyberColors.cardSurface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: CyberColors.laserCyan, width: 1.2),
+            ),
             title: Row(
-              children: const [
-                Icon(Icons.key_rounded, color: Color(0xFFFF6F00)),
-                SizedBox(width: 8),
-                Text('Recovery Key', style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold)),
+              children: [
+                const Icon(Icons.key_rounded, color: CyberColors.laserCyan, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'EMERGENCY RECOVERY KEY',
+                  style: CyberTypography.hudTitle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                ),
               ],
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Keep this 16-character key safe. If you forget your Master Password, this key lets you reset it.',
-                  style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                Text(
+                  'Keep this 16-character key safe. If you forget your Master Password, this sovereign key lets you reset your vault.',
+                  style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 12),
                 ),
                 const SizedBox(height: 16),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7ED),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFFFEDD5)),
+                    color: CyberColors.elevatedSurface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.5)),
                   ),
                   child: Row(
                     children: [
@@ -347,9 +471,8 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                           alignment: Alignment.centerLeft,
                           child: Text(
                             currentKey,
-                            style: const TextStyle(
-                              color: Color(0xFFC2410C),
-                              fontFamily: 'Courier',
+                            style: CyberTypography.mono(
+                              color: CyberColors.laserCyan,
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 1.5,
@@ -362,12 +485,15 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                         visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.copy_rounded, color: Color(0xFFC2410C), size: 20),
+                        icon: const Icon(Icons.copy_rounded, color: CyberColors.laserCyan, size: 20),
                         tooltip: 'Copy Recovery Key',
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: currentKey));
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Recovery Key copied to clipboard!')),
+                            const SnackBar(
+                              content: Text('Recovery Key copied to clipboard!'),
+                              backgroundColor: CyberColors.cardSurface,
+                            ),
                           );
                         },
                       ),
@@ -378,17 +504,23 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             ),
             actions: [
               TextButton(
-                child: const Text('Close', style: TextStyle(color: Color(0xFF64748B))),
+                child: Text('CLOSE', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
                 onPressed: () => Navigator.pop(ctx),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
-                child: const Text('Regenerate Key'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: CyberColors.plasmaAmber,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text('REGENERATE KEY', style: CyberTypography.mono(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
                 onPressed: () async {
                   final newK = await sec.regenerateRecoveryKey();
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(this.context).showSnackBar(
-                    SnackBar(content: Text('New Recovery Key generated: $newK')),
+                    SnackBar(
+                      content: Text('New Recovery Key generated: $newK'),
+                      backgroundColor: CyberColors.cardSurface,
+                    ),
                   );
                 },
               ),
@@ -411,21 +543,29 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        backgroundColor: CyberColors.cardSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: CyberColors.laserCyan, width: 1.2),
+        ),
+        title: Row(
           children: [
-            Icon(Icons.search_rounded, color: Color(0xFFFF6F00)),
-            SizedBox(width: 8),
-            Text('Search Settings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+            const Icon(Icons.search_rounded, color: CyberColors.laserCyan, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'SEARCH SETTINGS',
+              style: CyberTypography.hudTitle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
           ],
         ),
         content: TextField(
           controller: searchCtrl,
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Search setting or type password...',
-            prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF94A3B8)),
+          style: CyberTypography.body(color: Colors.white),
+          decoration: _cyberInputDecoration(
+            labelText: 'Search Settings',
+            hintText: 'Search or type decoy trigger...',
+            prefixIcon: const Icon(Icons.search_rounded, color: CyberColors.laserCyan, size: 18),
           ),
           onChanged: (val) async {
             final sec = context.read<VaultSecurityService>();
@@ -443,7 +583,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close', style: TextStyle(color: Color(0xFF64748B))),
+            child: Text('CLOSE', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
           ),
         ],
       ),
@@ -456,10 +596,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: CyberColors.cardSurface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: CyberColors.laserCyan, width: 1.2),
       ),
       builder: (ctx) {
         bool syncing = false;
@@ -480,29 +621,30 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFF6F00).withValues(alpha: 0.15),
+                            color: CyberColors.laserCyan.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.3)),
                           ),
-                          child: const Icon(Icons.credit_card_rounded, color: Color(0xFFFF6F00), size: 24),
+                          child: const Icon(Icons.credit_card_rounded, color: CyberColors.laserCyan, size: 24),
                         ),
                         const SizedBox(width: 12),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Card BIN Registry',
-                                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                'CARD BIN REGISTRY',
+                                style: CyberTypography.hudTitle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                               ),
                               Text(
-                                'Offline Detection & Self-Learning',
-                                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                'Offline Detection & Autonomous Learning',
+                                style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 11),
                               ),
                             ],
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                          icon: const Icon(Icons.close_rounded, color: CyberColors.textMuted),
                           onPressed: () => Navigator.pop(modalCtx),
                         ),
                       ],
@@ -510,15 +652,15 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                     const SizedBox(height: 16),
                     Text(
                       'TetherPass includes $bundledFmt pre-packaged offline card issuer prefixes. Whenever you add or customize a card, TetherPass learns the prefix locally on your device for permanent zero-latency recognition.',
-                      style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13, height: 1.4),
+                      style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 12.5),
                     ),
                     const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A),
+                        color: CyberColors.elevatedSurface,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF334155)),
+                        border: Border.all(color: CyberColors.glassBorderMuted),
                       ),
                       child: Row(
                         children: [
@@ -527,23 +669,23 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                               children: [
                                 Text(
                                   bundledFmt,
-                                  style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                                  style: CyberTypography.hudTitle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 2),
-                                const Text('Bundled Offline', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                                Text('Bundled Offline', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 10)),
                               ],
                             ),
                           ),
-                          Container(width: 1, height: 32, color: const Color(0xFF334155)),
+                          Container(width: 1, height: 32, color: CyberColors.glassBorderMuted),
                           Expanded(
                             child: Column(
                               children: [
                                 Text(
                                   '$customCount',
-                                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 17, fontWeight: FontWeight.bold),
+                                  style: CyberTypography.hudTitle(color: CyberColors.laserCyan, fontSize: 16, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 2),
-                                const Text('Learned / Synced', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                                Text('Learned / Synced', style: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 10)),
                               ],
                             ),
                           ),
@@ -556,14 +698,17 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                       height: 46,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF6F00),
-                          foregroundColor: Colors.white,
+                          backgroundColor: CyberColors.laserCyan,
+                          foregroundColor: Colors.black,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                         icon: syncing
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.cloud_sync_rounded, size: 20),
-                        label: Text(syncing ? 'Checking Updates...' : 'Check Community Updates (OTA)'),
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                            : const Icon(Icons.cloud_sync_rounded, size: 20, color: Colors.black),
+                        label: Text(
+                          syncing ? 'CHECKING UPDATES...' : 'CHECK COMMUNITY UPDATES (OTA)',
+                          style: CyberTypography.mono(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black),
+                        ),
                         onPressed: syncing
                             ? null
                             : () async {
@@ -583,7 +728,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                                           ? 'Sync complete! $count new card ranges updated.'
                                           : 'Unable to reach community repository. Offline database is active.',
                                     ),
-                                    backgroundColor: count >= 0 ? const Color(0xFF10B981) : Colors.amber.shade800,
+                                    backgroundColor: count >= 0 ? CyberColors.cardSurface : CyberColors.cardSurface,
                                   ),
                                 );
                               },
@@ -592,10 +737,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                     const SizedBox(height: 10),
                     Center(
                       child: TextButton.icon(
-                        icon: const Icon(Icons.open_in_new_rounded, size: 14, color: Color(0xFF38BDF8)),
-                        label: const Text(
+                        icon: const Icon(Icons.open_in_new_rounded, size: 14, color: CyberColors.laserCyan),
+                        label: Text(
                           'Contribute unlisted card prefix on GitHub',
-                          style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                          style: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 11),
                         ),
                         onPressed: () {
                           final url = BinDatabaseService.buildContributeUrl(binPrefix: '', bankName: '');
@@ -625,50 +770,56 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDlgState) => AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+          backgroundColor: CyberColors.cardSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: CyberColors.laserCyan, width: 1.2),
+          ),
+          title: Row(
             children: [
-              Icon(Icons.cloud_upload_outlined, color: Color(0xFFFF6F00)),
-              SizedBox(width: 8),
-              Text('Multi-Cloud & File Export', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
+              const Icon(Icons.cloud_upload_outlined, color: CyberColors.laserCyan, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                'MULTI-CLOUD & FILE EXPORT',
+                style: CyberTypography.hudTitle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+              ),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Your vault will be encrypted with AES-256 PBKDF2 using your Master Password. You can upload to OneDrive, Dropbox, Google Drive, or save to Downloads.',
-                style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 12),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: passwordCtrl,
                 obscureText: true,
-                style: const TextStyle(color: Color(0xFF0F172A)),
-                decoration: InputDecoration(
+                style: CyberTypography.body(color: Colors.white),
+                decoration: _cyberInputDecoration(
                   labelText: 'Encryption Master Password',
                   hintText: 'Enter your Master Password',
                   errorText: errorText,
-                  helperText: masterPwd != null ? 'Using your configured Master Password' : null,
-                  helperStyle: const TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold),
-                  prefixIcon: const Icon(Icons.key_rounded, color: Color(0xFFFF6F00)),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  helperText: masterPwd != null ? 'Using configured Master Password' : null,
+                  prefixIcon: const Icon(Icons.key_rounded, color: CyberColors.laserCyan, size: 18),
                 ),
               ),
             ],
           ),
           actions: [
             TextButton(
-              child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+              child: Text('CANCEL', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
               onPressed: () => Navigator.pop(ctx),
             ),
             OutlinedButton.icon(
-              icon: const Icon(Icons.share_rounded, size: 16, color: Color(0xFFFF6F00)),
-              label: const Text('Share to Cloud / Apps', style: TextStyle(color: Color(0xFFFF6F00), fontWeight: FontWeight.bold)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: CyberColors.laserCyan),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.share_rounded, size: 16, color: CyberColors.laserCyan),
+              label: Text('SHARE', style: CyberTypography.mono(color: CyberColors.laserCyan, fontWeight: FontWeight.bold, fontSize: 11)),
               onPressed: () async {
                 final pwd = passwordCtrl.text.trim();
                 if (pwd.length < 4) {
@@ -682,7 +833,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   if (items.isEmpty) {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Your vault is empty. Nothing to export.'), backgroundColor: Colors.orange),
+                        const SnackBar(content: Text('Your vault is empty. Nothing to export.'), backgroundColor: CyberColors.cardSurface),
                       );
                     }
                     return;
@@ -710,15 +861,18 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Cloud share error: $e'), backgroundColor: Colors.red),
+                      SnackBar(content: Text('Cloud share error: $e'), backgroundColor: CyberColors.crimsonAlert),
                     );
                   }
                 }
               },
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
-              child: const Text('Save to Downloads'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: CyberColors.laserCyan,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text('SAVE TO DOWNLOADS', style: CyberTypography.mono(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
               onPressed: () async {
                 final pwd = passwordCtrl.text.trim();
                 if (pwd.length < 4) {
@@ -732,7 +886,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   if (items.isEmpty) {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Your vault is empty. Nothing to export.'), backgroundColor: Colors.orange),
+                        const SnackBar(content: Text('Your vault is empty. Nothing to export.'), backgroundColor: CyberColors.cardSurface),
                       );
                     }
                     return;
@@ -748,7 +902,6 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
                   final fileName = 'TetherPass_Backup_$timestamp.json';
 
-                  // Save exclusively to local device storage (Downloads directory preferred)
                   File? savedFile;
                   final downloadDir = Directory('/storage/emulated/0/Download');
                   if (await downloadDir.exists()) {
@@ -780,26 +933,26 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
+                        backgroundColor: CyberColors.cardSurface,
                         content: Row(
                           children: [
-                            const Icon(Icons.check_circle_rounded, color: Colors.white),
+                            const Icon(Icons.check_circle_rounded, color: CyberColors.electricMint),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 '✓ Backup saved:\n${savedFile.path}',
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                style: CyberTypography.mono(color: Colors.white, fontSize: 11),
                               ),
                             ),
                           ],
                         ),
                         action: SnackBarAction(
-                          label: 'Share to Cloud',
-                          textColor: const Color(0xFFFFD54F),
+                          label: 'Share',
+                          textColor: CyberColors.laserCyan,
                           onPressed: () {
                             Share.shareXFiles([XFile(savedFile!.path)], text: 'TetherPass Encrypted Vault Backup');
                           },
                         ),
-                        backgroundColor: const Color(0xFF16A34A),
                         duration: const Duration(seconds: 6),
                         behavior: SnackBarBehavior.floating,
                       ),
@@ -808,7 +961,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red),
+                      SnackBar(content: Text('Export failed: $e'), backgroundColor: CyberColors.crimsonAlert),
                     );
                   }
                 }
@@ -822,7 +975,6 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
 
   Future<void> _importBackupFile() async {
     try {
-      // 1. Pick .json file from device storage
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
@@ -830,7 +982,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       );
 
       if (result == null || result.files.isEmpty || result.files.single.path == null) {
-        return; // User cancelled file selection
+        return;
       }
 
       final file = File(result.files.single.path!);
@@ -841,7 +993,6 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       final db = context.read<DatabaseService>();
       final masterPwd = await sec.getMasterPassword();
 
-      // 2. Try automatic decryption if Master Password is available
       if (masterPwd != null && masterPwd.isNotEmpty) {
         try {
           final items = SecureBackupExportService.importVaultWithPassword(
@@ -849,32 +1000,37 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             userPassword: masterPwd,
           );
 
-          // Succeeded with user's master password! Show quick confirmation
           if (!mounted) return;
           final confirmed = await showDialog<bool>(
             context: context,
             builder: (ctx) => AlertDialog(
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Row(
+              backgroundColor: CyberColors.cardSurface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: CyberColors.laserCyan, width: 1.2),
+              ),
+              title: Row(
                 children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.green),
-                  SizedBox(width: 8),
-                  Text('Restore Backup?', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
+                  const Icon(Icons.check_circle_rounded, color: CyberColors.electricMint),
+                  const SizedBox(width: 8),
+                  Text('RESTORE BACKUP?', style: CyberTypography.hudTitle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                 ],
               ),
               content: Text(
-                'Decrypted $fileName successfully with your Master Password!\n\nFound ${items.length} credential(s) in this file. Would you like to restore them to your vault?',
-                style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                'Decrypted $fileName successfully with Master Password!\n\nFound ${items.length} credential(s) in this file. Would you like to restore them to your vault?',
+                style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 13),
               ),
               actions: [
                 TextButton(
-                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                  child: Text('CANCEL', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
                   onPressed: () => Navigator.pop(ctx, false),
                 ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
-                  child: Text('Restore ${items.length} Items'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: CyberColors.electricMint,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Text('RESTORE ${items.length} ITEMS', style: CyberTypography.mono(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
                   onPressed: () => Navigator.pop(ctx, true),
                 ),
               ],
@@ -888,19 +1044,16 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Successfully restored ${items.length} vault items from $fileName!'),
-                  backgroundColor: Colors.green,
+                  content: Text('✓ Successfully restored ${items.length} vault items from $fileName!'),
+                  backgroundColor: CyberColors.cardSurface,
                 ),
               );
             }
           }
           return;
-        } catch (_) {
-          // Decryption with current master password didn't match; fallback to prompt below
-        }
+        } catch (_) {}
       }
 
-      // 3. Fallback prompt for password if different or not cached
       if (!mounted) return;
       final passwordCtrl = TextEditingController();
       String? errorText;
@@ -910,13 +1063,16 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         context: context,
         builder: (ctx) => StatefulBuilder(
           builder: (context, setDlgState) => AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Row(
+            backgroundColor: CyberColors.cardSurface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: CyberColors.laserCyan, width: 1.2),
+            ),
+            title: Row(
               children: [
-                Icon(Icons.lock_open_rounded, color: Color(0xFFFF6F00)),
-                SizedBox(width: 8),
-                Text('Decrypt Backup File', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
+                const Icon(Icons.lock_open_rounded, color: CyberColors.laserCyan),
+                const SizedBox(width: 8),
+                Text('DECRYPT BACKUP FILE', style: CyberTypography.hudTitle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
               ],
             ),
             content: SingleChildScrollView(
@@ -926,21 +1082,18 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 children: [
                   Text(
                     'Selected: $fileName\n\n${isUsingRecoveryKey ? 'Enter your 16-character Emergency Recovery Key:' : 'Enter the Master Password used when this backup was created:'}',
-                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                    style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 12),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: passwordCtrl,
                     obscureText: !isUsingRecoveryKey,
-                    style: const TextStyle(color: Color(0xFF0F172A)),
-                    decoration: InputDecoration(
+                    style: CyberTypography.body(color: Colors.white),
+                    decoration: _cyberInputDecoration(
                       labelText: isUsingRecoveryKey ? 'Recovery Key' : 'Decryption Password',
                       hintText: isUsingRecoveryKey ? 'XXXX-XXXX-XXXX-XXXX' : 'Enter Master Password',
                       errorText: errorText,
-                      prefixIcon: Icon(isUsingRecoveryKey ? Icons.vpn_key_rounded : Icons.key_rounded, color: const Color(0xFFFF6F00)),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: Icon(isUsingRecoveryKey ? Icons.vpn_key_rounded : Icons.key_rounded, color: CyberColors.laserCyan, size: 18),
                     ),
                   ),
                   Align(
@@ -949,7 +1102,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                       style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
                       child: Text(
                         isUsingRecoveryKey ? 'Use Master Password instead' : 'Forgot Password? Use 16-char Recovery Key',
-                        style: const TextStyle(color: Color(0xFF0284C7), fontSize: 12, fontWeight: FontWeight.w600),
+                        style: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 11, fontWeight: FontWeight.w600),
                       ),
                       onPressed: () {
                         setDlgState(() {
@@ -965,12 +1118,15 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             ),
             actions: [
               TextButton(
-                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                child: Text('CANCEL', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
                 onPressed: () => Navigator.pop(ctx),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
-                child: const Text('Decrypt & Restore'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: CyberColors.laserCyan,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text('DECRYPT & RESTORE', style: CyberTypography.mono(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
                 onPressed: () async {
                   final pwd = passwordCtrl.text.trim();
                   if (pwd.isEmpty) {
@@ -997,8 +1153,8 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Successfully restored $restoredCount vault items from $fileName!'),
-                          backgroundColor: Colors.green,
+                          content: Text('✓ Successfully restored $restoredCount vault items from $fileName!'),
+                          backgroundColor: CyberColors.cardSurface,
                         ),
                       );
                     }
@@ -1018,7 +1174,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('File import error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('File import error: $e'), backgroundColor: CyberColors.crimsonAlert),
         );
       }
     }
@@ -1281,9 +1437,9 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             const SizedBox(height: 24),
 
             // ── Keyboard & Autofill Section ──
-            const Text(
+            Text(
               'KEYBOARD & AUTOFILL',
-              style: TextStyle(color: Color(0xFFFF6F00), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+              style: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
             ),
             const SizedBox(height: 10),
 
@@ -1295,17 +1451,17 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
               trailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _isAutofillEnabled ? Colors.green.shade50 : const Color(0xFFFFF7ED),
+                  color: _isAutofillEnabled ? CyberColors.electricMint.withValues(alpha: 0.15) : CyberColors.elevatedSurface,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: _isAutofillEnabled ? Colors.green.shade300 : const Color(0xFFFFB74D),
+                    color: _isAutofillEnabled ? CyberColors.electricMint : CyberColors.glassBorderMuted,
                   ),
                 ),
                 child: Text(
                   _isAutofillEnabled ? 'Active' : 'Configure',
-                  style: TextStyle(
-                    color: _isAutofillEnabled ? Colors.green.shade700 : const Color(0xFFFF6F00),
-                    fontSize: 11,
+                  style: CyberTypography.mono(
+                    color: _isAutofillEnabled ? CyberColors.electricMint : CyberColors.laserCyan,
+                    fontSize: 10,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -1327,7 +1483,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
               icon: Icons.laptop_windows_rounded,
               title: 'Browser Extension (Windows)',
               subtitle: 'Autofill cards, accounts, IFSC & passwords in Chrome/Edge',
-              trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
+              trailing: const Icon(Icons.chevron_right_rounded, color: CyberColors.laserCyan),
               onTap: () {
                 Navigator.push(
                   context,
@@ -1339,9 +1495,9 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             const SizedBox(height: 24),
 
             // ── Card Intelligence & Offline BIN Registry ──
-            const Text(
+            Text(
               'CARD INTELLIGENCE & OFFLINE REGISTRY',
-              style: TextStyle(color: Color(0xFFFF6F00), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+              style: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
             ),
             const SizedBox(height: 10),
 
@@ -1349,16 +1505,16 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
               icon: Icons.credit_card_rounded,
               title: 'Global Card BIN Database',
               subtitle: '458,000+ offline card ranges • Self-learning & OTA updates',
-              trailing: const Icon(Icons.sync_rounded, size: 20, color: Color(0xFFFF6F00)),
+              trailing: const Icon(Icons.sync_rounded, size: 20, color: CyberColors.laserCyan),
               onTap: _showBinDatabaseDialog,
             ),
 
             const SizedBox(height: 24),
 
             // ── Multi-Cloud & Offline Backup Section ──
-            const Text(
+            Text(
               'MULTI-CLOUD & OFFLINE BACKUP',
-              style: TextStyle(color: Color(0xFFFF6F00), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+              style: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
             ),
             const SizedBox(height: 10),
 
@@ -1367,7 +1523,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
               icon: Icons.cloud_upload_outlined,
               title: 'Export to Any Cloud / Storage',
               subtitle: 'Upload encrypted vault to OneDrive, Dropbox, Drive, or Downloads',
-              trailing: const Icon(Icons.share_rounded, size: 18, color: Color(0xFFFF6F00)),
+              trailing: const Icon(Icons.share_rounded, size: 18, color: CyberColors.laserCyan),
               onTap: _exportBackupFile,
             ),
 
@@ -1376,16 +1532,16 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
               icon: Icons.cloud_download_outlined,
               title: 'Restore from Cloud or File',
               subtitle: 'Import backup from OneDrive, Dropbox, Drive, or Downloads',
-              trailing: const Icon(Icons.folder_open_rounded, size: 18, color: Color(0xFF0284C7)),
+              trailing: const Icon(Icons.folder_open_rounded, size: 18, color: CyberColors.laserCyan),
               onTap: _importBackupFile,
             ),
 
             const SizedBox(height: 24),
 
             // ── Session ──
-            const Text(
+            Text(
               'SESSION',
-              style: TextStyle(color: Color(0xFFFF6F00), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+              style: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
             ),
             const SizedBox(height: 10),
 

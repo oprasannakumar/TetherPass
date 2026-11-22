@@ -539,34 +539,39 @@ class _HomeScreenState extends State<HomeScreen> {
         final shouldRestore = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Row(
+            backgroundColor: CyberColors.cardSurface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: CyberColors.plasmaAmber, width: 1.2),
+            ),
+            title: Row(
               children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-                SizedBox(width: 8),
+                const Icon(Icons.warning_amber_rounded, color: CyberColors.plasmaAmber, size: 24),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Text('Empty Vault Warning', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
+                  child: Text(
+                    'EMPTY VAULT WARNING',
+                    style: CyberTypography.hudTitle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
                 ),
               ],
             ),
-            content: const Text(
+            content: Text(
               'Your phone currently has 0 saved items, but Google Drive already contains your saved vault backup!\n\n'
               'Backing up now would overwrite your cloud data. Did you mean to Restore your vault instead?',
-              style: TextStyle(color: Color(0xFF334155), fontSize: 13, height: 1.4),
+              style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 13),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                child: Text('CANCEL', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
               ),
               ElevatedButton.icon(
-                icon: const Icon(Icons.cloud_download_rounded, size: 16),
-                label: const Text('Restore from Drive'),
+                icon: const Icon(Icons.cloud_download_rounded, size: 16, color: Colors.black),
+                label: Text('RESTORE FROM DRIVE', style: CyberTypography.mono(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  backgroundColor: CyberColors.electricMint,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: () => Navigator.pop(ctx, true),
               ),
@@ -671,13 +676,19 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (dlgCtx) => StatefulBuilder(
         builder: (context, setDlgState) => AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+          backgroundColor: CyberColors.cardSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: CyberColors.laserCyan, width: 1.2),
+          ),
+          title: Row(
             children: [
-              Icon(Icons.cloud_download_rounded, color: Color(0xFFFF6F00)),
-              SizedBox(width: 8),
-              Text('Restore Cloud Backup', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
+              const Icon(Icons.cloud_download_rounded, color: CyberColors.laserCyan, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                'RESTORE CLOUD BACKUP',
+                style: CyberTypography.hudTitle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+              ),
             ],
           ),
           content: SingleChildScrollView(
@@ -689,21 +700,26 @@ class _HomeScreenState extends State<HomeScreen> {
                   isUsingRecoveryKey
                       ? 'Enter your 16-character Emergency Recovery Key (XXXX-XXXX-XXXX-XXXX):'
                       : 'Enter your Master Password to decrypt your cloud backup:',
-                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                  style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 12),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: passwordCtrl,
                   obscureText: !isUsingRecoveryKey,
-                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  style: CyberTypography.body(color: Colors.white),
                   decoration: InputDecoration(
                     labelText: isUsingRecoveryKey ? 'Recovery Key' : 'Master Password',
+                    labelStyle: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 12),
                     hintText: isUsingRecoveryKey ? 'XXXX-XXXX-XXXX-XXXX' : 'Enter backup password',
+                    hintStyle: CyberTypography.mono(color: CyberColors.textDim, fontSize: 11),
                     errorText: errorText,
-                    prefixIcon: Icon(isUsingRecoveryKey ? Icons.vpn_key_rounded : Icons.key_rounded, color: const Color(0xFFFF6F00)),
+                    errorStyle: CyberTypography.mono(color: CyberColors.crimsonAlert, fontSize: 10),
+                    prefixIcon: Icon(isUsingRecoveryKey ? Icons.vpn_key_rounded : Icons.key_rounded, color: CyberColors.laserCyan, size: 18),
                     filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    fillColor: CyberColors.elevatedSurface,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: CyberColors.glassBorderMuted)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: CyberColors.glassBorderMuted)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: CyberColors.laserCyan, width: 1.4)),
                   ),
                 ),
                 Align(
@@ -712,7 +728,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
                     child: Text(
                       isUsingRecoveryKey ? 'Use Master Password instead' : 'Forgot password? Use Recovery Key',
-                      style: const TextStyle(color: Color(0xFF0284C7), fontSize: 12, fontWeight: FontWeight.w600),
+                      style: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 11, fontWeight: FontWeight.w600),
                     ),
                     onPressed: () {
                       setDlgState(() {
@@ -728,12 +744,15 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           actions: [
             TextButton(
-              child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+              child: Text('CANCEL', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
               onPressed: () => Navigator.pop(dlgCtx),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
-              child: const Text('Decrypt & Restore'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: CyberColors.laserCyan,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text('DECRYPT & RESTORE', style: CyberTypography.mono(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
               onPressed: () async {
                 final pwd = passwordCtrl.text.trim();
                 if (pwd.isEmpty) {
@@ -754,7 +773,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('✓ Restored $count items from Google Drive!'),
-                        backgroundColor: Colors.green.shade800,
+                        backgroundColor: CyberColors.cardSurface,
                       ),
                     );
                   }
@@ -776,30 +795,45 @@ class _HomeScreenState extends State<HomeScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      backgroundColor: CyberColors.cardSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: CyberColors.laserCyan, width: 1.2),
+      ),
       builder: (ctx) => Padding(
         padding: const EdgeInsets.all(22),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
-                Icon(Icons.add_to_drive_rounded, color: Color(0xFFFF6F00), size: 24),
-                SizedBox(width: 10),
-                Text(
-                  'Google Drive Cloud Sync',
-                  style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: CyberColors.laserCyan.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.3)),
+                  ),
+                  child: const Icon(Icons.add_to_drive_rounded, color: CyberColors.laserCyan, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'GOOGLE DRIVE CLOUD SYNC',
+                      style: CyberTypography.hudTitle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      drive.isSignedIn
+                          ? 'Connected as ${drive.userEmail}'
+                          : 'Zero-Knowledge E2EE Google Drive Channel',
+                      style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 10),
+                    ),
+                  ],
                 ),
               ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              drive.isSignedIn
-                  ? 'Connected as ${drive.userEmail}'
-                  : 'Sync your encrypted vault to your private Google Drive',
-              style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
             ),
             const SizedBox(height: 18),
 
@@ -809,24 +843,48 @@ class _HomeScreenState extends State<HomeScreen> {
               leading: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: _items.isEmpty ? Colors.grey.withValues(alpha: 0.1) : const Color(0xFFFF6F00).withValues(alpha: 0.12),
+                  color: _items.isEmpty
+                      ? CyberColors.elevatedSurface
+                      : CyberColors.laserCyan.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _items.isEmpty
+                        ? CyberColors.glassBorderMuted
+                        : CyberColors.laserCyan.withValues(alpha: 0.4),
+                  ),
                 ),
-                child: Icon(Icons.cloud_upload_rounded, color: _items.isEmpty ? Colors.grey : const Color(0xFFFF6F00)),
+                child: Icon(
+                  Icons.cloud_upload_rounded,
+                  color: _items.isEmpty ? CyberColors.textDim : CyberColors.laserCyan,
+                  size: 20,
+                ),
               ),
               title: Text(
-                'Backup to Google Drive',
-                style: TextStyle(color: _items.isEmpty ? Colors.grey : const Color(0xFF0F172A), fontWeight: FontWeight.bold),
+                'BACKUP TO GOOGLE DRIVE',
+                style: CyberTypography.hudTitle(
+                  color: _items.isEmpty ? CyberColors.textDim : Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
               ),
               subtitle: Text(
                 _items.isEmpty ? 'Disabled: Vault is empty (Add items first)' : 'Upload encrypted backup (${_items.length} items)',
-                style: TextStyle(color: _items.isEmpty ? Colors.red.shade400 : const Color(0xFF64748B), fontSize: 12),
+                style: CyberTypography.mono(
+                  color: _items.isEmpty ? CyberColors.crimsonAlert : CyberColors.textMuted,
+                  fontSize: 10.5,
+                ),
               ),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Color(0xFFE2E8F0))),
-              tileColor: const Color(0xFFF8F9FA),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: CyberColors.glassBorderMuted),
+              ),
+              tileColor: CyberColors.elevatedSurface,
               onTap: _items.isEmpty ? () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cannot backup an empty vault. Did you mean to Restore?'), backgroundColor: Colors.orange),
+                  const SnackBar(
+                    content: Text('Cannot backup an empty vault. Did you mean to Restore?'),
+                    backgroundColor: CyberColors.cardSurface,
+                  ),
                 );
               } : () {
                 Navigator.pop(ctx);
@@ -839,26 +897,39 @@ class _HomeScreenState extends State<HomeScreen> {
             ListTile(
               leading: Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.cloud_download_rounded, color: Colors.blueAccent),
+                decoration: BoxDecoration(
+                  color: CyberColors.electricMint.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: CyberColors.electricMint.withValues(alpha: 0.4)),
+                ),
+                child: const Icon(Icons.cloud_download_rounded, color: CyberColors.electricMint, size: 20),
               ),
-              title: const Text('Restore from Google Drive', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
-              subtitle: const Text('Download & merge latest backup', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Color(0xFFE2E8F0))),
-              tileColor: const Color(0xFFF8F9FA),
+              title: Text(
+                'RESTORE FROM GOOGLE DRIVE',
+                style: CyberTypography.hudTitle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              subtitle: Text(
+                'Download & merge latest zero-knowledge backup',
+                style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 10.5),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: CyberColors.glassBorderMuted),
+              ),
+              tileColor: CyberColors.elevatedSurface,
               onTap: () {
                 Navigator.pop(ctx);
                 _restoreFromGoogleDrive();
               },
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
 
             if (drive.isSignedIn)
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton.icon(
-                  icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 16),
-                  label: const Text('Disconnect Google Drive', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                  icon: const Icon(Icons.logout_rounded, color: CyberColors.crimsonAlert, size: 16),
+                  label: Text('DISCONNECT DRIVE', style: CyberTypography.mono(color: CyberColors.crimsonAlert, fontSize: 11)),
                   onPressed: () async {
                     await drive.signOut();
                     if (!ctx.mounted) return;

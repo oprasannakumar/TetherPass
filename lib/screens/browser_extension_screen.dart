@@ -2,35 +2,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
-import '../services/auth_service.dart';
+import '../services/device_identity_service.dart';
 import '../services/drive_service.dart';
 import '../services/vault_security_service.dart';
+import '../theme/cyber_theme.dart';
 import '../widgets/totp_qr_scanner_dialog.dart';
 import '../widgets/tether_sync_dialog.dart';
 
-// ─── Cyber-Vault Luxury Palette ─────────────────────────────────────────────
-class CyberPalette {
-  CyberPalette._();
-
-  static const Color obsidianBg = Color(0xFF0A0E17);
-  static const Color surfaceCard = Color(0xFF121622);
-  static const Color surfaceElevated = Color(0xFF181B25);
-  static const Color borderSubtle = Color(0x14FFFFFF); // rgba(255, 255, 255, 0.08)
-  static const Color borderHighlight = Color(0x2800E5FF);
-
-  static const Color electricMint = Color(0xFF00F5A0);
-  static const Color laserCyan = Color(0xFF00E5FF);
-  static const Color skyBlue = Color(0xFF38BDF8);
-  static const Color amberWarning = Color(0xFFF59E0B);
-  static const Color coralRed = Color(0xFFEF4444);
-  static const Color mutedText = Color(0xFF8892B0);
-  static const Color darkDivider = Color(0xFF1F2433);
-}
-
-/// Desktop Tether Relay Screen matching the "Cyber-Vault Luxury" dark cybersecurity design.
+/// Desktop Tether Relay Screen matching the "Cyber-Vault" dark cybersecurity glassmorphic design.
+/// Communicates with live Google Drive sessions, real paired devices, and instant QR pairing.
 class BrowserExtensionScreen extends StatefulWidget {
   const BrowserExtensionScreen({super.key});
 
@@ -39,129 +21,185 @@ class BrowserExtensionScreen extends StatefulWidget {
 }
 
 class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
-    with TickerProviderStateMixin {
-  // Controllers
+    with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
-  late AnimationController _waveformController;
-  late AnimationController _holdController;
 
-  // Timers
-  Timer? _countdownTimer;
-  Timer? _pollTimer;
-
-  // Live State
-  int _ttlSecondsRemaining = 869; // 14 mins 29 secs initial countdown
-  int _selectedDeviceIndex = 0; // 0: Pixel 8 Pro, 1: Galaxy S23, 2: Broadcast
-  bool _hasPendingRequest = true;
-  int _pendingSecondsAgo = 12;
-  bool _isHolding = false;
-
-  // Audit Ledger Items
-  final List<Map<String, dynamic>> _auditEvents = [
-    {
-      'title': 'GitHub Account SSH Token',
-      'detail': 'Autofilled • Chrome 124 (Workstation)',
-      'time': '2m ago',
-      'icon': Icons.check_circle_rounded,
-      'color': CyberPalette.electricMint,
-    },
-    {
-      'title': 'NetBanking IFSC / Secret',
-      'detail': 'Ephemeral Streamed • Edge Browser',
-      'time': '1h ago',
-      'icon': Icons.key_rounded,
-      'color': CyberPalette.laserCyan,
-    },
-    {
-      'title': 'Volatile RAM Purged',
-      'detail': 'Timeout auto-triggered • 0 leaks detected',
-      'time': '3h ago',
-      'icon': Icons.delete_sweep_rounded,
-      'color': CyberPalette.coralRed,
-    },
-  ];
+  List<Map<String, dynamic>> _devices = [];
+  String _currentDeviceId = '';
+  String _currentDeviceName = '';
+  List<Map<String, dynamic>> _desktopSessions = [];
+  Timer? _sessionsRefreshTimer;
+  Timer? _tickerTimer;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
     super.initState();
-
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
 
-    _waveformController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
+    _loadDeviceIdentityAndDevices();
+    _fetchSessions();
 
-    _holdController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-
-    _holdController.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        _streamKeyWithBiometrics();
-      }
-    });
-
-    // Countdown ticker
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    // Background polling every 2 seconds
+    _sessionsRefreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (mounted) {
-        setState(() {
-          if (_ttlSecondsRemaining > 0) _ttlSecondsRemaining--;
-          _pendingSecondsAgo++;
-        });
+        _fetchSessions();
       }
     });
 
-    // Check Drive background sessions
-    _pollDriveSessions();
-    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (mounted) _pollDriveSessions();
+    // 1-second countdown ticker for synchronized live seconds display
+    _tickerTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _desktopSessions.any((s) => s['isCurrentlyActive'] == true)) {
+        setState(() {});
+      }
     });
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
-    _waveformController.dispose();
-    _holdController.dispose();
-    _countdownTimer?.cancel();
-    _pollTimer?.cancel();
+    _sessionsRefreshTimer?.cancel();
+    _tickerTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _pollDriveSessions() async {
+  Future<void> _loadDeviceIdentityAndDevices() async {
+    final id = await DeviceIdentityService.getDeviceId();
+    final name = await DeviceIdentityService.getDeviceName();
+    if (mounted) {
+      setState(() {
+        _currentDeviceId = id;
+        _currentDeviceName = name;
+      });
+      await _fetchDevices();
+    }
+  }
+
+  Future<void> _fetchSessions() async {
     final drive = context.read<DriveService>();
     if (!drive.isSignedIn) return;
     try {
       final sessions = await drive.getActiveDesktopSessions();
-      if (mounted && sessions.isNotEmpty) {
-        final active = sessions.firstWhere(
-          (s) => s['isCurrentlyActive'] == true,
-          orElse: () => sessions.first,
-        );
-        final expiresAt = (active['expiresAt'] as num?)?.toInt() ?? 0;
-        final now = DateTime.now().millisecondsSinceEpoch;
-        if (expiresAt > now) {
-          final remSec = ((expiresAt - now) / 1000).clamp(0, 1800).toInt();
-          setState(() {
-            _ttlSecondsRemaining = remSec;
-          });
-        }
+      if (mounted) {
+        setState(() {
+          _desktopSessions = sessions;
+        });
       }
     } catch (_) {}
   }
 
-  String _formatTtl(int totalSeconds) {
-    final mins = (totalSeconds ~/ 60).toString().padLeft(2, '0');
-    final secs = (totalSeconds % 60).toString().padLeft(2, '0');
-    return '$mins:$secs';
+  Future<void> _fetchDevices() async {
+    final drive = context.read<DriveService>();
+    if (!drive.isSignedIn) return;
+    try {
+      final list = await drive.getRegisteredDevices();
+      if (mounted) {
+        setState(() {
+          _devices = list;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _manualRefresh() async {
+    HapticFeedback.lightImpact();
+    setState(() => _isRefreshing = true);
+    await Future.wait([
+      _fetchSessions(),
+      _fetchDevices(),
+    ]);
+    if (mounted) {
+      setState(() => _isRefreshing = false);
+      _showCyberSnackBar('Telemetry synced with Google Drive cloud channel', isSuccess: true);
+    }
+  }
+
+  String _formatSessionTime(int ms) {
+    if (ms <= 0) return 'Just now';
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+    final hour = dt.hour.toString().padLeft(2, '0');
+    final minute = dt.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  Future<void> _terminateSession(String sessionId, String deviceName) async {
+    HapticFeedback.mediumImpact();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: CyberColors.cardSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: CyberColors.crimsonAlert, width: 1.2),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: CyberColors.crimsonAlert, size: 22),
+            const SizedBox(width: 8),
+            Text(
+              'TERMINATE SESSION?',
+              style: CyberTypography.hudTitle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Terminate the active tethered session on "$deviceName"?\n\nThe browser extension on that computer will be locked immediately and ephemeral cryptographic keys wiped from memory.',
+          style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('CANCEL', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: CyberColors.crimsonAlert,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'TERMINATE',
+              style: CyberTypography.mono(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final drive = context.read<DriveService>();
+      final ok = await TetherSyncDialog.run<bool>(
+        context: context,
+        mode: TetherSyncMode.disconnecting,
+        deviceName: deviceName,
+        task: () => drive.terminateDesktopSession(sessionId),
+      );
+      if (ok == true && mounted) {
+        await _fetchSessions();
+        _showCyberSnackBar('Session on "$deviceName" terminated and memory purged.', isSuccess: true);
+      }
+    }
+  }
+
+  Future<void> _extendSession(String sessionId, String deviceName, int minutes) async {
+    HapticFeedback.lightImpact();
+    final drive = context.read<DriveService>();
+    final ok = await drive.extendDesktopSession(sessionId, additionalMinutes: minutes);
+    if (ok && mounted) {
+      await _fetchSessions();
+      _showCyberSnackBar('Session on "$deviceName" extended by +$minutes minutes.', isSuccess: true);
+    }
   }
 
   Future<void> _scanDesktopQrCode() async {
+    HapticFeedback.lightImpact();
     final result = await TotpQrScannerDialog.scan(
       context,
       target: QrScannerTarget.desktopPairing,
@@ -190,7 +228,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
 
     if (requestId == null || requestId.isEmpty) {
       if (mounted) {
-        _showCyberToast('Invalid Desktop Pairing QR code', isSuccess: false);
+        _showCyberSnackBar('Invalid Desktop Pairing QR code scanned.', isSuccess: false);
       }
       return;
     }
@@ -214,89 +252,131 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
     );
 
     if (ok == true && mounted) {
-      setState(() {
-        _ttlSecondsRemaining = 1800;
-        _auditEvents.insert(0, {
-          'title': 'MV3 Companion Authenticated',
-          'detail': 'Paired via Direct QR • $targetDevice',
-          'time': 'Just now',
-          'icon': Icons.verified_user_rounded,
-          'color': CyberPalette.electricMint,
-        });
-      });
-      _showCyberToast('Relay Pipe Established with $targetDevice', isSuccess: true);
+      await _fetchSessions();
+      _showCyberSnackBar('✓ Relay Pipe Established with $targetDevice', isSuccess: true);
+    } else if (mounted) {
+      _showCyberSnackBar('Pairing expired or rejected. Tap "Refresh" on your PC to try again.', isSuccess: false);
     }
   }
 
-  Future<void> _streamKeyWithBiometrics() async {
-    HapticFeedback.heavyImpact();
-    final auth = AuthService();
-    final isAuthed = await auth.authenticate(reason: 'Stream zero-knowledge card key to Amazon.com checkout');
+  Future<void> _renameDevice(String deviceId, String currentName) async {
+    final ctrl = TextEditingController(text: currentName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: CyberColors.cardSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: CyberColors.laserCyan, width: 1.2),
+        ),
+        title: Text(
+          'RENAME DEVICE',
+          style: CyberTypography.hudTitle(color: Colors.white, fontSize: 16),
+        ),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: CyberTypography.body(color: Colors.white),
+          decoration: InputDecoration(
+            labelText: 'Device Name',
+            labelStyle: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 12),
+            hintText: 'e.g. Workstation or Personal Phone',
+            hintStyle: CyberTypography.mono(color: CyberColors.textDim, fontSize: 11),
+            filled: true,
+            fillColor: CyberColors.elevatedSurface,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('CANCEL', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: CyberColors.laserCyan,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: Text(
+              'SAVE',
+              style: CyberTypography.mono(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
 
-    if (isAuthed) {
-      HapticFeedback.vibrate();
-      if (mounted) {
-        setState(() {
-          _hasPendingRequest = false;
-          _auditEvents.insert(0, {
-            'title': 'HDFC Infinia (Visa Infinite)',
-            'detail': 'Passkey Streamed • Amazon.com (Checkout)',
-            'time': 'Just now',
-            'icon': Icons.bolt_rounded,
-            'color': CyberPalette.electricMint,
-          });
-        });
-        _showCyberToast('✓ Ephemeral Passkey Streamed to Active MV3!', isSuccess: true);
-      }
-    } else {
-      HapticFeedback.mediumImpact();
-      if (mounted) {
-        _showCyberToast('Biometric authorization cancelled', isSuccess: false);
+    if (newName != null && newName.isNotEmpty && newName != currentName) {
+      if (!mounted) return;
+      final drive = context.read<DriveService>();
+      final ok = await drive.renameRegisteredDevice(deviceId, newName);
+      if (ok && mounted) {
+        if (deviceId == _currentDeviceId) {
+          setState(() => _currentDeviceName = newName);
+        }
+        await _fetchDevices();
+        _showCyberSnackBar('Device renamed to "$newName"', isSuccess: true);
       }
     }
-    _holdController.reset();
-    setState(() => _isHolding = false);
   }
 
-  void _rejectPendingRequest() {
-    HapticFeedback.lightImpact();
-    setState(() {
-      _hasPendingRequest = false;
-      _auditEvents.insert(0, {
-        'title': 'Blocked Authorization Request',
-        'detail': 'Rejected manually • Amazon.com',
-        'time': 'Just now',
-        'icon': Icons.block_rounded,
-        'color': CyberPalette.coralRed,
-      });
-    });
-    _showCyberToast('Request rejected and blocked on Active MV3.', isSuccess: false);
+  Future<void> _removeDevice(String deviceId, String deviceName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: CyberColors.cardSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: CyberColors.crimsonAlert, width: 1.2),
+        ),
+        title: Text(
+          'REMOVE DEVICE?',
+          style: CyberTypography.hudTitle(color: Colors.white, fontSize: 15),
+        ),
+        content: Text(
+          'Remove "$deviceName" from registered devices?\n\nIt will no longer receive extension confirmation pop-ups or passkey relays.',
+          style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('CANCEL', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 12)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: CyberColors.crimsonAlert,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'REMOVE',
+              style: CyberTypography.mono(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final drive = context.read<DriveService>();
+      final ok = await drive.removeRegisteredDevice(deviceId);
+      if (ok && mounted) {
+        await _fetchDevices();
+        _showCyberSnackBar('Removed "$deviceName"', isSuccess: true);
+      }
+    }
   }
 
-  void _purgeAllAuditLogs() {
-    HapticFeedback.mediumImpact();
-    setState(() {
-      _auditEvents.clear();
-      _auditEvents.add({
-        'title': 'Volatile RAM Purged',
-        'detail': 'Manual purge executed • 0 residual hashes',
-        'time': 'Just now',
-        'icon': Icons.delete_sweep_rounded,
-        'color': CyberPalette.coralRed,
-      });
-    });
-    _showCyberToast('All relay audit logs purged from RAM cache.', isSuccess: true);
-  }
-
-  void _showCyberToast(String msg, {bool isSuccess = true}) {
+  void _showCyberSnackBar(String msg, {bool isSuccess = true}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: const Color(0xFF121622),
+        backgroundColor: CyberColors.cardSurface,
         elevation: 8,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
-            color: isSuccess ? CyberPalette.electricMint : CyberPalette.coralRed,
+            color: isSuccess ? CyberColors.electricMint : CyberColors.crimsonAlert,
             width: 1,
           ),
         ),
@@ -304,16 +384,16 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
           children: [
             Icon(
               isSuccess ? Icons.verified_rounded : Icons.info_outline_rounded,
-              color: isSuccess ? CyberPalette.electricMint : CyberPalette.coralRed,
+              color: isSuccess ? CyberColors.electricMint : CyberColors.crimsonAlert,
               size: 18,
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 msg,
-                style: GoogleFonts.plusJakartaSans(
+                style: CyberTypography.body(
                   color: Colors.white,
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -328,332 +408,197 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
   @override
   Widget build(BuildContext context) {
     final drive = context.watch<DriveService>();
+    final activeSessions = _desktopSessions.where((s) => s['isCurrentlyActive'] == true).toList();
+    final isAuthorized = activeSessions.isNotEmpty;
+
+    final int? minMinsLeft = isAuthorized
+        ? activeSessions
+            .map((s) => (s['minutesRemaining'] as num?)?.toInt() ?? 0)
+            .reduce((a, b) => a < b ? a : b)
+        : null;
 
     return Scaffold(
-      backgroundColor: CyberPalette.obsidianBg,
-      body: SafeArea(
-        child: Column(
+      backgroundColor: CyberColors.obsidianBg,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: CyberColors.laserCyan),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── 1. Top App Bar ──────────────────────────────────────────
-            _buildTopAppBar(drive),
-
-            // ── Scrollable Body ─────────────────────────────────────────
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── 2. Companion Connection Status Card ───────────────
-                    _buildCompanionStatusCard(),
-                    const SizedBox(height: 16),
-
-                    // ── 3. Pending Request Section (Actionable) ───────────
-                    if (_hasPendingRequest) ...[
-                      _buildPendingRequestCard(),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // ── 4. Target Device Dispatch ─────────────────────────
-                    _buildTargetDeviceDispatch(),
-                    const SizedBox(height: 16),
-
-                    // ── 5. Relay Audit Ledger ─────────────────────────────
-                    _buildRelayAuditLedger(),
-                    const SizedBox(height: 16),
-
-                    // ── 6. Bottom Channel Badge ───────────────────────────
-                    _buildBottomChannelBadge(),
-                    const SizedBox(height: 20),
-                  ],
-                ),
+            Text(
+              'TETHER RELAY // MV3',
+              style: CyberTypography.hudTitle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+                letterSpacing: 1.2,
               ),
             ),
-
-            // ── 7. Fixed Bottom Navigation Bar ────────────────────────────
-            _buildFixedBottomNavBar(),
+            Text(
+              'Zero-Knowledge Workstation Pipe',
+              style: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 10),
+            ),
           ],
+        ),
+        actions: [
+          IconButton(
+            icon: _isRefreshing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: CyberColors.laserCyan),
+                  )
+                : const Icon(Icons.refresh_rounded, color: CyberColors.laserCyan),
+            tooltip: 'Refresh Sessions',
+            onPressed: _isRefreshing ? null : _manualRefresh,
+          ),
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner_rounded, color: CyberColors.electricMint),
+            tooltip: 'Scan Desktop Extension QR',
+            onPressed: _scanDesktopQrCode,
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+      body: CyberBackground(
+        showGrid: true,
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── 1. Hero Status Card ──────────────────────────────────────
+              _buildHeroStatusBanner(isAuthorized, activeSessions.length, minMinsLeft),
+              const SizedBox(height: 16),
+
+              // ── 2. Instant QR Pairing Card ──────────────────────────────
+              _buildQrPairingCard(),
+              const SizedBox(height: 16),
+
+              // ── 3. Source Google Drive Channel ──────────────────────────
+              _buildDriveChannelCard(drive),
+              const SizedBox(height: 16),
+
+              // ── 4. Live Active Desktop Sessions ─────────────────────────
+              _buildActiveSessionsSection(drive, activeSessions),
+              const SizedBox(height: 16),
+
+              // ── 5. Linked Sovereign Mobile Devices ──────────────────────
+              _buildLinkedMobileDevicesSection(),
+              const SizedBox(height: 16),
+
+              // ── 6. Protocol & RAM Security Telemetry ────────────────────
+              _buildProtocolTelemetryCard(),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ─── Section 1: Top App Bar ───────────────────────────────────────────────
-  Widget _buildTopAppBar(DriveService drive) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: CyberPalette.obsidianBg,
-        border: Border(bottom: BorderSide(color: CyberPalette.borderSubtle)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              // Left: Shield logo mark + Title & Subtitle
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: CyberPalette.surfaceElevated,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: CyberPalette.borderHighlight),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x1A00E5FF),
-                      blurRadius: 10,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: const Center(
-                  child: Icon(Icons.shield_outlined, color: CyberPalette.laserCyan, size: 22),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'TetherPass',
-                    style: GoogleFonts.plusJakartaSans(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  Text(
-                    'Tether Relay',
-                    style: GoogleFonts.plusJakartaSans(
-                      color: CyberPalette.mutedText,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-
-              // Right: QR Scan Pair Button
-              IconButton(
-                icon: const Icon(Icons.qr_code_scanner_rounded, color: CyberPalette.laserCyan, size: 21),
-                tooltip: 'Scan Desktop QR Code',
-                style: IconButton.styleFrom(
-                  backgroundColor: CyberPalette.surfaceElevated,
-                  side: const BorderSide(color: CyberPalette.borderSubtle),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                onPressed: _scanDesktopQrCode,
-              ),
-              const SizedBox(width: 8),
-
-              // Right: Biometric trigger chip button
-              IconButton(
-                icon: const Icon(Icons.fingerprint_rounded, color: CyberPalette.electricMint, size: 21),
-                tooltip: 'Authenticate Biometrics',
-                style: IconButton.styleFrom(
-                  backgroundColor: CyberPalette.surfaceElevated,
-                  side: const BorderSide(color: CyberPalette.borderSubtle),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                onPressed: () async {
-                  final auth = AuthService();
-                  final ok = await auth.authenticate(reason: 'Test Sovereign Hardware Biometrics');
-                  if (ok && mounted) {
-                    _showCyberToast('✓ Biometric Sensor Hardware Verified!', isSuccess: true);
-                  }
-                },
-              ),
-              const SizedBox(width: 8),
-
-              // Right: Profile Avatar chip
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: CyberPalette.surfaceElevated,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: CyberPalette.borderHighlight),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: drive.userPhotoUrl != null
-                    ? Image.network(
-                        drive.userPhotoUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.person_outline_rounded, color: Colors.white70, size: 18),
-                      )
-                    : const Center(
-                        child: Icon(Icons.person_outline_rounded, color: Colors.white70, size: 18),
-                      ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // Sub-badge: Glowing pulsing cyan dot with status
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: const Color(0x1400E5FF),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0x3300E5FF)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedBuilder(
-                  animation: _pulseController,
-                  builder: (context, _) => Container(
-                    width: 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      color: CyberPalette.laserCyan,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: CyberPalette.laserCyan.withValues(alpha: 0.4 + (_pulseController.value * 0.6)),
-                          blurRadius: 6 + (_pulseController.value * 4),
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'TETHER ACTIVE: WINDOWS MV3',
-                  style: GoogleFonts.jetBrainsMono(
-                    color: CyberPalette.laserCyan,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── Section 2: Companion Connection Status Card ──────────────────────────
-  Widget _buildCompanionStatusCard() {
-    return Container(
+  // ─── 1. Hero Connection Status Banner ─────────────────────────────────────
+  Widget _buildHeroStatusBanner(bool isAuthorized, int sessionCount, int? minMinsLeft) {
+    return CyberGlassCard(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: CyberPalette.surfaceCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: CyberPalette.borderSubtle),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x22000000),
-            blurRadius: 16,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
+      borderRadius: 16,
+      borderColor: isAuthorized ? CyberColors.electricMint : CyberColors.glassBorder,
+      showCornerBrackets: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row with glowing dot + RAM ONLY chip badge
           Row(
             children: [
+              // Pulsing icon container
               AnimatedBuilder(
                 animation: _pulseController,
-                builder: (context, _) => Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: CyberPalette.laserCyan,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: CyberPalette.laserCyan.withValues(alpha: 0.5 + (_pulseController.value * 0.5)),
-                        blurRadius: 8,
-                        spreadRadius: 1,
+                builder: (context, child) {
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isAuthorized
+                          ? CyberColors.electricMint.withValues(alpha: 0.15 + 0.1 * _pulseController.value)
+                          : CyberColors.elevatedSurface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isAuthorized ? CyberColors.electricMint : CyberColors.glassBorderMuted,
+                        width: 1.4,
                       ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'MV3 RELAY ESTABLISHED',
-                style: GoogleFonts.jetBrainsMono(
-                  color: CyberPalette.laserCyan,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: CyberPalette.surfaceElevated,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: CyberPalette.borderSubtle),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.memory_rounded, color: CyberPalette.electricMint, size: 13),
-                    const SizedBox(width: 5),
-                    Text(
-                      'RAM ONLY',
-                      style: GoogleFonts.jetBrainsMono(
-                        color: CyberPalette.electricMint,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      boxShadow: isAuthorized
+                          ? [
+                              BoxShadow(
+                                color: CyberColors.electricMint.withValues(alpha: 0.3 * _pulseController.value),
+                                blurRadius: 10,
+                                spreadRadius: 1,
+                              )
+                            ]
+                          : [],
                     ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Title & Subtitle with Desktop Icon
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: CyberPalette.surfaceElevated,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: CyberPalette.borderSubtle),
-                ),
-                child: const Center(
-                  child: Icon(Icons.desktop_windows_rounded, color: Colors.white, size: 24),
-                ),
+                    child: Icon(
+                      isAuthorized ? Icons.laptop_windows_rounded : Icons.phonelink_lock_rounded,
+                      color: isAuthorized ? CyberColors.electricMint : CyberColors.textMuted,
+                      size: 28,
+                    ),
+                  );
+                },
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Chrome MV3 Companion',
-                      style: GoogleFonts.plusJakartaSans(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                    // Status Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isAuthorized
+                            ? CyberColors.electricMint.withValues(alpha: 0.15)
+                            : CyberColors.crimsonAlert.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isAuthorized ? CyberColors.electricMint : CyberColors.crimsonAlert,
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isAuthorized ? CyberColors.electricMint : CyberColors.crimsonAlert,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            isAuthorized ? 'RELAY PIPE ACTIVE' : 'DESKTOP LOCKED',
+                            style: CyberTypography.mono(
+                              color: isAuthorized ? CyberColors.electricMint : CyberColors.crimsonAlert,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 6),
                     Text(
-                      'Workstation Desktop (Windows 11 Pro • v124.0)',
-                      style: GoogleFonts.plusJakartaSans(
-                        color: CyberPalette.mutedText,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                      isAuthorized
+                          ? '$sessionCount Active Desktop Session${sessionCount > 1 ? "s" : ""}'
+                          : 'Awaiting Direct QR Pair',
+                      style: CyberTypography.hudTitle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
@@ -661,516 +606,190 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
               ),
             ],
           ),
-          const SizedBox(height: 16),
-
-          // Two metadata pills
-          Row(
-            children: [
-              // Ephemeral Key TTL countdown timer
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                  decoration: BoxDecoration(
-                    color: CyberPalette.surfaceElevated,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: CyberPalette.borderSubtle),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.timer_outlined, color: CyberPalette.amberWarning, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '⏱ ${_formatTtl(_ttlSecondsRemaining)}',
-                          style: GoogleFonts.jetBrainsMono(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
+          if (isAuthorized && minMinsLeft != null) ...[
+            const SizedBox(height: 14),
+            Container(height: 1, color: CyberColors.glassBorderMuted),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'PRIMARY SESSION TTL:',
+                  style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 11),
+                ),
+                Text(
+                  '$minMinsLeft min remaining',
+                  style: CyberTypography.mono(
+                    color: CyberColors.electricMint,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-
-              // Volatile Memory Pill
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                  decoration: BoxDecoration(
-                    color: CyberPalette.surfaceElevated,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: CyberPalette.borderSubtle),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.security_rounded, color: CyberPalette.skyBlue, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Wipe on Disconnect',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: Colors.white70,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          const Divider(color: CyberPalette.darkDivider, height: 1),
-          const SizedBox(height: 12),
-
-          // Bottom status line: Animated waveform pipe icon
-          Row(
-            children: [
-              _buildAnimatedWaveform(),
-              const SizedBox(width: 10),
-              Text(
-                'Sync Pipe: AES-GCM-256',
-                style: GoogleFonts.jetBrainsMono(
-                  color: CyberPalette.mutedText,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              InkWell(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  setState(() => _ttlSecondsRemaining += 900); // +15 mins
-                  _showCyberToast('+15m Added to Volatile Session TTL');
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  child: Text(
-                    '+15m Extend',
-                    style: GoogleFonts.plusJakartaSans(
-                      color: CyberPalette.laserCyan,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
 
-  // ── Animated Waveform Bars ──
-  Widget _buildAnimatedWaveform() {
-    return AnimatedBuilder(
-      animation: _waveformController,
-      builder: (context, _) {
-        final val = _waveformController.value;
-        return SizedBox(
-          width: 24,
-          height: 16,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              _buildBar(6 + (val * 8)),
-              _buildBar(14 - (val * 8)),
-              _buildBar(8 + (val * 6)),
-              _buildBar(16 - (val * 6)),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildBar(double height) {
-    return Container(
-      width: 2.5,
-      height: height.clamp(4.0, 16.0),
-      decoration: BoxDecoration(
-        color: CyberPalette.laserCyan,
-        borderRadius: BorderRadius.circular(2),
-      ),
-    );
-  }
-
-  // ─── Section 3: Pending Request Section (Actionable Card) ─────────────────
-  Widget _buildPendingRequestCard() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: CyberPalette.surfaceCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: CyberPalette.amberWarning.withValues(alpha: 0.6), width: 1.2),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33F59E0B),
-            blurRadius: 20,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
+  // ─── 2. Instant QR Pairing Card ───────────────────────────────────────────
+  Widget _buildQrPairingCard() {
+    return CyberGlassCard(
+      padding: const EdgeInsets.all(16),
+      borderRadius: 16,
+      borderColor: CyberColors.laserCyan.withValues(alpha: 0.4),
+      showCornerBrackets: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: Amber pulsing ring icon + Waiting for Passkey badge
-          Row(
-            children: [
-              AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, _) => Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: CyberPalette.amberWarning,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: CyberPalette.amberWarning.withValues(alpha: 0.4 + (_pulseController.value * 0.6)),
-                        blurRadius: 8,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'PENDING REQUEST',
-                style: GoogleFonts.jetBrainsMono(
-                  color: CyberPalette.amberWarning,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0x28F59E0B),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0x4DF59E0B)),
-                ),
-                child: Text(
-                  'Waiting for Passkey',
-                  style: GoogleFonts.plusJakartaSans(
-                    color: CyberPalette.amberWarning,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Origin Header: Amazon.com logo, TLS Encrypted, and red URGENT badge
           Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: CyberPalette.surfaceElevated,
+                  color: CyberColors.laserCyan.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: CyberPalette.borderSubtle),
+                  border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.3)),
                 ),
-                child: const Center(
-                  child: Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 22),
-                ),
+                child: const Icon(Icons.qr_code_scanner_rounded, color: CyberColors.laserCyan, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          'Amazon.com',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: CyberPalette.surfaceElevated,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: CyberPalette.borderSubtle),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.lock_rounded, color: CyberPalette.electricMint, size: 10),
-                              const SizedBox(width: 4),
-                              Text(
-                                'TLS Encrypted',
-                                style: GoogleFonts.jetBrainsMono(
-                                  color: Colors.white70,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
                     Text(
-                      '$_pendingSecondsAgo seconds ago • Initiated from Active MV3',
-                      style: GoogleFonts.plusJakartaSans(
-                        color: CyberPalette.mutedText,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                      'INSTANT QR PAIRING',
+                      style: CyberTypography.hudTitle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
                       ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Scan the QR displayed on Chrome/Edge on your PC to unlock zero-latency relay',
+                      style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 11),
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0x33EF4444),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: CyberPalette.coralRed),
-                ),
-                child: Text(
-                  'URGENT',
-                  style: GoogleFonts.jetBrainsMono(
-                    color: CyberPalette.coralRed,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ),
             ],
           ),
-          const SizedBox(height: 16),
-
-          // Details Key-Value Table
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: CyberPalette.surfaceElevated,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: CyberPalette.borderSubtle),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: CyberNeonButton(
+              label: 'SCAN DESKTOP EXTENSION QR',
+              icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.black, size: 18),
+              primaryColor: CyberColors.laserCyan,
+              onPressed: _scanDesktopQrCode,
             ),
-            child: Column(
-              children: [
-                _buildKeyValueRow('Requested Item', 'HDFC Infinia (Visa Infinite)', isBold: true),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Divider(color: CyberPalette.darkDivider, height: 1),
-                ),
-                _buildKeyValueRow('Vault Card ID', '•••• •••• •••• 8842', isMono: true),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Divider(color: CyberPalette.darkDivider, height: 1),
-                ),
-                _buildKeyValueRow('Destination URL', 'https://amazon.com/gp/buy...', isMono: true, color: CyberPalette.laserCyan),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Notice: Ready for zero-knowledge biometric authorization
-          Row(
-            children: [
-              const Icon(Icons.verified_user_outlined, color: CyberPalette.electricMint, size: 15),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Ready for zero-knowledge biometric authorization',
-                  style: GoogleFonts.plusJakartaSans(
-                    color: CyberPalette.mutedText,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Action Buttons (Horizontal layout)
-          Row(
-            children: [
-              // Reject button
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: CyberPalette.coralRed,
-                  side: BorderSide(color: CyberPalette.coralRed.withValues(alpha: 0.5)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                icon: const Icon(Icons.close_rounded, size: 18),
-                label: Text(
-                  'Reject',
-                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 13),
-                ),
-                onPressed: _rejectPendingRequest,
-              ),
-              const SizedBox(width: 12),
-
-              // Hold to Stream Key (High-contrast primary button)
-              Expanded(
-                child: GestureDetector(
-                  onTapDown: (_) {
-                    setState(() => _isHolding = true);
-                    _holdController.forward();
-                    HapticFeedback.lightImpact();
-                  },
-                  onTapUp: (_) {
-                    if (_holdController.status != AnimationStatus.completed) {
-                      _holdController.reverse();
-                      setState(() => _isHolding = false);
-                    }
-                  },
-                  onTapCancel: () {
-                    _holdController.reverse();
-                    setState(() => _isHolding = false);
-                  },
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Background container with animated hold progress fill
-                      Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: CyberPalette.electricMint,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x4D00F5A0),
-                              blurRadius: 16,
-                              offset: Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: AnimatedBuilder(
-                          animation: _holdController,
-                          builder: (context, _) => FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: _holdController.value,
-                            child: Container(
-                              color: Colors.white.withValues(alpha: 0.35),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Button label with Fingerprint icon
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.fingerprint_rounded, color: Colors.black, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            _isHolding ? 'Holding to Stream...' : 'Hold to Stream Key',
-                            style: GoogleFonts.plusJakartaSans(
-                              color: Colors.black,
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildKeyValueRow(String key, String value, {bool isBold = false, bool isMono = false, Color? color}) {
-    return Row(
-      children: [
-        Text(
-          key,
-          style: GoogleFonts.plusJakartaSans(
-            color: CyberPalette.mutedText,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w500,
+  // ─── 3. Source Google Drive Channel ───────────────────────────────────────
+  Widget _buildDriveChannelCard(DriveService drive) {
+    return CyberGlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      borderRadius: 14,
+      borderColor: CyberColors.glassBorderMuted,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: CyberColors.elevatedSurface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.3)),
+            ),
+            child: const Icon(Icons.cloud_sync_rounded, color: CyberColors.laserCyan, size: 20),
           ),
-        ),
-        const Spacer(),
-        Text(
-          value,
-          style: isMono
-              ? GoogleFonts.jetBrainsMono(
-                  color: color ?? Colors.white,
-                  fontSize: 12,
-                  fontWeight: isBold ? FontWeight.w700 : FontWeight.w600,
-                )
-              : GoogleFonts.plusJakartaSans(
-                  color: color ?? Colors.white,
-                  fontSize: 12.5,
-                  fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ISOLATED CLOUD RELAY CHANNEL',
+                  style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 9.5),
                 ),
-        ),
-      ],
+                const SizedBox(height: 2),
+                Text(
+                  drive.isSignedIn ? (drive.userEmail ?? 'Connected') : 'Offline (Sign in in Settings)',
+                  style: CyberTypography.mono(
+                    color: drive.isSignedIn ? CyberColors.electricMint : CyberColors.crimsonAlert,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          if (drive.isSignedIn)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: CyberColors.electricMint.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: CyberColors.electricMint.withValues(alpha: 0.4)),
+              ),
+              child: Text(
+                'E2EE READY',
+                style: CyberTypography.mono(
+                  color: CyberColors.electricMint,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
-  // ─── Section 4: Target Device Dispatch ────────────────────────────────────
-  Widget _buildTargetDeviceDispatch() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: CyberPalette.surfaceCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: CyberPalette.borderSubtle),
-      ),
+  // ─── 4. Live Active Desktop Sessions ──────────────────────────────────────
+  Widget _buildActiveSessionsSection(DriveService drive, List<Map<String, dynamic>> activeList) {
+    return CyberGlassCard(
+      padding: const EdgeInsets.all(16),
+      borderRadius: 16,
+      borderColor: activeList.isNotEmpty ? CyberColors.laserCyan.withValues(alpha: 0.3) : CyberColors.glassBorderMuted,
+      showCornerBrackets: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.screen_share_outlined, color: CyberPalette.laserCyan, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Target Device Dispatch',
-                style: GoogleFonts.plusJakartaSans(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: activeList.isNotEmpty
+                      ? CyberColors.electricMint.withValues(alpha: 0.15)
+                      : CyberColors.elevatedSurface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: activeList.isNotEmpty ? CyberColors.electricMint : CyberColors.glassBorderMuted,
+                  ),
+                ),
+                child: Icon(
+                  Icons.laptop_chromebook_rounded,
+                  color: activeList.isNotEmpty ? CyberColors.electricMint : CyberColors.textMuted,
+                  size: 18,
                 ),
               ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0x1400E5FF),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0x3300E5FF)),
-                ),
+              const SizedBox(width: 10),
+              Expanded(
                 child: Text(
-                  'Live Broadcast',
-                  style: GoogleFonts.jetBrainsMono(
-                    color: CyberPalette.laserCyan,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
+                  'DESKTOP SESSIONS (${activeList.length})',
+                  style: CyberTypography.hudTitle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
@@ -1178,328 +797,436 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
           ),
           const SizedBox(height: 6),
           Text(
-            'Select which active sovereign hardware authenticators receive real-time push payloads.',
-            style: GoogleFonts.plusJakartaSans(
-              color: CyberPalette.mutedText,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
+            'Browser extensions currently unlocked on Windows. Terminating a session locks the extension immediately and wipes decrypted caches from RAM.',
+            style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 11),
           ),
           const SizedBox(height: 14),
 
-          // 3-column selector row
-          Row(
-            children: [
-              _buildDeviceCard(
-                index: 0,
-                icon: Icons.phone_android_rounded,
-                title: 'Pixel 8 Pro',
-                subtitle: '(This Device)',
+          if (!drive.isSignedIn) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: CyberColors.plasmaAmber.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: CyberColors.plasmaAmber.withValues(alpha: 0.4)),
               ),
-              const SizedBox(width: 10),
-              _buildDeviceCard(
-                index: 1,
-                icon: Icons.phone_android_rounded,
-                title: 'Galaxy S23',
-                subtitle: 'Standby',
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: CyberColors.plasmaAmber, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Sign in to Google Drive in Settings to view and terminate live desktop sessions.',
+                      style: CyberTypography.body(color: CyberColors.plasmaAmber, fontSize: 11),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 10),
-              _buildDeviceCard(
-                index: 2,
-                icon: Icons.cell_tower_rounded,
-                title: 'Broadcast',
-                subtitle: 'All Vaults',
+            ),
+          ] else if (activeList.isEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: CyberColors.elevatedSurface.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: CyberColors.glassBorderMuted),
               ),
-            ],
+              child: Column(
+                children: [
+                  const Icon(Icons.phonelink_off_rounded, size: 36, color: CyberColors.textDim),
+                  const SizedBox(height: 10),
+                  Text(
+                    'NO ACTIVE DESKTOP SESSIONS',
+                    style: CyberTypography.hudTitle(
+                      color: CyberColors.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'When you unlock the TetherPass extension on Windows, its active live countdown and session will appear here.',
+                    textAlign: TextAlign.center,
+                    style: CyberTypography.body(color: CyberColors.textDim, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            ...activeList.map((s) => _buildSessionTile(s)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSessionTile(Map<String, dynamic> s) {
+    final sessionId = (s['sessionId'] as String?) ?? '';
+    final deviceName = (s['deviceName'] as String?) ?? 'Windows Browser Extension';
+    final expiresAt = (s['expiresAt'] as num?)?.toInt() ?? 0;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final remainingMs = (expiresAt > nowMs) ? (expiresAt - nowMs) : 0;
+    final mins = remainingMs ~/ 60000;
+    final secs = (remainingMs % 60000) ~/ 1000;
+    final timeStr = mins > 0 ? '$mins m $secs s remaining' : '$secs s remaining';
+    final createdAt = (s['createdAt'] as num?)?.toInt() ?? 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: CyberColors.cardSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.4), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: CyberColors.laserCyan.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: const BoxDecoration(
+              color: CyberColors.elevatedSurface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(13)),
+              border: Border(bottom: BorderSide(color: CyberColors.glassBorderMuted)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.laptop_windows_rounded, color: CyberColors.laserCyan, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    deviceName,
+                    style: CyberTypography.hudTitle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: CyberColors.electricMint.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: CyberColors.electricMint.withValues(alpha: 0.5)),
+                  ),
+                  child: Text(
+                    'ACTIVE',
+                    style: CyberTypography.mono(
+                      color: CyberColors.electricMint,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Details Body
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: CyberColors.electricMint,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      timeStr,
+                      style: CyberTypography.mono(
+                        color: CyberColors.electricMint,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (createdAt > 0)
+                      Text(
+                        'Started ${_formatSessionTime(createdAt)}',
+                        style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 10),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: CyberColors.laserCyan,
+                          side: BorderSide(color: CyberColors.laserCyan.withValues(alpha: 0.5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        ),
+                        icon: const Icon(Icons.more_time_rounded, size: 16),
+                        label: Text(
+                          '+15m EXTEND',
+                          style: CyberTypography.mono(
+                            color: CyberColors.laserCyan,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                        onPressed: () => _extendSession(sessionId, deviceName, 15),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: CyberColors.crimsonAlert,
+                          side: BorderSide(color: CyberColors.crimsonAlert.withValues(alpha: 0.5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        ),
+                        icon: const Icon(Icons.stop_circle_outlined, size: 16),
+                        label: Text(
+                          'TERMINATE',
+                          style: CyberTypography.mono(
+                            color: CyberColors.crimsonAlert,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                        onPressed: () => _terminateSession(sessionId, deviceName),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDeviceCard({
-    required int index,
-    required IconData icon,
-    required String title,
-    required String subtitle,
-  }) {
-    final isSelected = _selectedDeviceIndex == index;
-
-    return Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          HapticFeedback.lightImpact();
-          setState(() => _selectedDeviceIndex = index);
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0x1A00E5FF) : CyberPalette.surfaceElevated,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? CyberPalette.laserCyan : CyberPalette.borderSubtle,
-              width: isSelected ? 1.5 : 1,
-            ),
-            boxShadow: isSelected
-                ? const [
-                    BoxShadow(
-                      color: Color(0x3300E5FF),
-                      blurRadius: 12,
-                      offset: Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Column(
-            children: [
-              Icon(
-                icon,
-                color: isSelected ? CyberPalette.laserCyan : CyberPalette.mutedText,
-                size: 24,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: GoogleFonts.plusJakartaSans(
-                  color: isSelected ? Colors.white : Colors.white70,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: GoogleFonts.jetBrainsMono(
-                  color: isSelected ? CyberPalette.laserCyan : CyberPalette.mutedText,
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w600,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ─── Section 5: Relay Audit Ledger ────────────────────────────────────────
-  Widget _buildRelayAuditLedger() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: CyberPalette.surfaceCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: CyberPalette.borderSubtle),
-      ),
+  // ─── 5. Linked Sovereign Mobile Devices ────────────────────────────────────
+  Widget _buildLinkedMobileDevicesSection() {
+    return CyberGlassCard(
+      padding: const EdgeInsets.all(16),
+      borderRadius: 16,
+      borderColor: CyberColors.glassBorderMuted,
+      showCornerBrackets: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.terminal_rounded, color: CyberPalette.laserCyan, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Relay Audit Ledger',
-                style: GoogleFonts.plusJakartaSans(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: CyberColors.laserCyan.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
                 ),
+                child: const Icon(Icons.devices_rounded, color: CyberColors.laserCyan, size: 18),
               ),
-              const Spacer(),
-              TextButton(
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  foregroundColor: CyberPalette.coralRed,
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                ),
-                onPressed: _purgeAllAuditLogs,
-                child: Text(
-                  'Purge All Logs',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
+              const SizedBox(width: 10),
+              Text(
+                'LINKED AUTHENTICATOR PHONES',
+                style: CyberTypography.hudTitle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-
-          // List of past sync events
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _auditEvents.length,
-            separatorBuilder: (_, __) => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Divider(color: CyberPalette.darkDivider, height: 1),
-            ),
-            itemBuilder: (context, idx) {
-              final item = _auditEvents[idx];
-              return Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: CyberPalette.surfaceElevated,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: CyberPalette.borderSubtle),
-                    ),
-                    child: Center(
-                      child: Icon(item['icon'] as IconData, color: item['color'] as Color, size: 16),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item['title'] as String,
-                          style: GoogleFonts.plusJakartaSans(
-                            color: Colors.white,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          item['detail'] as String,
-                          style: GoogleFonts.plusJakartaSans(
-                            color: CyberPalette.mutedText,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    item['time'] as String,
-                    style: GoogleFonts.jetBrainsMono(
-                      color: CyberPalette.mutedText,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              );
-            },
+          const SizedBox(height: 6),
+          Text(
+            'Hardware phones registered to receive push approval prompts from your browser extensions.',
+            style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 11),
           ),
-        ],
-      ),
-    );
-  }
+          const SizedBox(height: 14),
 
-  // ─── Section 6: Bottom Channel Badge ──────────────────────────────────────
-  Widget _buildBottomChannelBadge() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: CyberPalette.surfaceElevated,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: CyberPalette.borderSubtle),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.cloud_sync_outlined, color: CyberPalette.laserCyan, size: 16),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              'Google Drive Isolated AppData Channel • card_vault_access_request.json • E2EE',
-              style: GoogleFonts.jetBrainsMono(
-                color: CyberPalette.mutedText,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
+          // Current Phone
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: CyberColors.elevatedSurface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: CyberColors.electricMint.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: CyberColors.electricMint.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.phone_android_rounded, color: CyberColors.electricMint, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              _currentDeviceName.isNotEmpty ? _currentDeviceName : 'Current Mobile Device',
+                              style: CyberTypography.hudTitle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: CyberColors.electricMint.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: CyberColors.electricMint.withValues(alpha: 0.6)),
+                            ),
+                            child: Text(
+                              'THIS PHONE',
+                              style: CyberTypography.mono(
+                                color: CyberColors.electricMint,
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'ID: ${_currentDeviceId.isNotEmpty ? _currentDeviceId : "Initializing..."}',
+                        style: CyberTypography.mono(color: CyberColors.textDim, fontSize: 9.5),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_rounded, size: 18, color: CyberColors.laserCyan),
+                  tooltip: 'Rename this phone',
+                  onPressed: () => _renameDevice(_currentDeviceId, _currentDeviceName),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
-    );
-  }
 
-  // ─── Section 7: Fixed Bottom Navigation Bar ───────────────────────────────
-  Widget _buildFixedBottomNavBar() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: CyberPalette.surfaceCard,
-        border: Border(top: BorderSide(color: CyberPalette.borderSubtle)),
-      ),
-      child: Row(
-        children: [
-          _buildNavItem(0, Icons.lock_outline_rounded, 'Vault', onTap: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            } else {
-              Navigator.pushReplacementNamed(context, '/home');
-            }
-          }),
-          _buildNavItem(1, Icons.cell_tower_rounded, 'Tether Relay', isActive: true),
-          _buildNavItem(2, Icons.nfc_rounded, 'Scan & NFC', onTap: _scanDesktopQrCode),
-          _buildNavItem(3, Icons.security_rounded, 'Security', onTap: () {
-            Navigator.pop(context);
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavItem(int index, IconData icon, String label, {bool isActive = false, VoidCallback? onTap}) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                color: isActive ? CyberPalette.laserCyan : CyberPalette.mutedText,
-                size: 22,
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    label,
-                    style: GoogleFonts.plusJakartaSans(
-                      color: isActive ? Colors.white : CyberPalette.mutedText,
-                      fontSize: 11,
-                      fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-                    ),
-                  ),
-                  if (isActive) ...[
-                    const SizedBox(width: 4),
+          // Other Registered Phones
+          if (_devices.where((d) => d['deviceId'] != _currentDeviceId).isNotEmpty) ...[
+            const SizedBox(height: 10),
+            ..._devices.where((d) => d['deviceId'] != _currentDeviceId).map((d) {
+              final name = (d['deviceName'] as String?) ?? 'Mobile Phone';
+              final id = (d['deviceId'] as String?) ?? '';
+              final platform = (d['platform'] as String?) ?? 'Android';
+              return Container(
+                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: CyberColors.cardSurface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: CyberColors.glassBorderMuted),
+                ),
+                child: Row(
+                  children: [
                     Container(
-                      width: 4,
-                      height: 4,
-                      decoration: const BoxDecoration(
-                        color: CyberPalette.laserCyan,
-                        shape: BoxShape.circle,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: CyberColors.elevatedSurface,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.smartphone_rounded, color: CyberColors.textMuted, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: CyberTypography.hudTitle(
+                              color: Colors.white,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '$platform • ID: ${id.length > 12 ? "${id.substring(0, 12)}..." : id}',
+                            style: CyberTypography.mono(color: CyberColors.textDim, fontSize: 9.5),
+                          ),
+                        ],
                       ),
                     ),
+                    IconButton(
+                      icon: const Icon(Icons.edit_rounded, size: 16, color: CyberColors.textMuted),
+                      tooltip: 'Rename',
+                      onPressed: () => _renameDevice(id, name),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, size: 16, color: CyberColors.crimsonAlert),
+                      tooltip: 'Remove',
+                      onPressed: () => _removeDevice(id, name),
+                    ),
                   ],
-                ],
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── 6. Protocol & RAM Security Telemetry ─────────────────────────────────
+  Widget _buildProtocolTelemetryCard() {
+    return CyberGlassCard(
+      padding: const EdgeInsets.all(14),
+      borderRadius: 14,
+      borderColor: CyberColors.glassBorderMuted,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.shield_outlined, color: CyberColors.laserCyan, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                'ZERO-KNOWLEDGE ARCHITECTURE',
+                style: CyberTypography.mono(
+                  color: CyberColors.laserCyan,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8,
+                ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 8),
+          Text(
+            '• Ephemeral Keys: Decryption keys live exclusively in volatile workstation RAM and are wiped automatically on disconnect or session expiration.\n• No Disk Caches: Passwords, card numbers, and banking credentials are never written to Windows storage.\n• Sovereign Authorization: Only this phone can approve access payloads via biometrics.',
+            style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 11),
+          ),
+        ],
       ),
     );
   }
