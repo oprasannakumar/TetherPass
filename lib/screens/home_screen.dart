@@ -1123,8 +1123,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       children: [
-                        _buildFilterChip('ALL (${_items.length})', 0),
-                        const SizedBox(width: 8),
                         _buildFilterChip('CREDIT (${_items.where((i) => i.isCard && i.isCredit).length})', 1),
                         const SizedBox(width: 8),
                         _buildFilterChip('DEBIT (${_items.where((i) => i.isCard && i.isDebit).length})', 2),
@@ -1272,7 +1270,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isSelected = _selectedFilter == index;
     return InkWell(
       borderRadius: BorderRadius.circular(20),
-      onTap: () => setState(() => _selectedFilter = index),
+      onTap: () => setState(() => _selectedFilter = _selectedFilter == index ? 0 : index),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
