@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../theme/cyber_theme.dart';
 
 enum TetherSyncMode {
   connecting,
@@ -19,7 +20,7 @@ class TetherSyncDialog extends StatefulWidget {
     this.customTitle,
   });
 
-  /// Runs an asynchronous task while showing the animated connection/disconnection dialog.
+  /// Runs an asynchronous task while showing the animated cyber connection/disconnection dialog.
   /// Automatically transitions to the success state before closing.
   static Future<T?> run<T>({
     required BuildContext context,
@@ -135,24 +136,24 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
   @override
   Widget build(BuildContext context) {
     final isConnecting = widget.mode == TetherSyncMode.connecting;
-    final primaryColor = isConnecting ? const Color(0xFFFF6F00) : const Color(0xFFEF4444);
+    final primaryColor = isConnecting ? CyberColors.laserCyan : CyberColors.crimsonAlert;
 
     final title = _isFinished
         ? (_isSuccess
-            ? (isConnecting ? 'Connected & Paired!' : 'Session Terminated & Locked')
-            : 'Operation Failed')
+            ? (isConnecting ? 'ENCLAVE TETHER ACTIVE' : 'SESSION TERMINATED & ZEROED')
+            : 'TRANSMISSION FAILED')
         : (widget.customTitle ??
-            (isConnecting ? 'Connecting to Desktop...' : 'Disconnecting Desktop...'));
+            (isConnecting ? 'ESTABLISHING TETHER...' : 'TERMINATING RELAY...'));
 
     final subtitle = _isFinished
         ? (_isSuccess
             ? (isConnecting
-                ? 'Desktop extension on "${widget.deviceName}" is unlocked.'
-                : 'Session on "${widget.deviceName}" has been secured.')
-            : (_errorMessage ?? 'Could not complete synchronization.'))
+                ? 'Desktop extension on "${widget.deviceName}" unlocked via E2EE sync pipe.'
+                : 'Volatile session on "${widget.deviceName}" purged from RAM.')
+            : (_errorMessage ?? 'Could not complete cryptographic handshake.'))
         : (isConnecting
-            ? 'Transmitting encrypted biometric link to "${widget.deviceName}"...'
-            : 'Locking session and revoking credentials on "${widget.deviceName}"...');
+            ? 'Streaming AES-GCM ephemeral handshake to "${widget.deviceName}"...'
+            : 'Revoking ephemeral keys & zeroing RAM on "${widget.deviceName}"...');
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -163,20 +164,24 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
           width: 320,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: CyberColors.cardSurface.withValues(alpha: 0.95),
             borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: primaryColor.withValues(alpha: 0.35),
+              width: 1.2,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.14),
+                color: primaryColor.withValues(alpha: 0.2),
                 blurRadius: 30,
-                offset: const Offset(0, 10),
+                spreadRadius: 2,
               ),
             ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ── Animated Radar Waves & Center Icon ──
+              // ── Animated Cyber Radar Waves & Center Icon ──
               SizedBox(
                 height: 120,
                 width: 120,
@@ -195,7 +200,7 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: primaryColor.withOpacity((1.0 - progress) * 0.45),
+                                color: primaryColor.withValues(alpha: (1.0 - progress) * 0.5),
                                 width: 2,
                               ),
                             ),
@@ -213,14 +218,14 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: primaryColor.withOpacity((1.0 - progress) * 0.35),
+                                color: primaryColor.withValues(alpha: (1.0 - progress) * 0.4),
                                 width: 1.5,
                               ),
                             ),
                           );
                         },
                       ),
-                      // Rotating dotted spinner ring
+                      // Rotating cyan spinner ring
                       AnimatedBuilder(
                         animation: _rotationController,
                         builder: (context, child) {
@@ -232,7 +237,7 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
                               child: CircularProgressIndicator(
                                 strokeWidth: 2.5,
                                 valueColor: AlwaysStoppedAnimation<Color>(
-                                  primaryColor.withOpacity(0.85),
+                                  primaryColor.withValues(alpha: 0.85),
                                 ),
                               ),
                             ),
@@ -254,20 +259,20 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
                             end: Alignment.bottomRight,
                             colors: _isFinished
                                 ? (_isSuccess
-                                    ? [const Color(0xFF10B981), const Color(0xFF059669)]
-                                    : [const Color(0xFFEF4444), const Color(0xFFB91C1C)])
+                                    ? [CyberColors.electricMint, const Color(0xFF00B377)]
+                                    : [CyberColors.crimsonAlert, const Color(0xFFB91C1C)])
                                 : (isConnecting
-                                    ? [const Color(0xFFFF8F00), const Color(0xFFFF6F00)]
-                                    : [const Color(0xFFF87171), const Color(0xFFEF4444)]),
+                                    ? [CyberColors.laserCyan, const Color(0xFF0284C7)]
+                                    : [CyberColors.crimsonAlert, const Color(0xFFB91C1C)]),
                           ),
                           boxShadow: [
                             BoxShadow(
                               color: (_isFinished
-                                      ? (_isSuccess ? const Color(0xFF10B981) : const Color(0xFFEF4444))
+                                      ? (_isSuccess ? CyberColors.electricMint : CyberColors.crimsonAlert)
                                       : primaryColor)
-                                  .withOpacity(0.35),
-                              blurRadius: 16,
-                              offset: const Offset(0, 6),
+                                  .withValues(alpha: 0.4),
+                              blurRadius: 18,
+                              offset: const Offset(0, 4),
                             ),
                           ],
                         ),
@@ -279,7 +284,7 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
                               : (isConnecting
                                   ? Icons.wifi_tethering_rounded
                                   : Icons.phonelink_erase_rounded),
-                          color: Colors.white,
+                          color: isConnecting && !_isFinished ? Colors.black : Colors.white,
                           size: 34,
                         ),
                       ),
@@ -288,17 +293,17 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
                 ),
               ),
 
-              const SizedBox(height: 18),
+              const SizedBox(height: 20),
 
               // Title
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 17,
+                style: CyberTypography.cyberHeader.copyWith(
+                  fontSize: 15,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                  letterSpacing: -0.3,
+                  color: Colors.white,
+                  letterSpacing: 1.0,
                 ),
               ),
 
@@ -308,29 +313,27 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
+                style: CyberTypography.bodySmall.copyWith(
+                  fontSize: 12,
                   color: _isFinished && !_isSuccess
-                      ? const Color(0xFFDC2626)
-                      : const Color(0xFF64748B),
+                      ? CyberColors.crimsonAlert
+                      : CyberColors.mutedText,
                   height: 1.4,
                 ),
               ),
 
-              const SizedBox(height: 18),
+              const SizedBox(height: 20),
 
               // Status Pill
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: _isFinished
-                      ? (_isSuccess ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2))
-                      : (isConnecting ? const Color(0xFFFFFBEB) : const Color(0xFFFEF2F2)),
+                  color: CyberColors.obsidianBg.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: _isFinished
-                        ? (_isSuccess ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA))
-                        : (isConnecting ? const Color(0xFFFDE68A) : const Color(0xFFFECACA)),
+                        ? (_isSuccess ? CyberColors.electricMint.withValues(alpha: 0.5) : CyberColors.crimsonAlert.withValues(alpha: 0.5))
+                        : primaryColor.withValues(alpha: 0.5),
                     width: 1,
                   ),
                 ),
@@ -339,37 +342,35 @@ class _TetherSyncDialogState extends State<TetherSyncDialog> with TickerProvider
                   children: [
                     if (!_isFinished) ...[
                       SizedBox(
-                        width: 8,
-                        height: 8,
+                        width: 10,
+                        height: 10,
                         child: CircularProgressIndicator(
-                          strokeWidth: 1.8,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            isConnecting ? const Color(0xFFD97706) : const Color(0xFFDC2626),
-                          ),
+                          strokeWidth: 2.0,
+                          valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        isConnecting ? 'Syncing...' : 'Disconnecting...',
-                        style: TextStyle(
+                        isConnecting ? 'TRANSMITTING...' : 'DISCONNECTING...',
+                        style: CyberTypography.monoBadge.copyWith(
                           fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: isConnecting ? const Color(0xFFB45309) : const Color(0xFFB91C1C),
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
                         ),
                       ),
                     ] else ...[
                       Icon(
                         _isSuccess ? Icons.check_circle_rounded : Icons.error_rounded,
                         size: 14,
-                        color: _isSuccess ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                        color: _isSuccess ? CyberColors.electricMint : CyberColors.crimsonAlert,
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        _isSuccess ? 'Completed' : 'Failed',
-                        style: TextStyle(
+                        _isSuccess ? 'CONFIRMED' : 'FAILED',
+                        style: CyberTypography.monoBadge.copyWith(
                           fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: _isSuccess ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                          fontWeight: FontWeight.bold,
+                          color: _isSuccess ? CyberColors.electricMint : CyberColors.crimsonAlert,
                         ),
                       ),
                     ],

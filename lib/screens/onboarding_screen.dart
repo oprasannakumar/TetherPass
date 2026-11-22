@@ -8,6 +8,7 @@ import '../services/database_service.dart';
 import '../services/drive_service.dart';
 import '../services/secure_backup_export_service.dart';
 import '../services/vault_security_service.dart';
+import '../theme/cyber_theme.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -90,64 +91,75 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Top Indicator
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (_currentPage > 0)
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1E293B)),
-                      onPressed: _previousPage,
-                    )
-                  else
-                    const SizedBox(width: 48),
-                  Row(
-                    children: List.generate(
-                      3,
-                      (index) => Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        width: _currentPage == index ? 24 : 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: _currentPage == index
-                              ? const Color(0xFFFF6F00) // Orange accent
-                              : const Color(0xFFCBD5E1),
-                          borderRadius: BorderRadius.circular(4),
+      backgroundColor: CyberColors.obsidianBg,
+      body: CyberBackground(
+        showGrid: true,
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Top Indicator
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (_currentPage > 0)
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: CyberColors.laserCyan),
+                        onPressed: _previousPage,
+                      )
+                    else
+                      const SizedBox(width: 48),
+                    Row(
+                      children: List.generate(
+                        3,
+                        (index) => Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: _currentPage == index ? 24 : 8,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: _currentPage == index
+                                ? CyberColors.laserCyan
+                                : CyberColors.glassBorderMuted,
+                            borderRadius: BorderRadius.circular(3),
+                            boxShadow: _currentPage == index
+                                ? [
+                                    BoxShadow(
+                                      color: CyberColors.laserCyan.withValues(alpha: 0.5),
+                                      blurRadius: 6,
+                                    ),
+                                  ]
+                                : null,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 48),
-                ],
+                    const SizedBox(width: 48),
+                  ],
+                ),
               ),
-            ),
 
-            // Page View
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (page) => setState(() => _currentPage = page),
-                children: [
-                  _buildStep1Welcome(),
-                  _buildStep2MasterPassword(),
-                  _buildStep3Biometric(),
-                ],
+              // Page View
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  onPageChanged: (page) => setState(() => _currentPage = page),
+                  children: [
+                    _buildStep1Welcome(),
+                    _buildStep2MasterPassword(),
+                    _buildStep3Biometric(),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ─── Step 1: Welcome & Restore ─────────────────────────────────────────────
+  // ─── Step 1: Welcome & Genesis ─────────────────────────────────────────────
 
   Widget _buildStep1Welcome() {
     return Padding(
@@ -156,14 +168,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white,
-              border: Border.all(color: const Color(0xFFFF6F00).withValues(alpha: 0.3), width: 2),
+              color: const Color(0xFF0F172A),
+              border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.5), width: 1.8),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFFF6F00).withValues(alpha: 0.2),
+                  color: CyberColors.laserCyan.withValues(alpha: 0.25),
                   blurRadius: 28,
                   offset: const Offset(0, 8),
                 ),
@@ -175,55 +187,58 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 width: 96,
                 height: 96,
                 fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.shield_rounded,
+                  color: CyberColors.laserCyan,
+                  size: 48,
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 32),
-          const Text(
-            'TetherPass',
-            style: TextStyle(
-              color: Color(0xFF0F172A),
-              fontSize: 32,
+          const SizedBox(height: 28),
+          Text(
+            'TETHERPASS',
+            style: CyberTypography.hudTitle(
+              color: CyberColors.textWhite,
+              fontSize: 28,
               fontWeight: FontWeight.w900,
-              letterSpacing: 1.1,
+              letterSpacing: 3.0,
             ),
           ),
-          const SizedBox(height: 10),
-          const Text(
-            'Zero-Knowledge Password, Bank & Card Manager\nProtected by Hardware AES-256 and Biometrics',
+          const SizedBox(height: 8),
+          const CyberBadge(
+            text: 'ZERO-KNOWLEDGE // HARDWARE ENCLAVE',
+            color: CyberColors.laserCyan,
+            hasGlow: true,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Air-Gapped Sovereign Credential & Bank Manager\nProtected by Hardware AES-256 and Biometric Nodes',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF64748B), fontSize: 14, height: 1.5),
+            style: CyberTypography.body(
+              color: CyberColors.textMuted,
+              fontSize: 13,
+            ),
           ),
           const Spacer(),
 
           // Google Drive & Local Restore Option
-          OutlinedButton.icon(
+          CyberNeonButton(
             onPressed: () => _showRestoreDialog(),
-            icon: const Icon(Icons.cloud_download_rounded, color: Color(0xFF0F172A)),
-            label: const Text('Restore via Google Drive or File', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600)),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 52),
-              backgroundColor: Colors.white,
-              side: const BorderSide(color: Color(0xFFCBD5E1)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
+            isOutlined: true,
+            label: 'RESTORE FROM DRIVE // FILE',
+            icon: const Icon(Icons.cloud_download_rounded, color: CyberColors.laserCyan, size: 18),
+            primaryColor: CyberColors.laserCyan,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
           // Primary: Create New Vault
-          ElevatedButton(
+          CyberNeonButton(
             onPressed: _nextPage,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF6F00),
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 54),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 3,
-            ),
-            child: const Text(
-              'Create New Vault',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+            label: 'INITIALIZE NEW VAULT',
+            icon: const Icon(Icons.add_moderator_rounded, color: Colors.black, size: 18),
+            primaryColor: CyberColors.electricMint,
+            textColor: Colors.black,
           ),
           const SizedBox(height: 16),
         ],
@@ -239,27 +254,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Set Master Password',
-            style: TextStyle(color: Color(0xFF0F172A), fontSize: 24, fontWeight: FontWeight.bold),
+          Text(
+            'ARM MASTER PASSKEY',
+            style: CyberTypography.hudTitle(
+              color: CyberColors.textWhite,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'This password encrypts your entire vault locally. It is never stored or sent to any server.',
-            style: TextStyle(color: Color(0xFF64748B), fontSize: 13, height: 1.4),
+          Text(
+            'This sovereign passkey locally seals your hardware vault. It is zero-knowledge and never leaves this device.',
+            style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 12.5),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 22),
 
           // Password Field
           TextField(
             controller: _passwordController,
             obscureText: _obscurePassword,
-            style: const TextStyle(color: Color(0xFF0F172A)),
+            style: CyberTypography.mono(color: Colors.white, fontSize: 14),
             decoration: InputDecoration(
-              labelText: 'Master Password (min 4 characters)',
-              prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFFFF6F00)),
+              labelText: 'MASTER PASSKEY (MIN 4 CHARS)',
+              prefixIcon: const Icon(Icons.lock_outline_rounded, color: CyberColors.laserCyan),
               suffixIcon: IconButton(
-                icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: const Color(0xFF64748B)),
+                icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: CyberColors.textMuted),
                 onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
               ),
             ),
@@ -270,12 +290,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           TextField(
             controller: _confirmController,
             obscureText: _obscureConfirm,
-            style: const TextStyle(color: Color(0xFF0F172A)),
+            style: CyberTypography.mono(color: Colors.white, fontSize: 14),
             decoration: InputDecoration(
-              labelText: 'Confirm Master Password',
-              prefixIcon: const Icon(Icons.lock_rounded, color: Color(0xFFFF6F00)),
+              labelText: 'CONFIRM MASTER PASSKEY',
+              prefixIcon: const Icon(Icons.lock_rounded, color: CyberColors.laserCyan),
               suffixIcon: IconButton(
-                icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility, color: const Color(0xFF64748B)),
+                icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility, color: CyberColors.textMuted),
                 onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
               ),
             ),
@@ -283,48 +303,50 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
           if (_step2Error != null) ...[
             const SizedBox(height: 8),
-            Text(_step2Error!, style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w600)),
+            Text(
+              _step2Error!,
+              style: CyberTypography.mono(color: CyberColors.crimsonAlert, fontSize: 11),
+            ),
           ],
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 22),
 
-          // Recovery Key Container
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-              boxShadow: const [
-                BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
-              ],
-            ),
+          // Recovery Key Glassmorphic Container
+          CyberGlassCard(
+            padding: const EdgeInsets.all(18),
+            borderRadius: 16,
+            borderColor: CyberColors.glassBorder,
+            showCornerBrackets: true,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  children: const [
-                    Icon(Icons.key_rounded, color: Color(0xFFFF6F00), size: 20),
-                    SizedBox(width: 8),
+                  children: [
+                    const Icon(Icons.key_rounded, color: CyberColors.laserCyan, size: 20),
+                    const SizedBox(width: 8),
                     Text(
-                      'Your 16-Character Recovery Key',
-                      style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                      '16-CHARACTER RECOVERY KEY',
+                      style: CyberTypography.hudTitle(
+                        color: CyberColors.textWhite,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12.5,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'If you forget your master password, this key is the ONLY way to recover your vault.',
-                  style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                Text(
+                  'If you forget your master passkey, this hardware key is the ONLY sovereign method to recover your vault.',
+                  style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 11),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7ED), // Warm light orange
+                    color: CyberColors.cardSurface,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFFFEDD5)),
+                    border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.4)),
                   ),
                   child: Row(
                     children: [
@@ -334,12 +356,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           alignment: Alignment.centerLeft,
                           child: Text(
                             _generatedRecoveryKey,
-                            style: const TextStyle(
-                              color: Color(0xFFC2410C),
-                              fontFamily: 'Courier',
+                            style: CyberTypography.mono(
+                              color: CyberColors.laserCyan,
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
+                              letterSpacing: 2.0,
                             ),
                           ),
                         ),
@@ -351,7 +372,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         visualDensity: VisualDensity.compact,
                         icon: Icon(
                           _copiedRecoveryKey ? Icons.check_circle_rounded : Icons.copy_rounded,
-                          color: _copiedRecoveryKey ? Colors.green : const Color(0xFFC2410C),
+                          color: _copiedRecoveryKey ? CyberColors.electricMint : CyberColors.laserCyan,
                           size: 20,
                         ),
                         tooltip: 'Copy Recovery Key',
@@ -359,7 +380,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           Clipboard.setData(ClipboardData(text: _generatedRecoveryKey));
                           setState(() => _copiedRecoveryKey = true);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Recovery Key copied to clipboard!')),
+                            const SnackBar(
+                              content: Text('Recovery Key copied to secure clipboard!'),
+                              backgroundColor: CyberColors.cardSurface,
+                            ),
                           );
                         },
                       ),
@@ -370,32 +394,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
 
-          ElevatedButton(
+          CyberNeonButton(
             onPressed: () {
               final pwd = _passwordController.text.trim();
               final conf = _confirmController.text.trim();
 
               if (pwd.length < 4) {
-                setState(() => _step2Error = 'Password must be at least 4 characters.');
+                setState(() => _step2Error = 'Passkey must be at least 4 characters.');
                 return;
               }
               if (pwd != conf) {
-                setState(() => _step2Error = 'Passwords do not match.');
+                setState(() => _step2Error = 'Passkeys do not match.');
                 return;
               }
 
               setState(() => _step2Error = null);
               _nextPage();
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF6F00),
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 54),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-            child: const Text('Continue to Biometrics', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            primaryColor: CyberColors.laserCyan,
+            label: 'PROCEED TO BIOMETRICS',
+            icon: const Icon(Icons.arrow_forward_rounded, color: Colors.black, size: 18),
           ),
         ],
       ),
@@ -414,43 +434,58 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.blue.withValues(alpha: 0.1),
-              border: Border.all(color: Colors.blue.withValues(alpha: 0.3), width: 2),
+              color: CyberColors.glassFill,
+              border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.5), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: CyberColors.laserCyan.withValues(alpha: 0.25),
+                  blurRadius: 24,
+                ),
+              ],
             ),
             child: const Icon(
               Icons.fingerprint_rounded,
               size: 80,
-              color: Colors.blueAccent,
+              color: CyberColors.laserCyan,
             ),
           ),
-          const SizedBox(height: 32),
-          const Text(
-            'Biometric Unlock',
-            style: TextStyle(color: Color(0xFF0F172A), fontSize: 24, fontWeight: FontWeight.bold),
+          const SizedBox(height: 28),
+          Text(
+            'BIOMETRIC PROTOCOL',
+            style: CyberTypography.hudTitle(
+              color: CyberColors.textWhite,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.5,
+            ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Use your fingerprint or face recognition to unlock your vault quickly without entering your Master Password every time.',
+          Text(
+            'Arm hardware fingerprint or facial recognition to disarm your vault quickly without entering your Master Passkey every cycle.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF64748B), fontSize: 13, height: 1.5),
+            style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 13),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
 
-          Container(
+          CyberGlassCard(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-              boxShadow: const [
-                BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
-              ],
-            ),
+            borderRadius: 16,
+            borderColor: CyberColors.glassBorder,
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Enable Biometrics', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
-              subtitle: const Text('Fingerprint / Face Recognition', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-              activeThumbColor: const Color(0xFFFF6F00),
+              title: Text(
+                'ENABLE BIOMETRICS',
+                style: CyberTypography.hudTitle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              subtitle: Text(
+                'Fingerprint / Touch / Face ID',
+                style: CyberTypography.mono(color: CyberColors.laserCyan, fontSize: 11),
+              ),
+              activeThumbColor: CyberColors.laserCyan,
               value: _biometricEnabled,
               onChanged: (val) => setState(() => _biometricEnabled = val),
             ),
@@ -458,17 +493,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
           const Spacer(),
 
-          ElevatedButton(
+          CyberNeonButton(
             onPressed: _isSettingUp ? null : _completeSetup,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF6F00),
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 54),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-            child: _isSettingUp
-                ? const CircularProgressIndicator(color: Colors.white)
-                : const Text('Finish & Open Vault', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            isLoading: _isSettingUp,
+            label: 'SEAL VAULT & INITIALIZE',
+            icon: const Icon(Icons.lock_rounded, color: Colors.black, size: 18),
+            primaryColor: CyberColors.electricMint,
+            textColor: Colors.black,
           ),
           const SizedBox(height: 16),
         ],
@@ -479,31 +510,49 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _showRestoreDialog() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      backgroundColor: CyberColors.cardSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        side: BorderSide(color: CyberColors.glassBorder, width: 1.2),
+      ),
       builder: (ctx) => Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Restore Vault', style: TextStyle(color: Color(0xFF0F172A), fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            const Text('Choose where to restore your encrypted backup from:', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
-            const SizedBox(height: 20),
+            Text(
+              'RESTORE VAULT PAYLOAD',
+              style: CyberTypography.hudTitle(
+                color: CyberColors.textWhite,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Select source to reconstruct encrypted enclave payload:',
+              style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 11),
+            ),
+            const SizedBox(height: 18),
             ListTile(
               leading: Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: const Color(0xFFFF6F00).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.cloud_download_rounded, color: Color(0xFFFF6F00)),
+                decoration: BoxDecoration(
+                  color: CyberColors.laserCyan.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.3)),
+                ),
+                child: const Icon(Icons.cloud_download_rounded, color: CyberColors.laserCyan),
               ),
-              title: const Text('Google Drive Backup', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
-              subtitle: const Text('Restores from hidden Google Drive AppData folder', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+              title: Text('Google Drive Cloud Backup', style: CyberTypography.hudTitle(color: Colors.white, fontSize: 13)),
+              subtitle: Text('Reconstruct from hidden AppData enclave payload', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 10)),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
-                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                side: const BorderSide(color: CyberColors.glassBorderMuted),
               ),
-              tileColor: const Color(0xFFF8F9FA),
+              tileColor: CyberColors.glassFill,
               onTap: () async {
                 Navigator.pop(ctx);
                 await _restoreFromDriveInOnboarding();
@@ -513,16 +562,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ListTile(
               leading: Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.file_open_rounded, color: Colors.blueAccent),
+                decoration: BoxDecoration(
+                  color: CyberColors.electricMint.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: CyberColors.electricMint.withValues(alpha: 0.3)),
+                ),
+                child: const Icon(Icons.file_open_rounded, color: CyberColors.electricMint),
               ),
-              title: const Text('Import Backup File (.json)', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
-              subtitle: const Text('Select TetherPass JSON backup and decrypt with Master Password', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+              title: Text('Import Encrypted File (.json)', style: CyberTypography.hudTitle(color: Colors.white, fontSize: 13)),
+              subtitle: Text('Load local ciphertext payload and decrypt with passkey', style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 10)),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
-                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                side: const BorderSide(color: CyberColors.glassBorderMuted),
               ),
-              tileColor: const Color(0xFFF8F9FA),
+              tileColor: CyberColors.glassFill,
               onTap: () {
                 Navigator.pop(ctx);
                 _importBackupFileInOnboarding();

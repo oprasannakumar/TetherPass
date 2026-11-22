@@ -13,6 +13,7 @@ import '../services/totp_service.dart';
 import '../services/breach_watch_service.dart';
 import '../services/clipboard_service.dart';
 import '../widgets/card_input_formatter.dart';
+import '../theme/cyber_theme.dart';
 import 'add_edit_screen.dart';
 
 class ItemDetailScreen extends StatefulWidget {
@@ -279,91 +280,94 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA), // 100% Light Theme Canvas
+      backgroundColor: CyberColors.obsidianBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        scrolledUnderElevation: 1,
+        scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A)),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: CyberColors.laserCyan),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          _item.nickname,
-          style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 18),
+          _item.nickname.toUpperCase(),
+          style: CyberTypography.hudTitle(
+            color: CyberColors.textWhite,
+            fontWeight: FontWeight.w800,
+            fontSize: 16,
+            letterSpacing: 1.2,
+          ),
         ),
         centerTitle: true,
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          child: Column(
-            children: [
-              // ── Top Stylized Card (All details displayed on card itself) ──
-              if (_item.isPassword) ...[
-                _buildPasswordVisual(),
-              ] else if (_item.isCard) ...[
-                _buildCardVisual(),
-                if (_item.isCardExpired || _item.isCardExpiringSoon) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: _item.isCardExpired ? Colors.red.shade50 : const Color(0xFFFFFBEB),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _item.isCardExpired ? Colors.red.shade200 : const Color(0xFFFDE68A),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _item.isCardExpired ? Icons.error_outline_rounded : Icons.warning_amber_rounded,
-                          color: _item.isCardExpired ? Colors.red : const Color(0xFFD97706),
-                          size: 20,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            _item.isCardExpired
-                                ? 'This card expired on ${_item.expiry}. Please contact ${_item.bankName} for a replacement.'
-                                : 'Card Expiry Warning: Expires in ${_item.cardExpiryDaysRemaining} days (${_item.expiry}). Check renewal with your bank.',
-                            style: TextStyle(
-                              color: _item.isCardExpired ? Colors.red.shade900 : const Color(0xFF92400E),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+      body: CyberBackground(
+        showGrid: true,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            child: Column(
+              children: [
+                // ── Top Stylized Card (All details displayed on card itself) ──
+                if (_item.isPassword) ...[
+                  _buildPasswordVisual(),
+                ] else if (_item.isCard) ...[
+                  _buildCardVisual(),
+                  if (_item.isCardExpired || _item.isCardExpiringSoon) ...[
+                    const SizedBox(height: 12),
+                    CyberGlassCard(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      borderRadius: 12,
+                      borderColor: _item.isCardExpired ? CyberColors.crimsonAlert : CyberColors.plasmaAmber,
+                      glowColor: _item.isCardExpired ? CyberColors.crimsonAlert : CyberColors.plasmaAmber,
+                      child: Row(
+                        children: [
+                          Icon(
+                            _item.isCardExpired ? Icons.error_outline_rounded : Icons.warning_amber_rounded,
+                            color: _item.isCardExpired ? CyberColors.crimsonAlert : CyberColors.plasmaAmber,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _item.isCardExpired
+                                  ? 'ENCLAVE WARNING: This card expired on ${_item.expiry}. Request hardware reissue from ${_item.bankName}.'
+                                  : 'TTL WARNING: Hardware validity expires in ${_item.cardExpiryDaysRemaining} days (${_item.expiry}). Check renewal.',
+                              style: CyberTypography.mono(
+                                color: _item.isCardExpired ? CyberColors.crimsonAlert : CyberColors.plasmaAmber,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
+                  if (_item.isCredit && (_item.creditLimit > 0 || _item.statementDay > 0 || _item.dueDay > 0)) ...[
+                    const SizedBox(height: 14),
+                    _buildCreditTrackerCard(),
+                  ],
+                ] else ...[
+                  if (_item.isAnyPasswordExpired || _item.isAnyPasswordExpiringSoon) ...[
+                    _buildNetBankingExpiryBanner(),
+                    const SizedBox(height: 14),
+                  ],
+                  _buildNetBankingCardVisual(),
                 ],
-                if (_item.isCredit && (_item.creditLimit > 0 || _item.statementDay > 0 || _item.dueDay > 0)) ...[
-                  const SizedBox(height: 14),
-                  _buildCreditTrackerCard(),
-                ],
-              ] else ...[
-                if (_item.isAnyPasswordExpired || _item.isAnyPasswordExpiringSoon) ...[
-                  _buildNetBankingExpiryBanner(),
-                  const SizedBox(height: 14),
-                ],
-                _buildNetBankingCardVisual(),
+
+                const SizedBox(height: 24),
+
+                // ── Quick Action Dock: 4 High-Tech Cyber Buttons ──
+                _buildQuickActionDock(),
+
+                const SizedBox(height: 24),
+
+                // ── Secure Notes Widget ──
+                _buildNotesWidget(),
+
+                const SizedBox(height: 24),
               ],
-
-              const SizedBox(height: 28),
-
-              // ── Quick Action Dock: 4 Circular Buttons (Light Theme) ──
-              _buildQuickActionDock(),
-
-              const SizedBox(height: 28),
-
-              // ── Secure Notes Widget (Light Theme) ──
-              _buildNotesWidget(),
-
-              const SizedBox(height: 24),
-            ],
+            ),
           ),
         ),
       ),
@@ -1840,7 +1844,7 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
     );
   }
 
-  // ─── Quick Action Dock (4 Circular Buttons - Light Theme) ──────────────────
+  // ─── Quick Action Dock (4 Futuristic Robotic Glass Buttons) ──────────────────
 
   Widget _buildQuickActionDock() {
     return Row(
@@ -1849,25 +1853,29 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
         _buildCircularDockButton(
           key: _copyDockKey,
           icon: Icons.copy_rounded,
-          label: 'Copy',
+          label: 'COPY ALL',
+          accentColor: CyberColors.laserCyan,
           onTap: _copyAllDetails,
         ),
         _buildCircularDockButton(
           key: _shareDockKey,
           icon: Icons.share_rounded,
-          label: 'Share',
+          label: 'STREAM',
+          accentColor: CyberColors.skyBlue,
           onTap: _shareDetails,
         ),
         _buildCircularDockButton(
           key: _editDockKey,
           icon: Icons.edit_outlined,
-          label: 'Edit',
+          label: 'MODIFY',
+          accentColor: CyberColors.electricMint,
           onTap: _editItem,
         ),
         _buildCircularDockButton(
           key: _deleteDockKey,
           icon: Icons.delete_outline_rounded,
-          label: 'Delete',
+          label: 'PURGE',
+          accentColor: CyberColors.crimsonAlert,
           onTap: _confirmDelete,
           isDestructive: true,
         ),
@@ -1880,16 +1888,9 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    Color accentColor = CyberColors.laserCyan,
     bool isDestructive = false,
   }) {
-    final iconColor = isDestructive ? const Color(0xFFEF4444) : const Color(0xFF0F172A);
-    final circleBorder = isDestructive
-        ? const Color(0xFFFCA5A5)
-        : const Color(0xFFE2E8F0);
-    final circleBg = isDestructive
-        ? const Color(0xFFFEF2F2)
-        : Colors.white;
-
     return InkWell(
       key: key,
       onTap: onTap,
@@ -1902,25 +1903,25 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
             height: 58,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: circleBg,
-              border: Border.all(color: circleBorder, width: 1.5),
-              boxShadow: const [
+              color: accentColor.withValues(alpha: 0.12),
+              border: Border.all(color: accentColor.withValues(alpha: 0.6), width: 1.4),
+              boxShadow: [
                 BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 6,
-                  offset: Offset(0, 2),
+                  color: accentColor.withValues(alpha: 0.25),
+                  blurRadius: 12,
                 ),
               ],
             ),
-            child: Icon(icon, color: iconColor, size: 24),
+            child: Icon(icon, color: accentColor, size: 24),
           ),
           const SizedBox(height: 8),
           Text(
             label,
-            style: TextStyle(
-              color: isDestructive ? const Color(0xFFEF4444) : const Color(0xFF475569),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+            style: CyberTypography.mono(
+              color: accentColor,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.8,
             ),
           ),
         ],
@@ -1928,71 +1929,73 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
     );
   }
 
-  // ─── Secure Notes Widget (Light Theme) ────────────────────────────────────
+  // ─── Secure Notes Widget ────────────────────────────────────
 
   Widget _buildNotesWidget() {
     final hasNotes = _item.notes.trim().isNotEmpty;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 6,
-            offset: Offset(0, 2),
+    return CyberGlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      borderRadius: 18,
+      borderColor: CyberColors.glassBorder,
+      showCornerBrackets: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.description_outlined, color: CyberColors.laserCyan, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                'ENCRYPTED ENCLAVE NOTES',
+                style: CyberTypography.mono(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: CyberColors.textMuted,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            hasNotes ? _item.notes : 'No metadata or secure notes attached. Tap MODIFY to append extra credentials.',
+            style: CyberTypography.mono(
+              color: hasNotes ? Colors.white : CyberColors.textDim,
+              fontSize: 12,
+              letterSpacing: 0.4,
+            ),
           ),
         ],
-      ),
-      child: Center(
-        child: Text(
-          hasNotes ? _item.notes : 'No notes saved. Tap Edit to add extra info.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: hasNotes ? const Color(0xFF1E293B) : const Color(0xFF94A3B8),
-            fontStyle: FontStyle.italic,
-            fontSize: 13,
-            height: 1.4,
-          ),
-        ),
       ),
     );
   }
 
   Widget _buildCreditTrackerCard() {
-    return Container(
-      width: double.infinity,
+    return CyberGlassCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
+      borderRadius: 16,
+      borderColor: CyberColors.glassBorder,
+      showCornerBrackets: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.speed_rounded, color: Color(0xFFFF6F00), size: 18),
-              SizedBox(width: 8),
+            children: [
+              const Icon(Icons.speed_rounded, color: CyberColors.laserCyan, size: 18),
+              const SizedBox(width: 8),
               Text(
-                'Credit Limit & Billing Tracker',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                'CREDIT LIMIT & BILLING TELEMETRY',
+                style: CyberTypography.hudTitle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: CyberColors.textWhite,
+                  letterSpacing: 0.8,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Row(
             children: [
               if (_item.creditLimit > 0)
@@ -2000,11 +2003,14 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('TOTAL LIMIT', style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 2),
+                      Text(
+                        'TOTAL LIMIT',
+                        style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 9.5, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 3),
                       Text(
                         '₹${formatIndianNumber(_item.creditLimit)}',
-                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15, fontWeight: FontWeight.bold),
+                        style: CyberTypography.mono(color: CyberColors.electricMint, fontSize: 14, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -2014,11 +2020,14 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('STATEMENT', style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 2),
+                      Text(
+                        'STATEMENT',
+                        style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 9.5, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 3),
                       Text(
                         '${_item.statementDay} of month',
-                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14, fontWeight: FontWeight.w600),
+                        style: CyberTypography.mono(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -2028,16 +2037,19 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('DUE DATE', style: TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 2),
+                      Text(
+                        'DUE DATE',
+                        style: CyberTypography.mono(color: CyberColors.textMuted, fontSize: 9.5, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 3),
                       Text(
                         '${_item.dueDay} of month',
-                        style: TextStyle(
+                        style: CyberTypography.mono(
                           color: (_item.daysUntilPaymentDue != null && _item.daysUntilPaymentDue! <= 5)
-                              ? Colors.red
-                              : const Color(0xFF0F172A),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                              ? CyberColors.crimsonAlert
+                              : CyberColors.laserCyan,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],

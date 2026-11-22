@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/totp_service.dart';
+import '../theme/cyber_theme.dart';
 
 /// Result obtained from scanning a 2FA QR code
 class TotpQrScanResult {
@@ -238,9 +240,12 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
 
     return Container(
       height: size.height * 0.85,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: CyberColors.cardSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border(
+          top: BorderSide(color: CyberColors.laserCyan.withValues(alpha: 0.4), width: 1.5),
+        ),
       ),
       child: Column(
         children: [
@@ -250,7 +255,7 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
             width: 44,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.white24,
+              color: CyberColors.laserCyan.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -263,12 +268,12 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFF6F00).withValues(alpha: 0.15),
+                    color: CyberColors.laserCyan.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
                     Icons.qr_code_scanner_rounded,
-                    color: Color(0xFFFF6F00),
+                    color: CyberColors.laserCyan,
                     size: 22,
                   ),
                 ),
@@ -279,28 +284,29 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
                     children: [
                       Text(
                         widget.target == QrScannerTarget.desktopPairing
-                            ? 'Scan Desktop Extension QR'
-                            : 'Scan 2FA Setup QR Code',
-                        style: const TextStyle(
-                          fontSize: 17,
+                            ? 'DESKTOP EXTENSION PAIRING'
+                            : '2FA SETUP MATRIX SCAN',
+                        style: CyberTypography.cyberHeader.copyWith(
+                          fontSize: 15,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
+                          letterSpacing: 1.2,
                         ),
                       ),
                       Text(
                         widget.target == QrScannerTarget.desktopPairing
-                            ? 'Point at the pairing QR code on your computer'
-                            : 'Point at the 2FA QR code on your computer screen',
-                        style: const TextStyle(
+                            ? 'Target the workstation QR reticle on your screen'
+                            : 'Align the 2FA authenticator QR barcode in frame',
+                        style: CyberTypography.bodySmall.copyWith(
                           fontSize: 12,
-                          color: Color(0xFF94A3B8),
+                          color: CyberColors.mutedText,
                         ),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                  icon: const Icon(Icons.close_rounded, color: CyberColors.mutedText),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
@@ -398,7 +404,7 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
               height: 250,
               child: CustomPaint(
                 painter: _CornerBracketPainter(
-                  color: Color(0xFFFF6F00),
+                  color: CyberColors.laserCyan,
                   bracketLength: 28,
                   strokeWidth: 4,
                 ),
@@ -419,16 +425,16 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            const Color(0xFFFF6F00).withValues(alpha: 0.0),
-                            const Color(0xFFFF6F00),
-                            const Color(0xFFFFB300),
-                            const Color(0xFFFF6F00),
-                            const Color(0xFFFF6F00).withValues(alpha: 0.0),
+                            CyberColors.laserCyan.withValues(alpha: 0.0),
+                            CyberColors.laserCyan,
+                            CyberColors.electricMint,
+                            CyberColors.laserCyan,
+                            CyberColors.laserCyan.withValues(alpha: 0.0),
                           ],
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFFF6F00).withValues(alpha: 0.8),
+                            color: CyberColors.laserCyan.withValues(alpha: 0.8),
                             blurRadius: 10,
                             spreadRadius: 2,
                           ),
@@ -514,11 +520,11 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           color: isActive
-              ? const Color(0xFFFF6F00).withValues(alpha: 0.25)
-              : const Color(0xFF1E293B),
+              ? CyberColors.laserCyan.withValues(alpha: 0.2)
+              : CyberColors.obsidianBg.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isActive ? const Color(0xFFFF6F00) : Colors.white12,
+            color: isActive ? CyberColors.laserCyan : Colors.white.withValues(alpha: 0.1),
           ),
         ),
         child: Column(
@@ -526,16 +532,16 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
           children: [
             Icon(
               icon,
-              color: isActive ? const Color(0xFFFF6F00) : Colors.white70,
+              color: isActive ? CyberColors.laserCyan : CyberColors.mutedText,
               size: 22,
             ),
             const SizedBox(height: 4),
             Text(
               label,
-              style: TextStyle(
-                color: isActive ? const Color(0xFFFF6F00) : Colors.white70,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+              style: GoogleFonts.rajdhani(
+                color: isActive ? CyberColors.laserCyan : CyberColors.mutedText,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
@@ -561,30 +567,34 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.15),
+              color: CyberColors.electricMint.withValues(alpha: 0.15),
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF10B981), width: 2),
+              border: Border.all(color: CyberColors.electricMint, width: 2),
+              boxShadow: [
+                BoxShadow(color: CyberColors.electricMint.withValues(alpha: 0.3), blurRadius: 20),
+              ],
             ),
             child: const Icon(
               Icons.check_circle_rounded,
-              color: Color(0xFF10B981),
+              color: CyberColors.electricMint,
               size: 48,
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
-            '2FA QR Code Verified!',
-            style: TextStyle(
-              fontSize: 20,
+          Text(
+            '2FA QR MATRIX VERIFIED',
+            style: CyberTypography.cyberHeader.copyWith(
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: Colors.white,
+              letterSpacing: 1.2,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'The authenticator key was successfully captured.',
+          Text(
+            'Cryptographic authenticator seed captured successfully.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+            style: CyberTypography.bodySmall.copyWith(fontSize: 12, color: CyberColors.mutedText),
           ),
           const SizedBox(height: 20),
 
@@ -593,9 +603,9 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
             width: double.infinity,
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
+              color: CyberColors.obsidianBg.withValues(alpha: 0.7),
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+              border: Border.all(color: CyberColors.electricMint.withValues(alpha: 0.4)),
             ),
             child: Column(
               children: [
@@ -604,33 +614,33 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(Icons.account_circle_rounded,
-                          color: Color(0xFFFF6F00), size: 18),
+                          color: CyberColors.laserCyan, size: 18),
                       const SizedBox(width: 8),
                       Text(
                         [
                           if (result.issuer != null) result.issuer,
                           if (result.account != null) result.account,
                         ].join(' : '),
-                        style: const TextStyle(
+                        style: GoogleFonts.rajdhani(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                          fontSize: 15,
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  const Divider(color: Colors.white12, height: 1),
+                  Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
                   const SizedBox(height: 12),
                 ],
 
-                const Text(
-                  'CURRENT 6-DIGIT VERIFICATION CODE',
-                  style: TextStyle(
-                    fontSize: 11,
+                Text(
+                  'CURRENT 6-DIGIT VERIFICATION TELEMETRY',
+                  style: CyberTypography.monoBadge.copyWith(
+                    fontSize: 10,
                     letterSpacing: 1.2,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF94A3B8),
+                    color: CyberColors.mutedText,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -638,12 +648,11 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
                 // Formatted rolling code
                 Text(
                   formattedCode,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
+                  style: GoogleFonts.jetBrainsMono(
                     fontSize: 34,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 4,
-                    color: Color(0xFF34D399),
+                    color: CyberColors.electricMint,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -661,20 +670,20 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
                         backgroundColor: Colors.white12,
                         valueColor: AlwaysStoppedAnimation<Color>(
                           _remainingSeconds <= 5
-                              ? Colors.redAccent
-                              : const Color(0xFF10B981),
+                              ? CyberColors.crimsonAlert
+                              : CyberColors.electricMint,
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       'Refreshes in ${_remainingSeconds}s',
-                      style: TextStyle(
+                      style: CyberTypography.monoData.copyWith(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: _remainingSeconds <= 5
-                            ? Colors.redAccent
-                            : const Color(0xFF10B981),
+                            ? CyberColors.crimsonAlert
+                            : CyberColors.electricMint,
                       ),
                     ),
                   ],
@@ -697,14 +706,14 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
                     });
                   },
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white70,
-                    side: const BorderSide(color: Colors.white24),
+                    foregroundColor: CyberColors.mutedText,
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: const Text('Rescan'),
+                  child: Text('RESCAN', style: GoogleFonts.rajdhani(fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -714,17 +723,19 @@ class _TotpQrScannerDialogState extends State<TotpQrScannerDialog>
                   onPressed: () {
                     Navigator.of(context).pop(result);
                   },
-                  icon: const Icon(Icons.check_rounded, color: Colors.white),
-                  label: const Text(
-                    'Apply & Use Key',
-                    style: TextStyle(
+                  icon: const Icon(Icons.check_rounded, color: Colors.black),
+                  label: Text(
+                    'APPLY & ENCRYPT KEY',
+                    style: GoogleFonts.rajdhani(
                       fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: Colors.white,
+                      fontSize: 14,
+                      color: Colors.black,
+                      letterSpacing: 0.8,
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF6F00),
+                    backgroundColor: CyberColors.laserCyan,
+                    foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),

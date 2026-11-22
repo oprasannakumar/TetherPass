@@ -17,6 +17,7 @@ import '../services/drive_service.dart';
 import '../services/secure_backup_export_service.dart';
 import '../services/vault_security_service.dart';
 import '../widgets/duress_decoy_dialog.dart';
+import '../theme/cyber_theme.dart';
 import 'browser_extension_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -1028,138 +1029,187 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     final drive = context.watch<DriveService>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: CyberColors.obsidianBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Settings & Security', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 18)),
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: CyberColors.laserCyan),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'SETTINGS & SECURITY',
+          style: CyberTypography.hudTitle(
+            color: CyberColors.textWhite,
+            fontWeight: FontWeight.w800,
+            fontSize: 16,
+            letterSpacing: 1.2,
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search_rounded, color: Color(0xFF64748B)),
+            icon: const Icon(Icons.search_rounded, color: CyberColors.laserCyan),
             tooltip: 'Search Settings',
             onPressed: _showSettingsSearchDialog,
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Merged Profile & Google Account Linking Card ──
-            Container(
-              key: _accountKey,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 1)),
-                ],
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: const Color(0xFFFF6F00).withValues(alpha: 0.12),
-                    backgroundImage: drive.userPhotoUrl != null ? NetworkImage(drive.userPhotoUrl!) : null,
-                    child: drive.userPhotoUrl == null
-                        ? const Icon(Icons.person_rounded, color: Color(0xFFFF6F00), size: 26)
-                        : null,
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          drive.isSignedIn ? (drive.userDisplayName ?? 'Google User') : 'Local Vault',
-                          style: const TextStyle(
-                            color: Color(0xFF0F172A),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
+      body: CyberBackground(
+        showGrid: true,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Merged Profile & Google Account Linking Card ──
+              CyberGlassCard(
+                key: _accountKey,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                borderRadius: 16,
+                borderColor: CyberColors.glassBorder,
+                showCornerBrackets: true,
+                child: Row(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.5), width: 1.4),
+                        boxShadow: [
+                          BoxShadow(color: CyberColors.laserCyan.withValues(alpha: 0.25), blurRadius: 8),
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 24,
+                        backgroundColor: CyberColors.cardSurface,
+                        backgroundImage: drive.userPhotoUrl != null ? NetworkImage(drive.userPhotoUrl!) : null,
+                        child: drive.userPhotoUrl == null
+                            ? const Icon(Icons.person_rounded, color: CyberColors.laserCyan, size: 26)
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            drive.isSignedIn ? (drive.userDisplayName ?? 'Google Operator') : 'Local Hardware Vault',
+                            style: CyberTypography.hudTitle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            if (drive.isSignedIn) ...[
-                              const Icon(Icons.cloud_done_rounded, color: Colors.green, size: 14),
-                              const SizedBox(width: 4),
-                            ],
-                            Expanded(
-                              child: Text(
-                                drive.isSignedIn
-                                    ? (drive.userEmail ?? 'Google Drive Linked')
-                                    : 'Link Google Drive to auto-backup',
-                                style: TextStyle(
-                                  color: drive.isSignedIn ? const Color(0xFF475569) : const Color(0xFF94A3B8),
-                                  fontSize: 12,
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              if (drive.isSignedIn) ...[
+                                const Icon(Icons.cloud_done_rounded, color: CyberColors.electricMint, size: 14),
+                                const SizedBox(width: 4),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  drive.isSignedIn
+                                      ? (drive.userEmail ?? 'Google Drive Cloud E2EE Linked')
+                                      : 'Link Google Drive for Zero-Knowledge Backup',
+                                  style: CyberTypography.mono(
+                                    color: drive.isSignedIn ? CyberColors.electricMint : CyberColors.textMuted,
+                                    fontSize: 10.5,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    if (drive.isSignedIn)
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          side: const BorderSide(color: CyberColors.crimsonAlert),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         ),
-                      ],
+                        onPressed: () async {
+                          await drive.signOut();
+                          setState(() {});
+                        },
+                        child: Text(
+                          'UNLINK',
+                          style: CyberTypography.mono(
+                            color: CyberColors.crimsonAlert,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      )
+                    else
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.add_to_drive_rounded, size: 15, color: Colors.black),
+                        label: Text(
+                          'LINK DRIVE',
+                          style: CyberTypography.mono(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          backgroundColor: CyberColors.laserCyan,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                        onPressed: () async {
+                          final ok = await drive.signIn();
+                          if (!ok && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(drive.lastError != null
+                                    ? 'Google Sign-In: ${drive.lastError}'
+                                    : 'Google Sign-In cancelled.'),
+                                backgroundColor: CyberColors.cardSurface,
+                              ),
+                            );
+                          }
+                          setState(() {});
+                        },
+                      ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // ── Security Section ──
+              Row(
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(shape: BoxShape.circle, color: CyberColors.laserCyan),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'SECURITY & ACCESS PROTOCOLS',
+                    style: CyberTypography.mono(
+                      color: CyberColors.laserCyan,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  if (drive.isSignedIn)
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        side: const BorderSide(color: Color(0xFFEF4444)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      ),
-                      onPressed: () async {
-                        await drive.signOut();
-                        setState(() {});
-                      },
-                      child: const Text('Logout', style: TextStyle(color: Color(0xFFEF4444), fontSize: 12, fontWeight: FontWeight.bold)),
-                    )
-                  else
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.add_to_drive_rounded, size: 15),
-                      label: const Text('Link Drive', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        backgroundColor: const Color(0xFFFF6F00),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                      onPressed: () async {
-                        final ok = await drive.signIn();
-                        if (!ok && mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(drive.lastError != null
-                                  ? 'Google Sign-In: ${drive.lastError}'
-                                  : 'Google Sign-In cancelled.'),
-                            ),
-                          );
-                        }
-                        setState(() {});
-                      },
-                    ),
                 ],
               ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // ── Security Section ──
-            const Text(
-              'SECURITY & ACCESS',
-              style: TextStyle(color: Color(0xFFFF6F00), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-            ),
-            const SizedBox(height: 10),
+              const SizedBox(height: 10),
 
             _buildSettingTile(
               key: _biometricKey,
@@ -1354,6 +1404,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -1366,31 +1417,51 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     VoidCallback? onTap,
     Color? iconColor,
   }) {
+    final effectiveColor = iconColor ?? CyberColors.laserCyan;
+
     return Container(
       key: key,
       margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 3, offset: Offset(0, 1)),
-        ],
-      ),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: (iconColor ?? const Color(0xFFFF6F00)).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: iconColor ?? const Color(0xFFFF6F00), size: 22),
-        ),
-        title: Text(title, style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14)),
-        subtitle: Text(subtitle, style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
-        trailing: trailing ?? (onTap != null ? const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFCBD5E1), size: 14) : null),
+      child: CyberGlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        borderRadius: 16,
+        borderColor: CyberColors.glassBorderMuted,
         onTap: onTap,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: effectiveColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: effectiveColor.withValues(alpha: 0.35), width: 1),
+              boxShadow: [
+                BoxShadow(color: effectiveColor.withValues(alpha: 0.2), blurRadius: 6),
+              ],
+            ),
+            child: Icon(icon, color: effectiveColor, size: 20),
+          ),
+          title: Text(
+            title,
+            style: CyberTypography.hudTitle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 13.5,
+              letterSpacing: 0.6,
+            ),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              subtitle,
+              style: CyberTypography.mono(
+                color: CyberColors.textMuted,
+                fontSize: 10.5,
+              ),
+            ),
+          ),
+          trailing: trailing ?? (onTap != null ? const Icon(Icons.arrow_forward_ios_rounded, color: CyberColors.laserCyan, size: 14) : null),
+        ),
       ),
     );
   }

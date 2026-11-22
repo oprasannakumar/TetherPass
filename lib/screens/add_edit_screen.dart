@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:provider/provider.dart';
@@ -15,6 +16,7 @@ import '../services/database_service.dart';
 import '../services/drive_service.dart';
 import '../services/nfc_card_scanner_service.dart';
 import '../services/totp_service.dart';
+import '../theme/cyber_theme.dart';
 import '../widgets/card_input_formatter.dart';
 import '../widgets/card_widget.dart';
 import '../widgets/totp_qr_scanner_dialog.dart';
@@ -405,54 +407,65 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
   Future<void> _startCardScan() async {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      backgroundColor: CyberColors.cardSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        side: BorderSide(color: Color(0x1A00E5FF), width: 1.2),
+      ),
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+              Container(width: 44, height: 4, decoration: BoxDecoration(color: CyberColors.laserCyan.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(2))),
               const SizedBox(height: 16),
-              const Text('Smart Card Scanner', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-              const SizedBox(height: 8),
-              const Text('Securely scan physical card details on-device using NFC tap, camera, or gallery photo.', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
-              const SizedBox(height: 16),
+              Text('SMART CARD SCANNER', style: CyberTypography.cyberHeader.copyWith(fontSize: 16, color: Colors.white, letterSpacing: 1.5)),
+              const SizedBox(height: 6),
+              Text('Securely ingest physical card telemetry via NFC tap, optical sensor, or encrypted storage.', textAlign: TextAlign.center, style: CyberTypography.bodySmall.copyWith(color: CyberColors.mutedText, fontSize: 12)),
+              const SizedBox(height: 20),
               ListTile(
+                tileColor: CyberColors.obsidianBg.withValues(alpha: 0.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: CyberColors.electricMint.withValues(alpha: 0.2))),
                 leading: Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: const Icon(Icons.contactless_rounded, color: Color(0xFF10B981)),
+                  decoration: BoxDecoration(color: CyberColors.electricMint.withValues(alpha: 0.15), shape: BoxShape.circle),
+                  child: const Icon(Icons.contactless_rounded, color: CyberColors.electricMint),
                 ),
-                title: const Text('Tap Contactless Card (NFC)', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                subtitle: const Text('Hold physical card against the back of phone to scan EMV chip', style: TextStyle(fontSize: 12)),
+                title: Text('Tap Contactless Card (NFC)', style: GoogleFonts.rajdhani(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15)),
+                subtitle: Text('Hold card against rear biometric antenna for EMV scan', style: CyberTypography.monoData.copyWith(color: CyberColors.mutedText, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _startNfcScan();
                 },
               ),
+              const SizedBox(height: 10),
               ListTile(
+                tileColor: CyberColors.obsidianBg.withValues(alpha: 0.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: CyberColors.laserCyan.withValues(alpha: 0.2))),
                 leading: Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: const Color(0xFFFF6F00).withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFFFF6F00)),
+                  decoration: BoxDecoration(color: CyberColors.laserCyan.withValues(alpha: 0.15), shape: BoxShape.circle),
+                  child: const Icon(Icons.camera_alt_rounded, color: CyberColors.laserCyan),
                 ),
-                title: const Text('Scan with Camera', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                subtitle: const Text('Point your phone camera at the front of your card', style: TextStyle(fontSize: 12)),
+                title: Text('Optical Matrix Scanner (Camera)', style: GoogleFonts.rajdhani(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15)),
+                subtitle: Text('Target card front face within neural OCR reticle', style: CyberTypography.monoData.copyWith(color: CyberColors.mutedText, fontSize: 11)),
                 onTap: () async {
                   Navigator.pop(ctx);
                   _processScan(await CardScannerService.scanCardFromCamera());
                 },
               ),
+              const SizedBox(height: 10),
               ListTile(
+                tileColor: CyberColors.obsidianBg.withValues(alpha: 0.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: CyberColors.quantumViolet.withValues(alpha: 0.2))),
                 leading: Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: const Icon(Icons.photo_library_rounded, color: Colors.blue),
+                  decoration: BoxDecoration(color: CyberColors.quantumViolet.withValues(alpha: 0.15), shape: BoxShape.circle),
+                  child: const Icon(Icons.photo_library_rounded, color: CyberColors.quantumViolet),
                 ),
-                title: const Text('Pick from Gallery', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                subtitle: const Text('Select a saved card image or screenshot', style: TextStyle(fontSize: 12)),
+                title: Text('Encrypted Gallery Image', style: GoogleFonts.rajdhani(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15)),
+                subtitle: Text('Analyze local card screenshot from secure filesystem', style: CyberTypography.monoData.copyWith(color: CyberColors.mutedText, fontSize: 11)),
                 onTap: () async {
                   Navigator.pop(ctx);
                   _processScan(await CardScannerService.scanCardFromGallery());
@@ -510,13 +523,14 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text('NFC Not Supported', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: const Text('This device does not have an NFC sensor. You can still scan cards using the Camera or Gallery.'),
+          backgroundColor: CyberColors.cardSurface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+          title: Text('NFC NOT SUPPORTED', style: CyberTypography.cyberHeader.copyWith(fontSize: 15, color: Colors.white)),
+          content: Text('Hardware lacks an integrated NFC transceiver. Optical scan pathways remain fully operational.', style: CyberTypography.bodySmall.copyWith(color: CyberColors.mutedText)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
+              child: Text('ACKNOWLEDGE', style: CyberTypography.monoBadge.copyWith(color: CyberColors.laserCyan)),
             ),
           ],
         ),
@@ -528,13 +542,14 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text('NFC Is Turned Off', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: const Text('Please turn on NFC in your phone Settings to scan contactless cards.'),
+          backgroundColor: CyberColors.cardSurface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+          title: Text('NFC SENSOR DISABLED', style: CyberTypography.cyberHeader.copyWith(fontSize: 15, color: CyberColors.plasmaAmber)),
+          content: Text('Transceiver is disabled in host system settings. Enable NFC antenna to scan contactless cards.', style: CyberTypography.bodySmall.copyWith(color: CyberColors.mutedText)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
+              child: Text('DISMISS', style: CyberTypography.monoBadge.copyWith(color: CyberColors.plasmaAmber)),
             ),
           ],
         ),
@@ -551,8 +566,11 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
       context: context,
       isDismissible: true,
       enableDrag: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      backgroundColor: CyberColors.cardSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        side: BorderSide(color: Color(0x3300E5FF), width: 1.2),
+      ),
       builder: (ctx) {
         sheetContext = ctx;
         return StatefulBuilder(
@@ -564,33 +582,37 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(width: 44, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+                    Container(width: 44, height: 4, decoration: BoxDecoration(color: CyberColors.laserCyan.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(2))),
                     const SizedBox(height: 20),
                     Container(
                       padding: const EdgeInsets.all(22),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                        color: CyberColors.electricMint.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(color: CyberColors.electricMint.withValues(alpha: 0.25), blurRadius: 20, spreadRadius: 4),
+                        ],
                       ),
-                      child: const Icon(Icons.contactless_rounded, size: 52, color: Color(0xFF10B981)),
+                      child: const Icon(Icons.contactless_rounded, size: 52, color: CyberColors.electricMint),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Ready to Scan',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    Text(
+                      'CONTACTLESS EMV SENSOR',
+                      style: CyberTypography.cyberHeader.copyWith(fontSize: 16, color: Colors.white, letterSpacing: 1.2),
                     ),
                     const SizedBox(height: 10),
                     Text(
                       currentStatus,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.4),
+                      style: CyberTypography.monoData.copyWith(fontSize: 13, color: CyberColors.laserCyan, height: 1.4),
                     ),
                     const SizedBox(height: 24),
                     OutlinedButton.icon(
-                      icon: const Icon(Icons.close_rounded),
-                      label: const Text('Cancel Scan'),
+                      icon: const Icon(Icons.close_rounded, size: 16),
+                      label: Text('ABORT SCAN', style: CyberTypography.monoBadge.copyWith(fontSize: 12)),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF64748B),
+                        foregroundColor: CyberColors.crimsonAlert,
+                        side: BorderSide(color: CyberColors.crimsonAlert.withValues(alpha: 0.5)),
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -1356,57 +1378,65 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
     final isEditing = widget.initialItem != null;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: CyberColors.obsidianBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: CyberColors.laserCyan, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: Text(
-          isEditing ? 'Edit Item' : 'Add to Vault',
-          style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 18),
+          isEditing ? 'MODIFY ENCLAVE PAYLOAD' : 'PROVISION VAULT PAYLOAD',
+          style: CyberTypography.cyberHeader.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 1.2),
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
             key: _tabBarKey,
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
+            ),
             child: TabBar(
               controller: _tabController,
-              indicatorColor: const Color(0xFFFF6F00),
+              indicatorColor: CyberColors.laserCyan,
               indicatorWeight: 3,
-              labelColor: const Color(0xFFFF6F00),
-              unselectedLabelColor: const Color(0xFF64748B),
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              labelColor: CyberColors.laserCyan,
+              unselectedLabelColor: CyberColors.mutedText,
+              labelStyle: GoogleFonts.rajdhani(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1.0),
+              unselectedLabelStyle: GoogleFonts.rajdhani(fontWeight: FontWeight.w600, fontSize: 14),
               tabs: const [
-                Tab(icon: Icon(Icons.credit_card_rounded), text: 'Card'),
-                Tab(icon: Icon(Icons.account_balance_rounded), text: 'Bank'),
-                Tab(icon: Icon(Icons.vpn_key_rounded), text: 'Password'),
+                Tab(icon: Icon(Icons.credit_card_rounded, size: 18), text: 'CARD CHASSIS'),
+                Tab(icon: Icon(Icons.account_balance_rounded, size: 18), text: 'NETBANKING'),
+                Tab(icon: Icon(Icons.vpn_key_rounded, size: 18), text: 'CREDENTIALS'),
               ],
             ),
           ),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildCardForm(),
-          _buildNetBankingForm(),
-          _buildPasswordForm(),
-        ],
+      body: CyberBackground(
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildCardForm(),
+            _buildNetBankingForm(),
+            _buildPasswordForm(),
+          ],
+        ),
       ),
       bottomNavigationBar: SafeArea(
-        child: Padding(
+        child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: ElevatedButton(
+          decoration: BoxDecoration(
+            color: CyberColors.cardSurface.withValues(alpha: 0.95),
+            border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
+          ),
+          child: CyberNeonButton(
+            label: isEditing ? 'COMMIT MODIFICATIONS' : 'ENCRYPT & SEAL PAYLOAD',
+            icon: const Icon(Icons.shield_rounded, size: 20, color: Colors.black),
+            primaryColor: CyberColors.laserCyan,
+            isLoading: _isSaving,
             onPressed: _isSaving ? null : _save,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF6F00),
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 54),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 3,
-            ),
-            child: _isSaving
-                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Text(isEditing ? 'Save Changes' : 'Save Item to Vault', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ),
         ),
       ),
@@ -1440,9 +1470,9 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
             key: _cardTypeKey,
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
+              color: CyberColors.cardSurface.withValues(alpha: 0.7),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
             child: Row(
               children: [
@@ -1458,11 +1488,9 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: _cardType == 'Credit' ? Colors.white : Colors.transparent,
+                        color: _cardType == 'Credit' ? CyberColors.laserCyan.withValues(alpha: 0.15) : Colors.transparent,
                         borderRadius: BorderRadius.circular(10),
-                        boxShadow: _cardType == 'Credit'
-                            ? const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))]
-                            : null,
+                        border: _cardType == 'Credit' ? Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.6)) : null,
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -1470,15 +1498,16 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                           Icon(
                             Icons.credit_card_rounded,
                             size: 18,
-                            color: _cardType == 'Credit' ? const Color(0xFFFF6F00) : const Color(0xFF64748B),
+                            color: _cardType == 'Credit' ? CyberColors.laserCyan : CyberColors.mutedText,
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'Credit Card',
-                            style: TextStyle(
-                              color: _cardType == 'Credit' ? const Color(0xFF0F172A) : const Color(0xFF64748B),
-                              fontWeight: _cardType == 'Credit' ? FontWeight.bold : FontWeight.w500,
+                            'CREDIT CHASSIS',
+                            style: GoogleFonts.rajdhani(
+                              color: _cardType == 'Credit' ? Colors.white : CyberColors.mutedText,
+                              fontWeight: FontWeight.bold,
                               fontSize: 13,
+                              letterSpacing: 1.0,
                             ),
                           ),
                         ],
@@ -1498,11 +1527,9 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: _cardType == 'Debit' ? Colors.white : Colors.transparent,
+                        color: _cardType == 'Debit' ? CyberColors.electricMint.withValues(alpha: 0.15) : Colors.transparent,
                         borderRadius: BorderRadius.circular(10),
-                        boxShadow: _cardType == 'Debit'
-                            ? const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))]
-                            : null,
+                        border: _cardType == 'Debit' ? Border.all(color: CyberColors.electricMint.withValues(alpha: 0.6)) : null,
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -1510,15 +1537,16 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                           Icon(
                             Icons.account_balance_wallet_rounded,
                             size: 18,
-                            color: _cardType == 'Debit' ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                            color: _cardType == 'Debit' ? CyberColors.electricMint : CyberColors.mutedText,
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'Debit Card',
-                            style: TextStyle(
-                              color: _cardType == 'Debit' ? const Color(0xFF0F172A) : const Color(0xFF64748B),
-                              fontWeight: _cardType == 'Debit' ? FontWeight.bold : FontWeight.w500,
+                            'DEBIT CHASSIS',
+                            style: GoogleFonts.rajdhani(
+                              color: _cardType == 'Debit' ? Colors.white : CyberColors.mutedText,
+                              fontWeight: FontWeight.bold,
                               fontSize: 13,
+                              letterSpacing: 1.0,
                             ),
                           ),
                         ],
@@ -1575,17 +1603,17 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
               onChanged: (val) {
                 if (_cardNumberError != null) setState(() => _cardNumberError = null);
               },
-              style: const TextStyle(color: Color(0xFF0F172A), fontFamily: 'Courier', letterSpacing: 1.5, fontWeight: FontWeight.bold),
+              style: CyberTypography.monoData.copyWith(color: Colors.white, letterSpacing: 1.5, fontWeight: FontWeight.bold),
               decoration: _buildInputDecoration(
                 labelText: 'Card Number',
                 hintText: 'e.g. 4532 1148 9023 5410',
                 errorText: _cardNumberError,
-                prefixIcon: Icon(Icons.credit_card_rounded, color: _cardNumberError != null ? Colors.redAccent : const Color(0xFFFF6F00)),
+                prefixIcon: Icon(Icons.credit_card_rounded, color: _cardNumberError != null ? CyberColors.crimsonAlert : CyberColors.laserCyan),
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.document_scanner_rounded, color: Color(0xFFFF6F00)),
+                      icon: const Icon(Icons.document_scanner_rounded, color: CyberColors.laserCyan),
                       tooltip: 'Smart Card Scanner (NFC / Camera / Gallery)',
                       onPressed: _startCardScan,
                     ),
@@ -1596,7 +1624,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                           message: _isLuhnValid ? 'Valid card number (Luhn Check passed)' : 'Invalid check digit',
                           child: Icon(
                             _isLuhnValid ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                            color: _isLuhnValid ? Colors.green : Colors.redAccent,
+                            color: _isLuhnValid ? CyberColors.electricMint : CyberColors.crimsonAlert,
                           ),
                         ),
                       ),
@@ -1612,18 +1640,18 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED), // Warm light orange
+                color: CyberColors.cardSurface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFFEDD5)),
+                border: Border.all(color: CyberColors.plasmaAmber.withValues(alpha: 0.5)),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.info_outline_rounded, color: Color(0xFFC2410C), size: 18),
+                  Icon(Icons.info_outline_rounded, color: CyberColors.plasmaAmber, size: 18),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Card type not identified. Please select from the dropdown below:',
-                      style: TextStyle(color: Color(0xFF9A3412), fontSize: 12, fontWeight: FontWeight.w600),
+                      'Card chassis not identified. Select network protocol below:',
+                      style: TextStyle(color: CyberColors.plasmaAmber, fontSize: 12, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -1641,15 +1669,15 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                 child: DropdownButtonFormField<String>(
                   value: _availableNetworks.contains(_cardNetwork) ? _cardNetwork : 'Visa',
                   isExpanded: true,
-                  dropdownColor: Colors.white,
-                  icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFFF6F00)),
-                  style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
+                  dropdownColor: CyberColors.cardSurface,
+                  icon: const Icon(Icons.arrow_drop_down, color: CyberColors.laserCyan),
+                  style: GoogleFonts.rajdhani(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                   decoration: _buildInputDecoration(
                     labelText: 'Card Type',
                     helperText: (!_networkAutoDetected && _cardNumberCtrl.text.replaceAll(' ', '').length >= 3)
                         ? 'Select network'
                         : null,
-                    helperStyle: const TextStyle(color: Color(0xFFC2410C), fontSize: 10, fontWeight: FontWeight.bold),
+                    helperStyle: const TextStyle(color: CyberColors.plasmaAmber, fontSize: 10, fontWeight: FontWeight.bold),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                   ),
                   items: _availableNetworks.map((net) {
@@ -1675,9 +1703,9 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                 child: DropdownButtonFormField<CardTier>(
                   value: _cardTier,
                   isExpanded: true,
-                  dropdownColor: Colors.white,
-                  icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFFF6F00)),
-                  style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
+                  dropdownColor: CyberColors.cardSurface,
+                  icon: const Icon(Icons.arrow_drop_down, color: CyberColors.laserCyan),
+                  style: GoogleFonts.rajdhani(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                   decoration: _buildInputDecoration(
                     labelText: 'Card Tier',
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -1741,12 +1769,12 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                   onChanged: (val) {
                     if (_cardExpiryError != null) setState(() => _cardExpiryError = null);
                   },
-                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  style: CyberTypography.monoData.copyWith(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                   decoration: _buildInputDecoration(
                     labelText: 'Expiry (MM/YY)',
                     hintText: 'e.g. 08/28',
                     errorText: _cardExpiryError,
-                    prefixIcon: Icon(Icons.date_range_rounded, color: _cardExpiryError != null ? Colors.redAccent : const Color(0xFFFF6F00)),
+                    prefixIcon: Icon(Icons.date_range_rounded, color: _cardExpiryError != null ? CyberColors.crimsonAlert : CyberColors.laserCyan),
                   ),
                 ),
               ),
@@ -1763,12 +1791,12 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                   onChanged: (val) {
                     if (_cardCvvError != null) setState(() => _cardCvvError = null);
                   },
-                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  style: CyberTypography.monoData.copyWith(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                   decoration: _buildInputDecoration(
                     labelText: 'CVV',
                     hintText: 'e.g. 842',
                     errorText: _cardCvvError,
-                    prefixIcon: Icon(Icons.security_rounded, color: _cardCvvError != null ? Colors.redAccent : const Color(0xFFFF6F00)),
+                    prefixIcon: Icon(Icons.security_rounded, color: _cardCvvError != null ? CyberColors.crimsonAlert : CyberColors.laserCyan),
                   ).copyWith(counterText: ''),
                 ),
               ),
@@ -1794,9 +1822,9 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                 Expanded(
                   child: DropdownButtonFormField<int>(
                     value: _statementDay,
-                    dropdownColor: Colors.white,
-                    icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFFF6F00)),
-                    style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                    dropdownColor: CyberColors.cardSurface,
+                    icon: const Icon(Icons.arrow_drop_down, color: CyberColors.laserCyan),
+                    style: GoogleFonts.rajdhani(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                     decoration: _buildInputDecoration(
                       labelText: 'Bill Statement Day',
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -1814,9 +1842,9 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                 Expanded(
                   child: DropdownButtonFormField<int>(
                     value: _dueDay,
-                    dropdownColor: Colors.white,
-                    icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFFF6F00)),
-                    style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                    dropdownColor: CyberColors.cardSurface,
+                    icon: const Icon(Icons.arrow_drop_down, color: CyberColors.laserCyan),
+                    style: GoogleFonts.rajdhani(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                     decoration: _buildInputDecoration(
                       labelText: 'Payment Due Day',
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -1928,21 +1956,21 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
+                        color: CyberColors.laserCyan.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFF93C5FD)),
+                        border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.4)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.bolt_rounded, size: 14, color: Color(0xFF2563EB)),
+                          const Icon(Icons.bolt_rounded, size: 14, color: CyberColors.laserCyan),
                           const SizedBox(width: 4),
                           Text(
                             'Suggested: ${_getSuggestedPortal(_nbBankCtrl.text)} (Tap to apply)',
-                            style: const TextStyle(
-                              color: Color(0xFF1D4ED8),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
+                            style: GoogleFonts.rajdhani(
+                              color: CyberColors.laserCyan,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ],
@@ -2031,16 +2059,16 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       alignment: Alignment.centerRight,
                       decoration: BoxDecoration(
-                        color: Colors.red.shade100,
+                        color: CyberColors.crimsonAlert.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.red.shade300),
+                        border: Border.all(color: CyberColors.crimsonAlert.withValues(alpha: 0.4)),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20),
-                          SizedBox(width: 6),
-                          Text('Delete', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                          const Icon(Icons.delete_outline_rounded, color: CyberColors.crimsonAlert, size: 20),
+                          const SizedBox(width: 6),
+                          Text('PURGE', style: CyberTypography.monoBadge.copyWith(color: CyberColors.crimsonAlert, fontSize: 11)),
                         ],
                       ),
                     ),
@@ -2072,10 +2100,10 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
               child: Container(
                 key: _nbAddAccountBtnKey,
                 child: TextButton.icon(
-                icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFFFF6F00), size: 18),
-                label: const Text(
-                  '+ Add Another Account Number',
-                  style: TextStyle(color: Color(0xFFFF6F00), fontWeight: FontWeight.bold, fontSize: 13),
+                icon: const Icon(Icons.add_circle_outline_rounded, color: CyberColors.laserCyan, size: 18),
+                label: Text(
+                  '+ ADD ANOTHER ACCOUNT NUMBER',
+                  style: GoogleFonts.rajdhani(color: CyberColors.laserCyan, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8),
                 ),
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -2239,13 +2267,13 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           final calculatedDate = totalDays > 0 ? now.add(Duration(days: totalDays)) : null;
 
           return AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Row(
+            backgroundColor: CyberColors.cardSurface,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+            title: Row(
               children: [
-                Icon(Icons.edit_calendar_rounded, color: Color(0xFFFF6F00)),
-                SizedBox(width: 8),
-                Text('Custom Expiry Duration', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
+                const Icon(Icons.edit_calendar_rounded, color: CyberColors.laserCyan),
+                const SizedBox(width: 8),
+                Text('CUSTOM EXPIRY DURATION', style: CyberTypography.cyberHeader.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
               ],
             ),
             content: SingleChildScrollView(
@@ -2253,9 +2281,9 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Specify validity duration in months and days from today:',
-                    style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                    style: CyberTypography.bodySmall.copyWith(color: CyberColors.mutedText, fontSize: 12),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -2266,14 +2294,15 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                           keyboardType: TextInputType.number,
                           textInputAction: TextInputAction.next,
                           onChanged: (_) => setDlgState(() {}),
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                          style: GoogleFonts.rajdhani(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
                           decoration: InputDecoration(
                             labelText: 'Months',
                             hintText: '0',
                             filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            fillColor: CyberColors.obsidianBg.withValues(alpha: 0.6),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
                             suffixText: 'mos',
+                            suffixStyle: CyberTypography.monoBadge.copyWith(color: CyberColors.mutedText),
                           ),
                         ),
                       ),
@@ -2284,14 +2313,15 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                           keyboardType: TextInputType.number,
                           textInputAction: TextInputAction.done,
                           onChanged: (_) => setDlgState(() {}),
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                          style: GoogleFonts.rajdhani(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
                           decoration: InputDecoration(
                             labelText: 'Days',
                             hintText: '0',
                             filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            fillColor: CyberColors.obsidianBg.withValues(alpha: 0.6),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
                             suffixText: 'days',
+                            suffixStyle: CyberTypography.monoBadge.copyWith(color: CyberColors.mutedText),
                           ),
                         ),
                       ),
@@ -2299,22 +2329,22 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                   ),
                   if (validationErr != null) ...[
                     const SizedBox(height: 8),
-                    Text(validationErr!, style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                    Text(validationErr!, style: const TextStyle(color: CyberColors.crimsonAlert, fontSize: 12, fontWeight: FontWeight.bold)),
                   ],
                   const SizedBox(height: 14),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF7ED),
+                      color: CyberColors.laserCyan.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFFFEDD5)),
+                      border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       calculatedDate != null
                           ? 'Expires on: ${DateFormat('dd MMM yyyy').format(calculatedDate)} ($totalDays days total)'
                           : 'Enter at least 1 day or month',
-                      style: const TextStyle(color: Color(0xFFC2410C), fontSize: 12, fontWeight: FontWeight.bold),
+                      style: CyberTypography.monoData.copyWith(color: CyberColors.laserCyan, fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -2322,12 +2352,12 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
             ),
             actions: [
               TextButton(
-                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                child: Text('CANCEL', style: CyberTypography.monoBadge.copyWith(color: CyberColors.mutedText)),
                 onPressed: () => Navigator.pop(ctx),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F00)),
-                child: const Text('Set Expiry'),
+                style: ElevatedButton.styleFrom(backgroundColor: CyberColors.laserCyan, foregroundColor: Colors.black),
+                child: Text('SET EXPIRY', style: GoogleFonts.rajdhani(fontWeight: FontWeight.bold)),
                 onPressed: () {
                   final m = int.tryParse(monthsCtrl.text.trim()) ?? 0;
                   final d = int.tryParse(daysCtrl.text.trim()) ?? 0;
@@ -2352,7 +2382,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
     required ValueChanged<DateTime?> onChanged,
   }) {
     final now = DateTime.now();
-    final daysRemaining = expiryDate != null ? expiryDate.difference(now).inDays : null;
+    final daysRemaining = expiryDate?.difference(now).inDays;
     final isExpired = daysRemaining != null && daysRemaining < 0;
     final isSoon = daysRemaining != null && daysRemaining >= 0 && daysRemaining <= 15;
 
@@ -2380,24 +2410,24 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
       }
 
       if (isExpired) {
-        pillColor = const Color(0xFFDC2626);
-        pillBg = const Color(0xFFFEF2F2);
+        pillColor = CyberColors.crimsonAlert;
+        pillBg = CyberColors.crimsonAlert.withValues(alpha: 0.15);
         displayPill = 'Expired';
       } else if (isSoon) {
-        pillColor = const Color(0xFFD97706);
-        pillBg = const Color(0xFFFFFBEB);
+        pillColor = CyberColors.plasmaAmber;
+        pillBg = CyberColors.plasmaAmber.withValues(alpha: 0.15);
       } else {
-        pillColor = const Color(0xFF059669);
-        pillBg = const Color(0xFFECFDF5);
+        pillColor = CyberColors.electricMint;
+        pillBg = CyberColors.electricMint.withValues(alpha: 0.15);
       }
     }
 
     return Container(
       height: 54,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: CyberColors.cardSurface.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.2),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12), width: 1.2),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       child: Column(
@@ -2409,10 +2439,10 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
             children: [
               Text(
                 label,
-                style: const TextStyle(
-                  fontSize: 10,
+                style: GoogleFonts.rajdhani(
+                  fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF64748B),
+                  color: CyberColors.mutedText,
                 ),
               ),
               if (expiryDate != null)
@@ -2434,19 +2464,19 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
               isDense: true,
               isExpanded: true,
               value: selectedValue,
-              dropdownColor: Colors.white,
+              dropdownColor: CyberColors.cardSurface,
               borderRadius: BorderRadius.circular(12),
-              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFFF6F00), size: 18),
-              style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontWeight: FontWeight.bold),
-              items: [
-                const DropdownMenuItem(value: 'none', child: Text('No Expiry')),
-                const DropdownMenuItem(value: '30', child: Text('30 Days (1 Mo)')),
-                const DropdownMenuItem(value: '90', child: Text('90 Days (3 Mo)')),
-                const DropdownMenuItem(value: '180', child: Text('180 Days (6 Mo)')),
-                const DropdownMenuItem(value: '365', child: Text('365 Days (1 Yr)')),
-                const DropdownMenuItem(
+              icon: const Icon(Icons.arrow_drop_down, color: CyberColors.laserCyan, size: 18),
+              style: GoogleFonts.rajdhani(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              items: const [
+                DropdownMenuItem(value: 'none', child: Text('No Expiry')),
+                DropdownMenuItem(value: '30', child: Text('30 Days (1 Mo)')),
+                DropdownMenuItem(value: '90', child: Text('90 Days (3 Mo)')),
+                DropdownMenuItem(value: '180', child: Text('180 Days (6 Mo)')),
+                DropdownMenuItem(value: '365', child: Text('365 Days (1 Yr)')),
+                DropdownMenuItem(
                   value: 'custom',
-                  child: Text('Custom (Months/Days)...', style: TextStyle(color: Color(0xFFFF6F00))),
+                  child: Text('Custom (Months/Days)...', style: TextStyle(color: CyberColors.laserCyan)),
                 ),
               ],
               onChanged: (val) async {
@@ -2484,44 +2514,38 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  const Color(0xFF4F46E5).withValues(alpha: 0.1),
-                  const Color(0xFF6366F1).withValues(alpha: 0.05),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: CyberColors.cardSurface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.2)),
+              border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF4F46E5),
+                    color: CyberColors.laserCyan.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.vpn_key_rounded, color: Colors.white, size: 22),
+                  child: const Icon(Icons.vpn_key_rounded, color: CyberColors.laserCyan, size: 22),
                 ),
                 const SizedBox(width: 14),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Password Manager',
-                        style: TextStyle(
-                          fontSize: 15,
+                        'CREDENTIAL ENCLAVE',
+                        style: CyberTypography.cyberHeader.copyWith(
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
+                          color: Colors.white,
+                          letterSpacing: 1.2,
                         ),
                       ),
-                      SizedBox(height: 2),
+                      const SizedBox(height: 2),
                       Text(
-                        'Save website & app logins. TetherPass will suggest them automatically when you visit the website.',
-                        style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
+                        'Cryptographically seal domain logins. TetherPass auto-detects destination sites.',
+                        style: CyberTypography.bodySmall.copyWith(color: CyberColors.mutedText, fontSize: 11),
                       ),
                     ],
                   ),
@@ -2588,11 +2612,11 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           // 4. Password Field with Reveal Toggle & Generator
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              color: CyberColors.cardSurface.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: _pwdPasswordError != null ? Colors.redAccent : const Color(0xFFCBD5E1),
-                width: _pwdPasswordError != null ? 1.6 : 1.2,
+                color: _pwdPasswordError != null ? CyberColors.crimsonAlert : Colors.white.withValues(alpha: 0.12),
+                width: _pwdPasswordError != null ? 1.6 : 1.0,
               ),
             ),
             child: Column(
@@ -2600,24 +2624,27 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                 TextField(
                   controller: _pwdPasswordCtrl,
                   obscureText: !_pwdPasswordVisible,
+                  style: CyberTypography.monoData.copyWith(color: Colors.white, fontSize: 14, letterSpacing: 1.2),
                   decoration: InputDecoration(
                     labelText: 'Password',
+                    labelStyle: GoogleFonts.rajdhani(color: CyberColors.mutedText, fontWeight: FontWeight.w600, fontSize: 13),
                     hintText: 'Enter account password',
+                    hintStyle: CyberTypography.monoData.copyWith(color: CyberColors.mutedText.withValues(alpha: 0.5), fontSize: 13),
                     floatingLabelBehavior: FloatingLabelBehavior.always,
-                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFF64748B)),
+                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: CyberColors.laserCyan),
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
                           icon: Icon(
                             _pwdPasswordVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-                            color: const Color(0xFF64748B),
+                            color: CyberColors.laserCyan,
                           ),
                           tooltip: _pwdPasswordVisible ? 'Hide Password' : 'Show Password',
                           onPressed: () => setState(() => _pwdPasswordVisible = !_pwdPasswordVisible),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.paste_rounded, color: Color(0xFF64748B)),
+                          icon: const Icon(Icons.paste_rounded, color: CyberColors.laserCyan),
                           tooltip: 'Paste Password',
                           onPressed: () async {
                             final data = await Clipboard.getData('text/plain');
@@ -2633,29 +2660,31 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     errorText: _pwdPasswordError,
+                    errorStyle: const TextStyle(color: CyberColors.crimsonAlert, fontSize: 11, fontWeight: FontWeight.bold),
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: CyberColors.obsidianBg.withValues(alpha: 0.6),
                     borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(11),
-                      bottomRight: Radius.circular(11),
+                      bottomLeft: Radius.circular(13),
+                      bottomRight: Radius.circular(13),
                     ),
-                    border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                    border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
                   ),
                   child: Row(
                     children: [
                       TextButton.icon(
                         onPressed: _generateStrongPassword,
-                        icon: const Icon(Icons.auto_awesome_rounded, size: 16, color: Color(0xFFFF6F00)),
-                        label: const Text(
-                          'Generate Strong Password',
-                          style: TextStyle(
+                        icon: const Icon(Icons.auto_awesome_rounded, size: 16, color: CyberColors.plasmaAmber),
+                        label: Text(
+                          'GENERATE QUANTUM PASSKEY',
+                          style: GoogleFonts.rajdhani(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFFFF6F00),
+                            color: CyberColors.plasmaAmber,
+                            letterSpacing: 0.8,
                           ),
                         ),
                         style: TextButton.styleFrom(
@@ -2668,7 +2697,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                       if (_pwdPasswordCtrl.text.isNotEmpty)
                         Text(
                           '${_pwdPasswordCtrl.text.length} chars',
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                          style: CyberTypography.monoData.copyWith(fontSize: 11, color: CyberColors.mutedText),
                         ),
                     ],
                   ),
@@ -2682,9 +2711,9 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: CyberColors.cardSurface.withValues(alpha: 0.85),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2694,51 +2723,53 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFF6F00).withValues(alpha: 0.1),
+                        color: CyberColors.laserCyan.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.lock_clock_rounded, color: Color(0xFFFF6F00), size: 18),
+                      child: const Icon(Icons.lock_clock_rounded, color: CyberColors.laserCyan, size: 18),
                     ),
                     const SizedBox(width: 10),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Two-Factor Authentication (2FA / TOTP)',
-                            style: TextStyle(
+                            'TWO-FACTOR AUTHENTICATION (TOTP)',
+                            style: GoogleFonts.rajdhani(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E293B),
+                              color: Colors.white,
+                              letterSpacing: 0.8,
                             ),
                           ),
                           Text(
-                            'Optional: Generates rolling 6-digit authenticator codes',
-                            style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                            'Rolling 6-digit cryptographic authenticator protocol',
+                            style: CyberTypography.monoData.copyWith(fontSize: 11, color: CyberColors.mutedText),
                           ),
                         ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Row(
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: _scanTotpQrCode,
-                        icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 18),
-                        label: const Text(
-                          'Scan 2FA Setup QR Code',
-                          style: TextStyle(
+                        icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.black, size: 18),
+                        label: Text(
+                          'SCAN 2FA SETUP QR MATRIX',
+                          style: GoogleFonts.rajdhani(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: Colors.black,
+                            letterSpacing: 0.8,
                           ),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF6F00),
-                          foregroundColor: Colors.white,
+                          backgroundColor: CyberColors.laserCyan,
+                          foregroundColor: Colors.black,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -2747,37 +2778,39 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 TextField(
                   controller: _pwdTotpCtrl,
                   textCapitalization: TextCapitalization.characters,
                   autocorrect: false,
                   enableSuggestions: false,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.2,
+                  style: CyberTypography.monoData.copyWith(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
                     fontSize: 13,
-                    color: Color(0xFF0F172A),
+                    color: Colors.white,
                   ),
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
                     labelText: '2FA Secret Key or URI',
+                    labelStyle: GoogleFonts.rajdhani(color: CyberColors.mutedText, fontWeight: FontWeight.w600, fontSize: 13),
                     hintText: 'e.g. JBSWY3DPEHPK3PXP or otpauth://...',
-                    hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                    hintStyle: CyberTypography.monoData.copyWith(fontSize: 12, color: CyberColors.mutedText.withValues(alpha: 0.5)),
                     filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    fillColor: CyberColors.obsidianBg.withValues(alpha: 0.6),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: CyberColors.laserCyan, width: 1.5)),
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFFFF6F00), size: 20),
+                          icon: const Icon(Icons.qr_code_scanner_rounded, color: CyberColors.laserCyan, size: 20),
                           tooltip: 'Scan QR Code',
                           onPressed: _scanTotpQrCode,
                         ),
                         IconButton(
-                          icon: const Icon(Icons.paste_rounded, color: Color(0xFF64748B), size: 20),
+                          icon: const Icon(Icons.paste_rounded, color: CyberColors.laserCyan, size: 20),
                           tooltip: 'Paste 2FA Secret Key',
                           onPressed: () async {
                             final data = await Clipboard.getData(Clipboard.kTextPlain);
@@ -2798,23 +2831,22 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
+                      color: CyberColors.electricMint.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFA7F3D0)),
+                      border: Border.all(color: CyberColors.electricMint.withValues(alpha: 0.4)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 16),
+                            const Icon(Icons.check_circle_rounded, color: CyberColors.electricMint, size: 16),
                             const SizedBox(width: 6),
                             Text(
                               'Active Code: ${TotpService.generateCode(_pwdTotpCtrl.text)}',
-                              style: const TextStyle(
-                                fontFamily: 'monospace',
+                              style: CyberTypography.monoData.copyWith(
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF065F46),
+                                color: CyberColors.electricMint,
                                 fontSize: 13,
                               ),
                             ),
@@ -2822,7 +2854,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                         ),
                         Text(
                           '${TotpService.getRemainingSeconds()}s left',
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF059669), fontWeight: FontWeight.w600),
+                          style: CyberTypography.monoData.copyWith(fontSize: 11, color: CyberColors.electricMint, fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
@@ -2899,51 +2931,52 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
       helperText: helperText,
       helperStyle: helperStyle,
       errorText: errorText,
-      errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold),
+      errorStyle: const TextStyle(color: CyberColors.crimsonAlert, fontSize: 11, fontWeight: FontWeight.bold),
       errorMaxLines: 2,
       filled: true,
-      fillColor: Colors.white,
+      fillColor: CyberColors.cardSurface.withValues(alpha: 0.85),
       contentPadding: contentPadding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      labelStyle: const TextStyle(
-        color: Color(0xFF64748B),
+      labelStyle: GoogleFonts.rajdhani(
+        color: CyberColors.mutedText,
         fontWeight: FontWeight.w600,
         fontSize: 13,
+        letterSpacing: 0.8,
       ),
-      floatingLabelStyle: TextStyle(
-        color: errorText != null ? Colors.redAccent : const Color(0xFFFF6F00),
+      floatingLabelStyle: GoogleFonts.rajdhani(
+        color: errorText != null ? CyberColors.crimsonAlert : CyberColors.laserCyan,
         fontWeight: FontWeight.bold,
         fontSize: 13,
+        letterSpacing: 1.0,
       ),
-      hintStyle: const TextStyle(
-        color: Color(0xFF94A3B8),
+      hintStyle: CyberTypography.monoData.copyWith(
+        color: CyberColors.mutedText.withValues(alpha: 0.4),
         fontSize: 13,
-        fontStyle: FontStyle.italic,
       ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12), width: 1.0),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(
-          color: errorText != null ? Colors.redAccent : const Color(0xFFCBD5E1),
-          width: errorText != null ? 1.6 : 1.2,
+          color: errorText != null ? CyberColors.crimsonAlert : Colors.white.withValues(alpha: 0.12),
+          width: errorText != null ? 1.6 : 1.0,
         ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(
-          color: errorText != null ? Colors.redAccent : const Color(0xFFFF6F00),
-          width: 1.8,
+          color: errorText != null ? CyberColors.crimsonAlert : CyberColors.laserCyan,
+          width: 1.5,
         ),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.redAccent, width: 1.6),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: CyberColors.crimsonAlert, width: 1.6),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.redAccent, width: 2.0),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: CyberColors.crimsonAlert, width: 2.0),
       ),
     );
   }
@@ -2977,22 +3010,22 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
         return Align(
           alignment: Alignment.topLeft,
           child: Material(
-            elevation: 8,
-            shadowColor: Colors.black26,
+            elevation: 12,
+            shadowColor: Colors.black54,
             borderRadius: BorderRadius.circular(14),
-            color: Colors.white,
+            color: CyberColors.cardSurface,
             child: Container(
               width: MediaQuery.of(context).size.width - 40,
               constraints: const BoxConstraints(maxHeight: 230),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.3)),
               ),
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 shrinkWrap: true,
                 itemCount: options.length,
-                separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                separatorBuilder: (_, __) => Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
                 itemBuilder: (BuildContext context, int index) {
                   final BankEntry option = options.elementAt(index);
                   return InkWell(
@@ -3005,10 +3038,10 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                           Container(
                             padding: const EdgeInsets.all(7),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFF6F00).withValues(alpha: 0.12),
+                              color: CyberColors.laserCyan.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(Icons.account_balance_rounded, size: 16, color: Color(0xFFFF6F00)),
+                            child: const Icon(Icons.account_balance_rounded, size: 16, color: CyberColors.laserCyan),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -3017,21 +3050,21 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                               children: [
                                 Text(
                                   option.displayName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                    color: Color(0xFF0F172A),
+                                  style: GoogleFonts.rajdhani(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Colors.white,
                                   ),
                                 ),
                                 if (option.category != null)
                                   Text(
                                     option.category!,
-                                    style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                    style: CyberTypography.monoData.copyWith(fontSize: 11, color: CyberColors.mutedText),
                                   ),
                               ],
                             ),
                           ),
-                          const Icon(Icons.north_west_rounded, size: 14, color: Color(0xFF94A3B8)),
+                          const Icon(Icons.north_west_rounded, size: 14, color: CyberColors.laserCyan),
                         ],
                       ),
                     ),
@@ -3048,14 +3081,14 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           focusNode: fieldFocusNode,
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.next,
-          style: const TextStyle(color: Color(0xFF0F172A)),
+          style: CyberTypography.monoData.copyWith(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
           onChanged: (val) {
             onChanged(val);
           },
           decoration: _buildInputDecoration(
             labelText: label,
             hintText: hint,
-            prefixIcon: Icon(Icons.account_balance_rounded, color: errorText != null ? Colors.redAccent : const Color(0xFFFF6F00)),
+            prefixIcon: Icon(Icons.account_balance_rounded, color: errorText != null ? CyberColors.crimsonAlert : CyberColors.laserCyan),
             errorText: errorText,
           ),
         );
@@ -3100,11 +3133,11 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
       onChanged: onChanged,
       onTap: onTap,
       inputFormatters: inputFormatters,
-      style: const TextStyle(color: Color(0xFF0F172A)),
+      style: CyberTypography.monoData.copyWith(color: Colors.white, fontSize: 14),
       decoration: _buildInputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(icon, color: errorText != null ? Colors.redAccent : const Color(0xFFFF6F00)),
+        prefixIcon: Icon(icon, color: errorText != null ? CyberColors.crimsonAlert : CyberColors.laserCyan),
         errorText: errorText,
       ),
     );
@@ -3116,7 +3149,11 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
       barrierDismissible: true,
       builder: (ctx) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          backgroundColor: CyberColors.cardSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: CyberColors.crimsonAlert.withValues(alpha: 0.4), width: 1.2),
+          ),
           clipBehavior: Clip.antiAlias,
           insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: ConstrainedBox(
@@ -3133,37 +3170,38 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2),
+                      color: CyberColors.crimsonAlert.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFFECACA)),
+                      border: Border.all(color: CyberColors.crimsonAlert.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.red.shade100,
+                            color: CyberColors.crimsonAlert.withValues(alpha: 0.2),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 22),
+                          child: const Icon(Icons.warning_amber_rounded, color: CyberColors.crimsonAlert, size: 22),
                         ),
                         const SizedBox(width: 12),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Card Already Exists',
-                                style: TextStyle(
-                                  fontSize: 16,
+                                'DUPLICATE ENCLAVE RECORD',
+                                style: CyberTypography.cyberHeader.copyWith(
+                                  fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF991B1B),
+                                  color: CyberColors.crimsonAlert,
+                                  letterSpacing: 1.0,
                                 ),
                               ),
-                              SizedBox(height: 2),
+                              const SizedBox(height: 2),
                               Text(
-                                'A card with this exact number is already saved in your vault.',
-                                style: TextStyle(fontSize: 12, color: Color(0xFF7F1D1D)),
+                                'A card with this exact payload is already sealed in the enclave.',
+                                style: CyberTypography.bodySmall.copyWith(fontSize: 11, color: CyberColors.mutedText),
                               ),
                             ],
                           ),
@@ -3186,10 +3224,10 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                     showFullNumber: true,
                   ),
                   const SizedBox(height: 8),
-                  const Center(
+                  Center(
                     child: Text(
-                      'Tap card to flip and view CVV & magnetic strip',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontStyle: FontStyle.italic),
+                      'Tap card chassis to flip and inspect telemetry',
+                      style: CyberTypography.monoData.copyWith(fontSize: 11, color: CyberColors.mutedText, fontStyle: FontStyle.italic),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -3198,41 +3236,41 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: CyberColors.obsidianBg.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                     ),
                     child: Column(
                       children: [
                         _buildDuplicateRow('Nickname', duplicateCard.nickname),
-                        const Divider(height: 16),
+                        Divider(height: 16, color: Colors.white.withValues(alpha: 0.06)),
                         _buildDuplicateRow('Bank Name', duplicateCard.bankName),
-                        const Divider(height: 16),
+                        Divider(height: 16, color: Colors.white.withValues(alpha: 0.06)),
                         _buildDuplicateRow('Card Number', duplicateCard.cardNumber),
-                        const Divider(height: 16),
+                        Divider(height: 16, color: Colors.white.withValues(alpha: 0.06)),
                         _buildDuplicateRow('Cardholder', duplicateCard.cardHolder),
-                        const Divider(height: 16),
+                        Divider(height: 16, color: Colors.white.withValues(alpha: 0.06)),
                         _buildDuplicateRow('Expiry Date', duplicateCard.expiry.isEmpty ? '—' : duplicateCard.expiry),
-                        const Divider(height: 16),
+                        Divider(height: 16, color: Colors.white.withValues(alpha: 0.06)),
                         _buildDuplicateRow('CVV', duplicateCard.cvv.isEmpty ? '—' : duplicateCard.cvv),
-                        const Divider(height: 16),
+                        Divider(height: 16, color: Colors.white.withValues(alpha: 0.06)),
                         _buildDuplicateRow('Card Type', '${duplicateCard.isDebit ? "Debit" : "Credit"} (${duplicateCard.cardNetwork})'),
-                        const Divider(height: 16),
+                        Divider(height: 16, color: Colors.white.withValues(alpha: 0.06)),
                         _buildDuplicateRow('Card Tier', duplicateCard.cardTier.displayName),
                         if (duplicateCard.isCredit && duplicateCard.creditLimit > 0) ...[
-                          const Divider(height: 16),
+                          Divider(height: 16, color: Colors.white.withValues(alpha: 0.06)),
                           _buildDuplicateRow('Credit Limit', '₹${formatIndianNumber(duplicateCard.creditLimit)}'),
                         ],
                         if (duplicateCard.isCredit && duplicateCard.statementDay > 0) ...[
-                          const Divider(height: 16),
+                          Divider(height: 16, color: Colors.white.withValues(alpha: 0.06)),
                           _buildDuplicateRow('Statement Day', '${duplicateCard.statementDay}th of month'),
                         ],
                         if (duplicateCard.isCredit && duplicateCard.dueDay > 0) ...[
-                          const Divider(height: 16),
+                          Divider(height: 16, color: Colors.white.withValues(alpha: 0.06)),
                           _buildDuplicateRow('Due Day', '${duplicateCard.dueDay}th of month'),
                         ],
                         if (duplicateCard.notes.isNotEmpty) ...[
-                          const Divider(height: 16),
+                          Divider(height: 16, color: Colors.white.withValues(alpha: 0.06)),
                           _buildDuplicateRow('Notes', duplicateCard.notes),
                         ],
                       ],
@@ -3247,24 +3285,24 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                         child: OutlinedButton(
                           onPressed: () => Navigator.pop(ctx),
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFFCBD5E1)),
+                            side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
-                          child: const Text(
-                            'Change Number',
-                            style: TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.bold, fontSize: 13),
+                          child: Text(
+                            'CHANGE NUMBER',
+                            style: GoogleFonts.rajdhani(color: CyberColors.mutedText, fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: ElevatedButton.icon(
-                          icon: const Icon(Icons.edit_rounded, size: 16),
-                          label: const Text('Edit This Card', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          icon: const Icon(Icons.edit_rounded, size: 16, color: Colors.black),
+                          label: Text('EDIT EXISTING', style: GoogleFonts.rajdhani(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFF6F00),
-                            foregroundColor: Colors.white,
+                            backgroundColor: CyberColors.laserCyan,
+                            foregroundColor: Colors.black,
                             elevation: 0,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -3297,14 +3335,14 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           width: 95,
           child: Text(
             label,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+            style: GoogleFonts.rajdhani(fontSize: 13, color: CyberColors.mutedText, fontWeight: FontWeight.bold),
           ),
         ),
         Expanded(
           child: Text(
             value,
             textAlign: TextAlign.end,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A), fontWeight: FontWeight.bold),
+            style: CyberTypography.monoData.copyWith(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
           ),
         ),
       ],

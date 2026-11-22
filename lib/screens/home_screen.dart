@@ -13,6 +13,7 @@ import '../services/drive_service.dart';
 import '../services/vault_security_service.dart';
 import '../widgets/duress_decoy_dialog.dart';
 import '../widgets/tether_sync_dialog.dart';
+import '../theme/cyber_theme.dart';
 import 'add_edit_screen.dart';
 import 'item_detail_screen.dart';
 import 'settings_screen.dart';
@@ -372,6 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
             masterPwd = await sec.getMasterPassword();
           }
         }
+        if (!mounted) return;
         await TetherSyncDialog.run<bool>(
           context: context,
           mode: TetherSyncMode.connecting,
@@ -437,6 +439,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ElevatedButton(
               onPressed: () async {
                 final valid = await sec.verifyMasterPassword(ctrl.text.trim());
+                if (!ctx.mounted) return;
                 if (valid) {
                   Navigator.of(ctx).pop(true);
                 } else {
@@ -781,11 +784,11 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            const Row(
               children: [
-                const Icon(Icons.add_to_drive_rounded, color: Color(0xFFFF6F00), size: 24),
-                const SizedBox(width: 10),
-                const Text(
+                Icon(Icons.add_to_drive_rounded, color: Color(0xFFFF6F00), size: 24),
+                SizedBox(width: 10),
+                Text(
                   'Google Drive Cloud Sync',
                   style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold),
                 ),
@@ -858,6 +861,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   label: const Text('Disconnect Google Drive', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
                   onPressed: () async {
                     await drive.signOut();
+                    if (!ctx.mounted) return;
                     Navigator.pop(ctx);
                     setState(() {});
                   },
@@ -875,10 +879,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final grouped = _groupedItems;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: CyberColors.obsidianBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
         // Profile Avatar (Left)
         leading: Padding(
           key: _profileKey,
@@ -892,19 +897,47 @@ class _HomeScreenState extends State<HomeScreen> {
               );
               _loadItems();
             },
-            child: CircleAvatar(
-              backgroundColor: const Color(0xFFFF6F00).withValues(alpha: 0.15),
-              backgroundImage: drive.userPhotoUrl != null ? NetworkImage(drive.userPhotoUrl!) : null,
-              child: drive.userPhotoUrl == null
-                  ? const Icon(Icons.person_rounded, color: Color(0xFFFF6F00), size: 20)
-                  : null,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.5), width: 1.2),
+                boxShadow: [
+                  BoxShadow(color: CyberColors.laserCyan.withValues(alpha: 0.2), blurRadius: 6),
+                ],
+              ),
+              child: CircleAvatar(
+                backgroundColor: CyberColors.cardSurface,
+                backgroundImage: drive.userPhotoUrl != null ? NetworkImage(drive.userPhotoUrl!) : null,
+                child: drive.userPhotoUrl == null
+                    ? const Icon(Icons.person_rounded, color: CyberColors.laserCyan, size: 20)
+                    : null,
+              ),
             ),
           ),
         ),
-        // Centered Title
-        title: const Text(
-          'My Vault',
-          style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: 0.5),
+        // Centered Cyber Robotic Title
+        title: Column(
+          children: [
+            Text(
+              'TETHERPASS VAULT',
+              style: CyberTypography.hudTitle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: CyberColors.textWhite,
+                letterSpacing: 2.0,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'ENCLAVE // HARDWARE AIR-GAP',
+              style: CyberTypography.mono(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                color: CyberColors.laserCyan,
+                letterSpacing: 1.0,
+              ),
+            ),
+          ],
         ),
         centerTitle: true,
         // Actions: Google Drive Sync & Lock Icon
@@ -913,10 +946,14 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             key: _driveSyncKey,
             icon: _isSyncing
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Color(0xFFFF6F00), strokeWidth: 2))
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(color: CyberColors.laserCyan, strokeWidth: 2),
+                  )
                 : Stack(
                     children: [
-                      const Icon(Icons.cloud_sync_rounded, color: Color(0xFF0F172A)),
+                      const Icon(Icons.cloud_sync_rounded, color: CyberColors.laserCyan, size: 22),
                       if (drive.isSignedIn)
                         Positioned(
                           right: 0,
@@ -926,7 +963,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             height: 8,
                             decoration: const BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Colors.green,
+                              color: CyberColors.electricMint,
+                              boxShadow: [
+                                BoxShadow(color: CyberColors.electricMint, blurRadius: 4),
+                              ],
                             ),
                           ),
                         ),
@@ -938,151 +978,193 @@ class _HomeScreenState extends State<HomeScreen> {
           // Lock Icon
           IconButton(
             key: _lockKey,
-            icon: const Icon(Icons.lock_rounded, color: Color(0xFF64748B)),
-            tooltip: 'Lock Vault',
+            icon: const Icon(Icons.lock_rounded, color: CyberColors.crimsonAlert, size: 22),
+            tooltip: 'Arm Vault Lock',
             onPressed: _lockVault,
           ),
+          const SizedBox(width: 4),
         ],
       ),
-      body: Column(
-        children: [
-          // Search & Filter Header
-          Padding(
-            key: _searchFilterKey,
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _searchCtrl,
-                  onChanged: _handleSearchInput,
-                  style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: 'Search by bank or nickname...',
-                    prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 20),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _buildFilterChip('All (${_items.length})', 0),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('Credit Cards (${_items.where((i) => i.isCard && i.isCredit).length})', 1),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('Debit Cards (${_items.where((i) => i.isCard && i.isDebit).length})', 2),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('Bank (${_items.where((i) => i.isNetBanking).length})', 3),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('Passwords (${_items.where((i) => i.isPassword).length})', 4),
-                    ],
-                  ),
-                ),
-                if (VaultSecurityService.isDecoySetupRevealed) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF7ED),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFFFD8A8)),
+      body: CyberBackground(
+        showGrid: true,
+        child: Column(
+          children: [
+            // Search & Filter Header
+            Padding(
+              key: _searchFilterKey,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+              child: Column(
+                children: [
+                  // Glassmorphic Search Input with Neon Laser Border
+                  CyberGlassCard(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                    borderRadius: 14,
+                    borderColor: CyberColors.glassBorder,
+                    showCornerBrackets: true,
+                    child: TextField(
+                      controller: _searchCtrl,
+                      onChanged: _handleSearchInput,
+                      style: CyberTypography.mono(color: Colors.white, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'SEARCH VAULT // BANK / CORE ID...',
+                        hintStyle: CyberTypography.mono(color: CyberColors.textDim, fontSize: 11),
+                        prefixIcon: const Icon(Icons.search_rounded, color: CyberColors.laserCyan, size: 20),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        fillColor: Colors.transparent,
+                        filled: false,
+                      ),
                     ),
+                  ),
+                  const SizedBox(height: 10),
+                  // Robotic Filter Pills
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
                     child: Row(
                       children: [
-                        const Icon(Icons.shield_outlined, color: Color(0xFFFF6F00), size: 18),
+                        _buildFilterChip('ALL (${_items.length})', 0),
                         const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Duress Decoy Vault (Stealth Unlocked)',
-                                style: TextStyle(color: Color(0xFF9A3412), fontWeight: FontWeight.bold, fontSize: 12),
-                              ),
-                              FutureBuilder<bool>(
-                                future: context.read<VaultSecurityService>().isDuressEnabled(),
-                                builder: (ctx, snap) {
-                                  final active = snap.data == true;
-                                  return Text(
-                                    active ? 'Active • Alternate PIN configured' : 'Not configured • Tap to set PIN',
-                                    style: TextStyle(
-                                      color: active ? const Color(0xFF15803D) : const Color(0xFFC2410C),
-                                      fontSize: 10,
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () async {
-                            await showDuressDecoySetupDialog(context, onStateChanged: () {
-                              if (mounted) setState(() {});
-                            });
-                          },
-                          child: const Text('Configure', style: TextStyle(color: Color(0xFFFF6F00), fontWeight: FontWeight.bold, fontSize: 12)),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.visibility_off_outlined, color: Color(0xFF9A3412), size: 16),
-                          tooltip: 'Hide Decoy Setup',
-                          onPressed: () {
-                            setState(() {
-                              VaultSecurityService.isDecoySetupRevealed = false;
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Decoy Vault setup is hidden again.')),
-                            );
-                          },
-                        ),
+                        _buildFilterChip('CREDIT (${_items.where((i) => i.isCard && i.isCredit).length})', 1),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('DEBIT (${_items.where((i) => i.isCard && i.isDebit).length})', 2),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('BANK (${_items.where((i) => i.isNetBanking).length})', 3),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('PASSWORDS (${_items.where((i) => i.isPassword).length})', 4),
                       ],
                     ),
                   ),
-                ],
-              ],
-            ),
-          ),
-
-          // Main List grouped alphabetically by Bank Name
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF6F00)))
-                : _filteredItems.isEmpty
-                    ? _buildEmptyState()
-                    : RefreshIndicator(
-                        color: const Color(0xFFFF6F00),
-                        backgroundColor: Colors.white,
-                        onRefresh: _loadItems,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 80),
-                          itemCount: grouped.keys.length,
-                          itemBuilder: (context, index) {
-                            final bankName = grouped.keys.elementAt(index);
-                            final bankItems = grouped[bankName]!;
-                            return _buildBankGroup(bankName, bankItems);
-                          },
-                        ),
+                  if (VaultSecurityService.isDecoySetupRevealed) ...[
+                    const SizedBox(height: 10),
+                    CyberGlassCard(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      borderRadius: 12,
+                      borderColor: CyberColors.plasmaAmber.withValues(alpha: 0.5),
+                      glowColor: CyberColors.plasmaAmber,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.shield_outlined, color: CyberColors.plasmaAmber, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'DURESS DECOY VAULT (STEALTH UNLOCKED)',
+                                  style: CyberTypography.hudTitle(
+                                    color: CyberColors.plasmaAmber,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                FutureBuilder<bool>(
+                                  future: context.read<VaultSecurityService>().isDuressEnabled(),
+                                  builder: (ctx, snap) {
+                                    final active = snap.data == true;
+                                    return Text(
+                                      active ? 'STATUS: ARMED • Alternate PIN Linked' : 'STATUS: UNCONFIGURED • Set PIN',
+                                      style: CyberTypography.mono(
+                                        color: active ? CyberColors.electricMint : CyberColors.plasmaAmber,
+                                        fontSize: 9.5,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              await showDuressDecoySetupDialog(context, onStateChanged: () {
+                                if (mounted) setState(() {});
+                              });
+                            },
+                            child: Text(
+                              'CONFIGURE',
+                              style: CyberTypography.mono(
+                                color: CyberColors.laserCyan,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.visibility_off_outlined, color: CyberColors.textMuted, size: 16),
+                            tooltip: 'Hide Decoy Setup',
+                            onPressed: () {
+                              setState(() {
+                                VaultSecurityService.isDecoySetupRevealed = false;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Decoy Vault setup is hidden again.'),
+                                  backgroundColor: CyberColors.cardSurface,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
-          ),
-        ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // Main List grouped by Bank Name
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator(color: CyberColors.laserCyan))
+                  : _filteredItems.isEmpty
+                      ? _buildEmptyState()
+                      : RefreshIndicator(
+                          color: CyberColors.laserCyan,
+                          backgroundColor: CyberColors.cardSurface,
+                          onRefresh: _loadItems,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 90),
+                            itemCount: grouped.keys.length,
+                            itemBuilder: (context, index) {
+                              final bankName = grouped.keys.elementAt(index);
+                              final bankItems = grouped[bankName]!;
+                              return _buildBankGroup(bankName, bankItems);
+                            },
+                          ),
+                        ),
+            ),
+          ],
+        ),
       ),
 
-      // Fixed Orange "+" Floating Action Button at Bottom Right
-      floatingActionButton: FloatingActionButton(
-        key: _fabKey,
-        backgroundColor: const Color(0xFFFF6F00),
-        foregroundColor: Colors.white,
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: const Icon(Icons.add, size: 28),
-        onPressed: () async {
-          final added = await Navigator.push<bool>(
-            context,
-            MaterialPageRoute(builder: (_) => const AddEditScreen()),
-          );
-          if (added == true) _loadItems();
-        },
+      // Fixed Robotic Neon Floating Action Button at Bottom Right
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: CyberColors.laserCyan.withValues(alpha: 0.4),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: FloatingActionButton(
+          key: _fabKey,
+          backgroundColor: CyberColors.laserCyan,
+          foregroundColor: Colors.black,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: const Icon(Icons.add_rounded, size: 30, color: Colors.black),
+          onPressed: () async {
+            final added = await Navigator.push<bool>(
+              context,
+              MaterialPageRoute(builder: (_) => const AddEditScreen()),
+            );
+            if (added == true) _loadItems();
+          },
+        ),
       ),
     );
   }
@@ -1093,21 +1175,30 @@ class _HomeScreenState extends State<HomeScreen> {
       borderRadius: BorderRadius.circular(20),
       onTap: () => setState(() => _selectedFilter = index),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFFF6F00) : Colors.white,
+          color: isSelected ? CyberColors.laserCyan.withValues(alpha: 0.2) : CyberColors.glassFill,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? const Color(0xFFFF6F00) : const Color(0xFFE2E8F0)),
+          border: Border.all(
+            color: isSelected ? CyberColors.laserCyan : CyberColors.glassBorderMuted,
+            width: isSelected ? 1.4 : 1.0,
+          ),
           boxShadow: isSelected
-              ? [BoxShadow(color: const Color(0xFFFF6F00).withValues(alpha: 0.25), blurRadius: 4, offset: const Offset(0, 2))]
-              : const [BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1))],
+              ? [
+                  BoxShadow(
+                    color: CyberColors.laserCyan.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF64748B),
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          style: CyberTypography.mono(
+            color: isSelected ? CyberColors.laserCyan : CyberColors.textMuted,
+            fontSize: 10.5,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            letterSpacing: 0.6,
           ),
         ),
       ),
@@ -1122,27 +1213,42 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
           child: Row(
             children: [
-              const Icon(Icons.account_balance_rounded, color: Color(0xFFFF6F00), size: 16),
+              Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: CyberColors.laserCyan,
+                  boxShadow: [
+                    BoxShadow(color: CyberColors.laserCyan, blurRadius: 4),
+                  ],
+                ),
+              ),
               const SizedBox(width: 8),
               Text(
-                bankName,
-                style: const TextStyle(
-                  color: Color(0xFFFF6F00),
-                  fontSize: 13,
+                bankName.toUpperCase(),
+                style: CyberTypography.hudTitle(
+                  color: CyberColors.laserCyan,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 1.1,
+                  letterSpacing: 1.2,
                 ),
               ),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
-                  borderRadius: BorderRadius.circular(10),
+                  color: CyberColors.glassFillLight,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: CyberColors.glassBorderMuted, width: 0.8),
                 ),
                 child: Text(
-                  '${items.length} ${items.length == 1 ? "item" : "items"}',
-                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w600),
+                  '${items.length} ${items.length == 1 ? "CORE" : "CORES"}',
+                  style: CyberTypography.mono(
+                    color: CyberColors.textMuted,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -1158,60 +1264,44 @@ class _HomeScreenState extends State<HomeScreen> {
     final isExpired = item.isCard && item.isCardExpired;
     final isExpiringSoon = item.isCard && item.isCardExpiringSoon;
 
-    Color tileBgColor = Colors.white;
-    Color tileBorderColor = const Color(0xFFE2E8F0);
-    double borderWidth = 1.0;
-    List<BoxShadow> tileShadow = const [
-      BoxShadow(color: Colors.black12, blurRadius: 3, offset: Offset(0, 1)),
-    ];
+    Color tileBorderColor = CyberColors.glassBorderMuted;
+    Color? glowColor;
 
     Color iconBg;
     Color iconColor;
 
     if (isExpired) {
-      // Red colour for already expired card
-      tileBgColor = const Color(0xFFFEF2F2);
-      tileBorderColor = const Color(0xFFEF4444);
-      borderWidth = 1.8;
-      tileShadow = [
-        BoxShadow(color: Colors.red.withValues(alpha: 0.18), blurRadius: 6, offset: const Offset(0, 2)),
-      ];
-      iconBg = Colors.red.shade100;
-      iconColor = Colors.red.shade700;
+      tileBorderColor = CyberColors.crimsonAlert;
+      glowColor = CyberColors.crimsonAlert;
+      iconBg = CyberColors.crimsonAlert.withValues(alpha: 0.16);
+      iconColor = CyberColors.crimsonAlert;
     } else if (isExpiringSoon) {
-      // Yellow colour for card which is going to expire in 2 to 3 months
-      tileBgColor = const Color(0xFFFEFCE8);
-      tileBorderColor = const Color(0xFFEAB308);
-      borderWidth = 1.8;
-      tileShadow = [
-        BoxShadow(color: const Color(0xFFEAB308).withValues(alpha: 0.22), blurRadius: 6, offset: const Offset(0, 2)),
-      ];
-      iconBg = const Color(0xFFFEF08A);
-      iconColor = const Color(0xFFB45309);
+      tileBorderColor = CyberColors.plasmaAmber;
+      glowColor = CyberColors.plasmaAmber;
+      iconBg = CyberColors.plasmaAmber.withValues(alpha: 0.16);
+      iconColor = CyberColors.plasmaAmber;
     } else if (item.isPassword) {
-      iconBg = const Color(0xFF6366F1).withValues(alpha: 0.12);
-      iconColor = const Color(0xFF4F46E5);
+      iconBg = CyberColors.quantumViolet.withValues(alpha: 0.16);
+      iconColor = CyberColors.quantumViolet;
     } else {
       iconBg = item.isCard
           ? (item.isDebit
-              ? const Color(0xFF10B981).withValues(alpha: 0.12)
-              : const Color(0xFFFF6F00).withValues(alpha: 0.12))
-          : Colors.blueAccent.withValues(alpha: 0.12);
+              ? CyberColors.electricMint.withValues(alpha: 0.16)
+              : CyberColors.laserCyan.withValues(alpha: 0.16))
+          : CyberColors.skyBlue.withValues(alpha: 0.16);
       iconColor = item.isCard
-          ? (item.isDebit ? const Color(0xFF10B981) : const Color(0xFFFF6F00))
-          : Colors.blueAccent;
+          ? (item.isDebit ? CyberColors.electricMint : CyberColors.laserCyan)
+          : CyberColors.skyBlue;
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: tileBgColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: tileBorderColor, width: borderWidth),
-        boxShadow: tileShadow,
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      margin: const EdgeInsets.only(bottom: 10),
+      child: CyberGlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        borderRadius: 16,
+        borderColor: tileBorderColor,
+        glowColor: glowColor,
+        showCornerBrackets: isExpired || isExpiringSoon,
         onTap: () async {
           await Navigator.push(
             context,
@@ -1219,205 +1309,163 @@ class _HomeScreenState extends State<HomeScreen> {
           );
           _loadItems();
         },
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: iconBg,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            item.isPassword
-                ? Icons.vpn_key_rounded
-                : (item.isCard
-                    ? (item.isDebit ? Icons.account_balance_wallet_rounded : Icons.credit_card_rounded)
-                    : Icons.account_balance_rounded),
-            color: iconColor,
-            size: 22,
-          ),
-        ),
-        title: Row(
+        child: Row(
+          children: [
+            // Glowing Cyber Icon Node
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: iconColor.withValues(alpha: 0.4), width: 1),
+                boxShadow: [
+                  BoxShadow(color: iconColor.withValues(alpha: 0.25), blurRadius: 8),
+                ],
+              ),
+              child: Icon(
+                item.isPassword
+                    ? Icons.vpn_key_rounded
+                    : (item.isCard
+                        ? (item.isDebit ? Icons.account_balance_wallet_rounded : Icons.credit_card_rounded)
+                        : Icons.account_balance_rounded),
+                color: iconColor,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
           children: [
             Expanded(
               child: Text(
                 item.nickname,
-                style: TextStyle(
+                style: CyberTypography.hudTitle(
                   color: isExpired
-                      ? const Color(0xFF991B1B)
-                      : (isExpiringSoon ? const Color(0xFF854D0E) : const Color(0xFF0F172A)),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
+                      ? CyberColors.crimsonAlert
+                      : (isExpiringSoon ? CyberColors.plasmaAmber : Colors.white),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 6),
             if (item.isPassword) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEEF2FF),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFFC7D2FE)),
-                ),
-                child: const Text(
-                  'PASSWORD',
-                  style: TextStyle(
-                    color: Color(0xFF4338CA),
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              const CyberBadge(
+                text: 'PASSKEY',
+                color: CyberColors.quantumViolet,
               ),
             ] else if (item.isCard) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: item.isDebit ? const Color(0xFFECFDF5) : const Color(0xFFEEF2FF),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: item.isDebit ? const Color(0xFFA7F3D0) : const Color(0xFFC7D2FE),
-                  ),
-                ),
-                child: Text(
-                  item.isDebit ? 'DEBIT' : 'CREDIT',
-                  style: TextStyle(
-                    color: item.isDebit ? const Color(0xFF047857) : const Color(0xFF4338CA),
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              CyberBadge(
+                text: item.isDebit ? 'DEBIT' : 'CREDIT',
+                color: item.isDebit ? CyberColors.electricMint : CyberColors.laserCyan,
               ),
               const SizedBox(width: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isExpired
-                      ? Colors.red.shade100
-                      : (isExpiringSoon ? const Color(0xFFFEF08A) : const Color(0xFFF1F5F9)),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: isExpired
-                        ? Colors.red.shade300
-                        : (isExpiringSoon ? const Color(0xFFFACC15) : const Color(0xFFE2E8F0)),
-                  ),
-                ),
-                child: Text(
-                  item.cardTier.displayName.toUpperCase(),
-                  style: TextStyle(
-                    color: isExpired
-                        ? Colors.red.shade900
-                        : (isExpiringSoon ? const Color(0xFF854D0E) : const Color(0xFF475569)),
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              CyberBadge(
+                text: item.cardTier.displayName.toUpperCase(),
+                color: isExpired
+                    ? CyberColors.crimsonAlert
+                    : (isExpiringSoon ? CyberColors.plasmaAmber : CyberColors.textMuted),
               ),
-            ] else ...[
-              if (item.isAnyPasswordExpired)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.red.shade200),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.error_outline_rounded, color: Colors.red, size: 10),
-                      SizedBox(width: 3),
-                      Text(
-                        'PASSWORD EXPIRED',
-                        style: TextStyle(color: Colors.red, fontSize: 9, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                )
-              else if (item.isAnyPasswordExpiringSoon)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.amber.shade300),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 10),
-                      SizedBox(width: 3),
-                      Text(
-                        'EXPIRING SOON',
-                        style: TextStyle(color: Color(0xFFD97706), fontSize: 9, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
             ],
           ],
         ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            item.isPassword
-                ? '${item.website.isNotEmpty ? "${item.website}  •  " : ""}${item.userId.isNotEmpty ? item.userId : "Password Saved"}'
-                : (item.isCard
-                    ? '${item.isDebit ? "Debit" : "Credit"}  •  ${item.cardNetwork}  •  ${item.maskedCardNumber}'
-                    : (item.allAccounts.isNotEmpty
-                        ? (item.allAccounts.length > 1
-                            ? '${item.allAccounts.length} Accounts  •  Primary: ${item.allAccounts.first.maskedAccountNumber}'
-                            : 'A/C: ${item.allAccounts.first.maskedAccountNumber}${item.allAccounts.first.ifscCode.isNotEmpty ? "  •  ${item.allAccounts.first.ifscCode}" : ""}')
-                        : 'User ID: ${item.userId.isEmpty ? "—" : item.userId}')),
-            style: TextStyle(
-              color: isExpired
-                  ? Colors.red.shade800
-                  : (isExpiringSoon ? const Color(0xFF854D0E) : const Color(0xFF64748B)),
-              fontSize: 12,
-            ),
+        const SizedBox(height: 5),
+        Text(
+          item.isPassword
+              ? '${item.website.isNotEmpty ? "${item.website}  •  " : ""}${item.userId.isNotEmpty ? item.userId : "Password Encrypted"}'
+              : (item.isCard
+                  ? '${item.isDebit ? "Debit" : "Credit"}  •  ${item.cardNetwork}  •  ${item.maskedCardNumber}'
+                  : (item.allAccounts.isNotEmpty
+                      ? (item.allAccounts.length > 1
+                          ? '${item.allAccounts.length} Accounts  •  Primary: ${item.allAccounts.first.maskedAccountNumber}'
+                          : 'A/C: ${item.allAccounts.first.maskedAccountNumber}${item.allAccounts.first.ifscCode.isNotEmpty ? "  •  ${item.allAccounts.first.ifscCode}" : ""}')
+                      : 'User ID: ${item.userId.isEmpty ? "—" : item.userId}')),
+          style: CyberTypography.mono(
+            color: isExpired
+                ? CyberColors.crimsonAlert
+                : (isExpiringSoon ? CyberColors.plasmaAmber : CyberColors.textMuted),
+            fontSize: 11,
+            letterSpacing: 0.4,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-        trailing: Icon(
-          Icons.arrow_forward_ios_rounded,
-          color: isExpired
-              ? Colors.red.shade400
-              : (isExpiringSoon ? const Color(0xFFCA8A04) : const Color(0xFFCBD5E1)),
-          size: 14,
-        ),
-      ),
-    );
-  }
+      ],
+    ),
+  ),
+  const SizedBox(width: 6),
+  Icon(
+    Icons.chevron_right_rounded,
+    color: isExpired
+        ? CyberColors.crimsonAlert
+        : (isExpiringSoon ? CyberColors.plasmaAmber : CyberColors.textMuted),
+    size: 20,
+  ),
+],
+),
+),
+);
+}
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.shield_outlined, size: 64, color: const Color(0xFFCBD5E1)),
-          const SizedBox(height: 16),
-          const Text(
-            'Your Vault is Empty',
-            style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Tap the orange + button below to add your\nfirst credit card or Bank account.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF64748B), fontSize: 13, height: 1.4),
-          ),
-          const SizedBox(height: 24),
-          // Action in empty state: Quick Restore
-          OutlinedButton.icon(
-            icon: const Icon(Icons.cloud_download_rounded, color: Colors.blueAccent, size: 16),
-            label: const Text('Restore from Drive', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Colors.blueAccent),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: CyberColors.glassFill,
+                border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.3)),
+                boxShadow: [
+                  BoxShadow(
+                    color: CyberColors.laserCyan.withValues(alpha: 0.2),
+                    blurRadius: 20,
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.shield_outlined, size: 54, color: CyberColors.laserCyan),
             ),
-            onPressed: _restoreFromGoogleDrive,
-          ),
-        ],
+            const SizedBox(height: 20),
+            Text(
+              'ENCLAVE IS EMPTY',
+              style: CyberTypography.hudTitle(
+                color: CyberColors.textWhite,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Initialize your sovereign vault cores by tapping the "+" button below or restore an encrypted cloud payload.',
+              textAlign: TextAlign.center,
+              style: CyberTypography.body(
+                color: CyberColors.textMuted,
+                fontSize: 12.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            CyberNeonButton(
+              height: 44,
+              primaryColor: CyberColors.laserCyan,
+              isOutlined: true,
+              label: 'RESTORE FROM DRIVE',
+              icon: const Icon(Icons.cloud_download_rounded, color: CyberColors.laserCyan, size: 18),
+              onPressed: _restoreFromGoogleDrive,
+            ),
+          ],
+        ),
       ),
     );
   }

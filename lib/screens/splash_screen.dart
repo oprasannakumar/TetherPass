@@ -7,14 +7,15 @@ import '../services/bin_database_service.dart';
 import '../services/crypto_service.dart';
 import '../services/database_service.dart';
 import '../services/vault_security_service.dart';
+import '../theme/cyber_theme.dart';
 import 'home_screen.dart';
 import 'onboarding_screen.dart';
 import 'unlock_screen.dart';
 import '../main.dart';
 
-/// Animated Launch Splash Screen
-/// Displays the TetherPass icon with a breathing glow and smooth entrance animation
-/// while zero-knowledge encryption and local vault services initialize in the background.
+/// Cyber-Vault Animated Launch Splash Screen
+/// Features a futuristic robotic HUD sequence with glassmorphic depth,
+/// rotating neon perimeter rings, and real-time security diagnostics.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -22,39 +23,45 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _animController;
+class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late AnimationController _rotationController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
-  late Animation<double> _pulseAnimation;
-  String _statusText = 'Securing storage...';
+  late Animation<double> _glowAnimation;
+  String _statusText = 'SYS.INIT: ENCRYPTED STORAGE...';
 
   @override
   void initState() {
     super.initState();
 
-    _animController = AnimationController(
+    _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1600),
     )..repeat(reverse: true);
 
-    _scaleAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
+    _rotationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat();
+
+    _scaleAnimation = Tween<double>(begin: 0.90, end: 1.05).animate(
       CurvedAnimation(
-        parent: _animController,
-        curve: const Interval(0.0, 0.7, curve: Curves.easeOutBack),
+        parent: _pulseController,
+        curve: Curves.easeInOut,
       ),
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
-        parent: _animController,
-        curve: const Interval(0.0, 0.4, curve: Curves.easeIn),
+        parent: _pulseController,
+        curve: const Interval(0.0, 0.45, curve: Curves.easeIn),
       ),
     );
 
-    _pulseAnimation = Tween<double>(begin: 6.0, end: 24.0).animate(
+    _glowAnimation = Tween<double>(begin: 8.0, end: 32.0).animate(
       CurvedAnimation(
-        parent: _animController,
+        parent: _pulseController,
         curve: Curves.easeInOut,
       ),
     );
@@ -64,7 +71,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   void dispose() {
-    _animController.dispose();
+    _pulseController.dispose();
+    _rotationController.dispose();
     super.dispose();
   }
 
@@ -73,7 +81,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     try {
       if (mounted) {
-        setState(() => _statusText = 'Initializing secure enclave...');
+        setState(() => _statusText = 'SYS.ENCLAVE: CALIBRATING HARDWARE VAULT...');
       }
 
       final cryptoService = context.read<CryptoService>();
@@ -83,7 +91,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       await cryptoService.init();
 
       if (mounted) {
-        setState(() => _statusText = 'Loading encrypted database...');
+        setState(() => _statusText = 'SYS.CRYPTO: MOUNTING AES-256 CORES...');
       }
 
       await dbService.init();
@@ -96,7 +104,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       unawaited(BinDatabaseService.init());
 
       if (mounted) {
-        setState(() => _statusText = 'Verifying vault integrity...');
+        setState(() => _statusText = 'SYS.SECURITY: VERIFYING VAULT INTEGRITY...');
       }
 
       final isOnboarded = await securityService.isOnboarded();
@@ -106,9 +114,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         AutoLockService.markUnlocked();
       }
 
-      // Ensure minimum pleasant display time (~850ms) so animation finishes gracefully
       final elapsed = DateTime.now().difference(startTime).inMilliseconds;
-      const minDurationMs = 850;
+      const minDurationMs = 950;
       if (elapsed < minDurationMs) {
         await Future.delayed(Duration(milliseconds: minDurationMs - elapsed));
       }
@@ -122,7 +129,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 350),
+          transitionDuration: const Duration(milliseconds: 400),
           pageBuilder: (_, __, ___) => targetScreen,
           transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(opacity: animation, child: child);
@@ -132,7 +139,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     } catch (e) {
       debugPrint('[Splash] Initialization error: $e');
       if (!mounted) return;
-      // Fallback navigation if error
       Navigator.pushReplacementNamed(context, '/unlock');
     }
   }
@@ -140,127 +146,297 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(flex: 2),
+      backgroundColor: CyberColors.obsidianBg,
+      body: CyberBackground(
+        showGrid: true,
+        child: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Spacer(flex: 2),
 
-              // Animated App Icon with Glowing Breathing Aura
-              AnimatedBuilder(
-                animation: _animController,
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale: _scaleAnimation.value,
-                    child: Container(
-                      width: 104,
-                      height: 104,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF6F00).withValues(alpha: 0.22),
-                            blurRadius: _pulseAnimation.value,
-                            spreadRadius: _pulseAnimation.value * 0.4,
-                            offset: const Offset(0, 4),
+                // Robotic Central Core with Rotating HUD Ring & Glass Aura
+                AnimatedBuilder(
+                  animation: Listenable.merge([_pulseController, _rotationController]),
+                  builder: (context, child) {
+                    return SizedBox(
+                      width: 170,
+                      height: 170,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Outer Rotating Robotic Ring
+                          RotationTransition(
+                            turns: _rotationController,
+                            child: Container(
+                              width: 160,
+                              height: 160,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: CyberColors.laserCyan.withValues(alpha: 0.35),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Stack(
+                                children: [
+                                  Positioned(
+                                    top: 0,
+                                    left: 70,
+                                    child: Container(
+                                      width: 20,
+                                      height: 4,
+                                      decoration: BoxDecoration(
+                                        color: CyberColors.laserCyan,
+                                        borderRadius: BorderRadius.circular(2),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: CyberColors.laserCyan.withValues(alpha: 0.8),
+                                            blurRadius: 8,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 0,
+                                    right: 70,
+                                    child: Container(
+                                      width: 20,
+                                      height: 4,
+                                      decoration: BoxDecoration(
+                                        color: CyberColors.electricMint,
+                                        borderRadius: BorderRadius.circular(2),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: CyberColors.electricMint.withValues(alpha: 0.8),
+                                            blurRadius: 8,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
+
+                          // Inner Reverse Rotating Hex Ring
+                          RotationTransition(
+                            turns: ReverseAnimation(_rotationController),
+                            child: Container(
+                              width: 136,
+                              height: 136,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: CyberColors.quantumViolet.withValues(alpha: 0.25),
+                                  width: 1.0,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          // Glassmorphic Glowing Enclave Core
+                          Transform.scale(
+                            scale: _scaleAnimation.value,
+                            child: Container(
+                              width: 110,
+                              height: 110,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Color(0xFF162544),
+                                    Color(0xFF0C1322),
+                                  ],
+                                ),
+                                border: Border.all(
+                                  color: CyberColors.laserCyan.withValues(alpha: 0.6),
+                                  width: 1.6,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: CyberColors.laserCyan.withValues(alpha: 0.3),
+                                    blurRadius: _glowAnimation.value,
+                                    spreadRadius: _glowAnimation.value * 0.35,
+                                  ),
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.8),
+                                    blurRadius: 20,
+                                  ),
+                                ],
+                              ),
+                              padding: const EdgeInsets.all(8),
+                              child: ClipOval(
+                                child: Image.asset(
+                                  'assets/icons/vault_logo.png',
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Center(
+                                    child: Icon(
+                                      Icons.shield_rounded,
+                                      size: 54,
+                                      color: CyberColors.laserCyan,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      padding: const EdgeInsets.all(4),
-                      child: ClipOval(
-                        child: Image.asset(
-                          'assets/icons/vault_logo.png',
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: const Color(0xFFFF6F00),
-                            child: const Icon(
-                              Icons.lock_rounded,
-                              size: 52,
-                              color: Colors.white,
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 32),
+
+                // Futuristic Robotic Branding Title
+                FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: CyberColors.laserCyan,
                             ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'TETHERPASS',
+                            style: CyberTypography.hudTitle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 3.5,
+                              color: CyberColors.textWhite,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: CyberColors.laserCyan,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: CyberColors.laserCyan.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: CyberColors.laserCyan.withValues(alpha: 0.25),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          'AIR-GAPPED CYBER-VAULT PROTOCOL',
+                          style: CyberTypography.mono(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: CyberColors.laserCyan,
+                            letterSpacing: 1.5,
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 28),
-
-              // Brand Name
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: const Column(
-                  children: [
-                    Text(
-                      'TetherPass',
-                      style: TextStyle(
-                        color: Color(0xFF0F172A),
-                        fontSize: 30,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      'Air-Gapped Vault Security',
-                      style: TextStyle(
-                        color: Color(0xFF64748B),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
-              const Spacer(flex: 2),
+                const Spacer(flex: 2),
 
-              // Animated Status Indicator
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: 140,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: const LinearProgressIndicator(
-                          minHeight: 3,
-                          backgroundColor: Color(0xFFF1F5F9),
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6F00)),
+                // Glassmorphic Diagnostic Status Terminal
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 36),
+                  child: CyberGlassCard(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    borderRadius: 14,
+                    borderColor: CyberColors.glassBorder,
+                    showCornerBrackets: true,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'CORE STATUS',
+                              style: CyberTypography.mono(
+                                fontSize: 9.5,
+                                color: CyberColors.textMuted,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: const BoxDecoration(
+                                    color: CyberColors.electricMint,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'ACTIVE ENCLAVE',
+                                  style: CyberTypography.mono(
+                                    fontSize: 9.5,
+                                    color: CyberColors.electricMint,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      child: Text(
-                        _statusText,
-                        key: ValueKey<String>(_statusText),
-                        style: const TextStyle(
-                          color: Color(0xFF94A3B8),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
+                        const SizedBox(height: 10),
+                        // Futuristic Progress Indicator with Cyan / Mint Gradient
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: const SizedBox(
+                            height: 3,
+                            child: LinearProgressIndicator(
+                              backgroundColor: Color(0xFF10192A),
+                              valueColor: AlwaysStoppedAnimation<Color>(CyberColors.laserCyan),
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 10),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 250),
+                          child: Text(
+                            _statusText,
+                            key: ValueKey<String>(_statusText),
+                            style: CyberTypography.mono(
+                              fontSize: 10,
+                              color: CyberColors.laserCyan,
+                              letterSpacing: 0.6,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 36),
-            ],
+                const SizedBox(height: 40),
+              ],
+            ),
           ),
         ),
       ),
