@@ -1030,10 +1030,10 @@ async function markQrCodeExpired() {
 
   if (timerEl) timerEl.textContent = '⌛ Code expired. Tap Refresh to reload';
   if (canvas) canvas.style.opacity = '0.3';
-  if (pulseDot) pulseDot.style.background = '#94A3B8';
+  if (pulseDot) pulseDot.style.background = '#475569';
   if (refreshBtn) {
-    refreshBtn.style.background = '#FF6F00';
-    refreshBtn.style.color = '#FFFFFF';
+    refreshBtn.style.background = '#00F5A0';
+    refreshBtn.style.color = '#04060A';
     refreshBtn.style.border = 'none';
     refreshBtn.style.fontWeight = '700';
   }
@@ -1070,9 +1070,9 @@ async function startDirectQrPairing(force = false) {
   if (canvas) canvas.style.opacity = '1';
   if (pulseDot) pulseDot.style.background = '#F59E0B';
   if (refreshBtn) {
-    refreshBtn.style.background = '#F8FAFC';
-    refreshBtn.style.color = '#334155';
-    refreshBtn.style.border = '1px solid #CBD5E1';
+    refreshBtn.style.background = '#141E34';
+    refreshBtn.style.color = '#8892B0';
+    refreshBtn.style.border = '1px solid #1E293B';
     refreshBtn.style.fontWeight = '600';
   }
 
@@ -1082,8 +1082,8 @@ async function startDirectQrPairing(force = false) {
       loadingEl.style.display = 'block';
       loadingEl.innerHTML = `
         <div style="font-size: 24px; margin-bottom: 6px;">🔗</div>
-        <div style="font-weight: 700; color: #0F172A; margin-bottom: 4px;">Sign in with Google First</div>
-        <div style="font-size: 11px; color: #64748B; line-height: 1.4;">
+        <div style="font-weight: 700; color: #F8FAFC; margin-bottom: 4px;">Sign in with Google First</div>
+        <div style="font-size: 11px; color: #8892B0; line-height: 1.4;">
           Connect your Google Drive account above to generate a secure pairing QR code.
         </div>
       `;
@@ -1095,7 +1095,7 @@ async function startDirectQrPairing(force = false) {
   if (loadingEl) {
     loadingEl.style.display = 'block';
     loadingEl.innerHTML = `
-      <div style="display: inline-block; width: 22px; height: 22px; border: 3px solid #E2E8F0; border-top-color: #FF6F00; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 8px;"></div>
+      <div style="display: inline-block; width: 22px; height: 22px; border: 3px solid rgba(255, 255, 255, 0.1); border-top-color: #00F5A0; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 8px;"></div>
       <div>Generating secure pairing QR code...</div>
     `;
   }
@@ -1132,10 +1132,10 @@ async function startDirectQrPairing(force = false) {
 
       if (loadingEl) {
         loadingEl.innerHTML = `
-          <div style="color: #EF4444; font-weight: 700; font-size: 13px; margin-bottom: 6px;">
+          <div style="color: #FF3366; font-weight: 700; font-size: 13px; margin-bottom: 6px;">
             ${isAuthErr ? '⚠️ Google Session Expired' : '⚠️ Pairing Setup Error'}
           </div>
-          <div style="font-size: 11px; color: #64748B; margin-bottom: 12px; line-height: 1.4;">
+          <div style="font-size: 11px; color: #8892B0; margin-bottom: 12px; line-height: 1.4;">
             ${isAuthErr ? 'Your Google authorization has expired or is invalid. Please sign in again to continue.' : escapeHtml(errMsg)}
           </div>
           ${isAuthErr ? `
@@ -1240,10 +1240,10 @@ async function startDirectQrPairing(force = false) {
       loadingEl.style.display = 'block';
       if (readyEl) readyEl.style.display = 'none';
       loadingEl.innerHTML = `
-        <div style="color: #EF4444; font-weight: 700; font-size: 13px; margin-bottom: 6px;">
+        <div style="color: #FF3366; font-weight: 700; font-size: 13px; margin-bottom: 6px;">
           ${isAuthErr ? '⚠️ Google Session Expired' : '⚠️ Pairing Setup Error'}
         </div>
-        <div style="color: #64748B; font-size: 11px; margin-bottom: 12px; line-height: 1.4;">
+        <div style="color: #8892B0; font-size: 11px; margin-bottom: 12px; line-height: 1.4;">
           ${isAuthErr ? 'Your Google authorization has expired or is invalid. Please sign in again to continue.' : escapeHtml(errMsg)}
         </div>
         ${isAuthErr ? `
@@ -1663,7 +1663,7 @@ function renderVaultList(query = '') {
     });
 
     if (cards.length === 0) {
-      list.innerHTML = '<div style="padding:20px;text-align:center;color:#94A3B8;font-size:12px;">No matching cards found.</div>';
+      list.innerHTML = '<div style="padding:20px;text-align:center;color:#8892B0;font-size:12px;">No matching cards found.</div>';
       return;
     }
 
@@ -1708,7 +1708,7 @@ function renderVaultList(query = '') {
     });
 
     if (banks.length === 0) {
-      list.innerHTML = '<div style="padding:20px;text-align:center;color:#94A3B8;font-size:12px;">No matching bank accounts.</div>';
+      list.innerHTML = '<div style="padding:20px;text-align:center;color:#8892B0;font-size:12px;">No matching bank accounts.</div>';
       return;
     }
 
@@ -1731,19 +1731,19 @@ function renderVaultList(query = '') {
       const tile = document.createElement('div');
       tile.className = 'card-tile';
       if (isMatch) {
-        tile.style.border = '1px solid #93C5FD';
-        tile.style.backgroundColor = '#F0F9FF';
+        tile.style.border = '1px solid #00F5A0';
+        tile.style.backgroundColor = 'rgba(0, 245, 160, 0.08)';
       }
 
       let accountsHtml = '';
       if (accs.length > 0) {
         accountsHtml = accs.map((acc, i) => `
-          <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:6px 8px;margin-top:4px;">
-            <div style="font-size:11px;font-weight:700;color:#1E293B;display:flex;justify-content:space-between;">
+          <div style="background:#141E34;border:1px solid #1E293B;border-radius:6px;padding:6px 8px;margin-top:4px;">
+            <div style="font-size:11px;font-weight:700;color:#F8FAFC;display:flex;justify-content:space-between;font-family:var(--font-mono);">
               <span>A/C: ${escapeHtml(acc.accountNumber || '—')}</span>
-              ${acc.label ? `<span style="font-size:10px;color:#64748B;">${escapeHtml(acc.label)}</span>` : ''}
+              ${acc.label ? `<span style="font-size:10px;color:#8892B0;">${escapeHtml(acc.label)}</span>` : ''}
             </div>
-            <div style="font-size:11px;color:#64748B;">IFSC: <strong>${escapeHtml(acc.ifscCode || 'None')}</strong></div>
+            <div style="font-size:11px;color:#8892B0;font-family:var(--font-mono);">IFSC: <strong style="color:#00E5FF;">${escapeHtml(acc.ifscCode || 'None')}</strong></div>
           </div>
         `).join('');
       }
@@ -1751,11 +1751,11 @@ function renderVaultList(query = '') {
       let credsHtml = '';
       if (hasCreds) {
         credsHtml = `
-          <div style="background:#F1F5F9;border-radius:6px;padding:6px 8px;margin-top:4px;font-size:11px;display:flex;flex-direction:column;gap:3px;">
-            ${bank.userId ? `<div style="color:#334155;">👤 User / Customer ID: <strong>${escapeHtml(bank.userId)}</strong></div>` : ''}
-            ${bank.loginPassword ? `<div style="color:#334155;">🔑 Login Password: <strong>••••••••</strong></div>` : ''}
-            ${bank.cifNumber ? `<div style="color:#64748B;">🏷️ CIF: <strong>${escapeHtml(bank.cifNumber)}</strong></div>` : ''}
-            ${bank.mpin ? `<div style="color:#64748B;">🔢 MPIN: <strong>••••</strong></div>` : ''}
+          <div style="background:#141E34;border:1px solid #1E293B;border-radius:6px;padding:6px 8px;margin-top:4px;font-size:11px;display:flex;flex-direction:column;gap:3px;font-family:var(--font-mono);">
+            ${bank.userId ? `<div style="color:#F8FAFC;">👤 User / Customer ID: <strong style="color:#00F5A0;">${escapeHtml(bank.userId)}</strong></div>` : ''}
+            ${bank.loginPassword ? `<div style="color:#8892B0;">🔑 Login Password: <strong>••••••••</strong></div>` : ''}
+            ${bank.cifNumber ? `<div style="color:#8892B0;">🏷️ CIF: <strong style="color:#F8FAFC;">${escapeHtml(bank.cifNumber)}</strong></div>` : ''}
+            ${bank.mpin ? `<div style="color:#8892B0;">🔢 MPIN: <strong style="color:#F8FAFC;">••••</strong></div>` : ''}
           </div>
         `;
       }
@@ -1784,9 +1784,9 @@ function renderVaultList(query = '') {
       tile.innerHTML = `
         <div class="tile-header">
           <span class="tile-title">🏦 ${escapeHtml(bank.bankName || 'Bank')} ${bank.nickname && bank.nickname !== bank.bankName ? '(' + escapeHtml(bank.nickname) + ')' : ''}</span>
-          ${isMatch ? '<span class="tile-badge" style="background:#DBEAFE;color:#1D4ED8;border-color:#93C5FD;">⭐ MATCHES TAB</span>' : '<span class="tile-badge">BANK</span>'}
+          ${isMatch ? '<span class="tile-badge badge-match">⭐ MATCHES TAB</span>' : '<span class="tile-badge">BANK</span>'}
         </div>
-        ${webUrl ? `<div style="font-size:11px;color:#3B82F6;margin-bottom:2px;word-break:break-all;">🔗 ${escapeHtml(bank.website)}</div>` : ''}
+        ${webUrl ? `<div style="font-size:11px;color:#38BDF8;margin-bottom:2px;word-break:break-all;">🔗 ${escapeHtml(bank.website)}</div>` : ''}
         ${accountsHtml}
         ${credsHtml}
         <div class="tile-actions">
@@ -1807,7 +1807,7 @@ function renderVaultList(query = '') {
 
     if (matchingBanks.length > 0) {
       const matchHeader = document.createElement('div');
-      matchHeader.style.cssText = 'padding:6px 10px;margin-bottom:6px;background:#EFF6FF;border-radius:6px;font-size:11px;font-weight:bold;color:#1E40AF;display:flex;align-items:center;gap:6px;';
+      matchHeader.style.cssText = 'padding:6px 10px;margin-bottom:6px;background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);border-radius:8px;font-size:11px;font-weight:bold;color:#00E5FF;display:flex;align-items:center;gap:6px;';
       matchHeader.innerHTML = `<span>⭐ Suggested for <strong>${escapeHtml(currentActiveTabDomain)}</strong> (${matchingBanks.length})</span>`;
       list.appendChild(matchHeader);
 
@@ -1817,7 +1817,7 @@ function renderVaultList(query = '') {
       if (otherBanks.length > 0) {
         if (query) {
           const otherHeader = document.createElement('div');
-          otherHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+          otherHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#8892B0;text-transform:uppercase;letter-spacing:0.8px;';
           otherHeader.textContent = `All Other Banks (${otherBanks.length})`;
           list.appendChild(otherHeader);
           otherBanks.forEach(b => list.appendChild(renderBankTile(b, false)));
@@ -1826,7 +1826,7 @@ function renderVaultList(query = '') {
           toggleWrap.style.cssText = 'text-align:center;margin-top:14px;margin-bottom:8px;';
           const toggleBtn = document.createElement('button');
           toggleBtn.className = 'btn-toggle-others';
-          toggleBtn.style.cssText = 'background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:8px;padding:7px 16px;color:#475569;font-size:11px;font-weight:600;cursor:pointer;width:100%;transition:all 0.15s ease;';
+          toggleBtn.style.cssText = 'background:#141E34;border:1px dashed rgba(255,255,255,0.15);border-radius:8px;padding:8px 16px;color:#8892B0;font-size:11px;font-weight:600;cursor:pointer;width:100%;transition:all 0.15s ease;';
           toggleBtn.textContent = `▾ Show Other Bank Accounts (${otherBanks.length})`;
 
           const otherContainer = document.createElement('div');
@@ -1874,7 +1874,7 @@ function renderVaultList(query = '') {
     });
 
     if (pwds.length === 0 && banksWithCreds.length === 0) {
-      list.innerHTML = '<div style="padding:20px;text-align:center;color:#94A3B8;font-size:12px;">No passwords saved in vault.</div>';
+      list.innerHTML = '<div style="padding:20px;text-align:center;color:#8892B0;font-size:12px;">No passwords saved in vault.</div>';
       return;
     }
 
@@ -1903,18 +1903,18 @@ function renderVaultList(query = '') {
       const tile = document.createElement('div');
       tile.className = 'card-tile';
       if (isMatch) {
-        tile.style.border = '1px solid #93C5FD';
-        tile.style.backgroundColor = '#F0F9FF';
+        tile.style.border = '1px solid #00F5A0';
+        tile.style.backgroundColor = 'rgba(0, 245, 160, 0.08)';
       }
       const webUrl = pwd.website ? (pwd.website.startsWith('http') ? pwd.website : 'https://' + pwd.website) : '';
-      const totpBtn = pwd.totpCode ? `<button class="copy-chip" style="background:#ECFDF5;color:#059669;border-color:#A7F3D0;font-weight:bold;" data-copy="${escapeHtml(pwd.totpCode)}">⚡ ${escapeHtml(pwd.totpCode)} (${pwd.totpSeconds}s)</button>` : '';
+      const totpBtn = pwd.totpCode ? `<button class="copy-chip" style="background:rgba(0,245,160,0.12);color:#00F5A0;border:1px solid rgba(0,245,160,0.4);font-family:var(--font-mono);font-weight:bold;" data-copy="${escapeHtml(pwd.totpCode)}">⚡ ${escapeHtml(pwd.totpCode)} (${pwd.totpSeconds}s)</button>` : '';
       tile.innerHTML = `
         <div class="tile-header">
           <span class="tile-title">🌐 ${escapeHtml(pwd.nickname)}</span>
-          ${isMatch ? '<span class="tile-badge" style="background:#DBEAFE;color:#1D4ED8;border-color:#93C5FD;">⭐ MATCHES TAB</span>' : '<span class="tile-badge" style="background:#EEF2FF;color:#4338CA;border-color:#C7D2FE;">WEB</span>'}
+          ${isMatch ? '<span class="tile-badge badge-match">⭐ MATCHES TAB</span>' : '<span class="tile-badge badge-web">WEB</span>'}
         </div>
-        ${pwd.website ? `<div style="font-size:11px;color:#3B82F6;margin-bottom:4px;word-break:break-all;">🔗 ${escapeHtml(pwd.website)}</div>` : ''}
-        <div style="font-size:11px;color:#475569;margin-bottom:6px;">👤 User: <strong>${escapeHtml(pwd.username || 'N/A')}</strong></div>
+        ${pwd.website ? `<div style="font-size:11px;color:#38BDF8;margin-bottom:4px;word-break:break-all;">🔗 ${escapeHtml(pwd.website)}</div>` : ''}
+        <div style="font-size:11px;color:#8892B0;margin-bottom:6px;font-family:var(--font-mono);">👤 User: <strong style="color:#F8FAFC;">${escapeHtml(pwd.username || 'N/A')}</strong></div>
         <div class="tile-actions">
           <button class="copy-chip fill-page-chip pwd-fill-btn">⚡ Fill Page</button>
           ${pwd.username ? `<button class="copy-chip" data-copy="${escapeHtml(pwd.username)}">Copy User</button>` : ''}
@@ -1938,18 +1938,18 @@ function renderVaultList(query = '') {
       const tile = document.createElement('div');
       tile.className = 'card-tile';
       if (isMatch) {
-        tile.style.border = '1px solid #93C5FD';
-        tile.style.backgroundColor = '#F0F9FF';
+        tile.style.border = '1px solid #00F5A0';
+        tile.style.backgroundColor = 'rgba(0, 245, 160, 0.08)';
       }
       const webUrl = bank.website ? (bank.website.startsWith('http') ? bank.website : 'https://' + bank.website) : '';
       tile.innerHTML = `
         <div class="tile-header">
           <span class="tile-title">🏦 ${escapeHtml(bank.bankName)} NetBanking</span>
-          ${isMatch ? '<span class="tile-badge" style="background:#DBEAFE;color:#1D4ED8;border-color:#93C5FD;">⭐ MATCHES TAB</span>' : '<span class="tile-badge">BANK LOGIN</span>'}
+          ${isMatch ? '<span class="tile-badge badge-match">⭐ MATCHES TAB</span>' : '<span class="tile-badge">BANK LOGIN</span>'}
         </div>
-        ${bank.website ? `<div style="font-size:11px;color:#3B82F6;margin-bottom:4px;word-break:break-all;">🔗 ${escapeHtml(bank.website)}</div>` : ''}
-        <div style="font-size:11px;color:#475569;margin-bottom:4px;">👤 Customer / User ID: <strong>${escapeHtml(bank.userId || 'N/A')}</strong></div>
-        ${bank.loginPassword ? `<div style="font-size:11px;color:#475569;margin-bottom:6px;">🔑 Password: <strong>••••••••</strong></div>` : ''}
+        ${bank.website ? `<div style="font-size:11px;color:#38BDF8;margin-bottom:4px;word-break:break-all;">🔗 ${escapeHtml(bank.website)}</div>` : ''}
+        <div style="font-size:11px;color:#8892B0;margin-bottom:4px;font-family:var(--font-mono);">👤 Customer / User ID: <strong style="color:#00F5A0;">${escapeHtml(bank.userId || 'N/A')}</strong></div>
+        ${bank.loginPassword ? `<div style="font-size:11px;color:#8892B0;margin-bottom:6px;font-family:var(--font-mono);">🔑 Password: <strong>••••••••</strong></div>` : ''}
         <div class="tile-actions">
           <button class="copy-chip fill-page-chip bank-fill-btn">⚡ Fill Bank Page</button>
           ${bank.userId ? `<button class="copy-chip" data-copy="${escapeHtml(bank.userId)}">Copy Customer ID</button>` : ''}
@@ -1972,7 +1972,7 @@ function renderVaultList(query = '') {
     // 1. Suggested for Active Tab (prioritized at the top)
     if (matchingItems.length > 0) {
       const matchHeader = document.createElement('div');
-      matchHeader.style.cssText = 'padding:6px 10px;margin-bottom:6px;background:#EFF6FF;border-radius:6px;font-size:11px;font-weight:bold;color:#1E40AF;display:flex;align-items:center;gap:6px;';
+      matchHeader.style.cssText = 'padding:6px 10px;margin-bottom:6px;background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);border-radius:8px;font-size:11px;font-weight:bold;color:#00E5FF;display:flex;align-items:center;gap:6px;';
       matchHeader.innerHTML = `<span>⭐ Suggested for <strong>${escapeHtml(currentActiveTabDomain)}</strong> (${matchingItems.length})</span>`;
       list.appendChild(matchHeader);
 
@@ -1987,14 +1987,14 @@ function renderVaultList(query = '') {
           // When searching, display directly
           if (otherPwds.length > 0) {
             const pwdHeader = document.createElement('div');
-            pwdHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+            pwdHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#8892B0;text-transform:uppercase;letter-spacing:0.8px;';
             pwdHeader.textContent = `Other Website Logins (${otherPwds.length})`;
             list.appendChild(pwdHeader);
             otherPwds.forEach(p => list.appendChild(renderPwdTile(p, false)));
           }
           if (otherBanks.length > 0) {
             const bankHeader = document.createElement('div');
-            bankHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+            bankHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#8892B0;text-transform:uppercase;letter-spacing:0.8px;';
             bankHeader.textContent = `Other Bank Logins (${otherBanks.length})`;
             list.appendChild(bankHeader);
             otherBanks.forEach(b => list.appendChild(renderBankLoginTile(b, false)));
@@ -2005,7 +2005,7 @@ function renderVaultList(query = '') {
           toggleWrap.style.cssText = 'text-align:center;margin-top:14px;margin-bottom:8px;';
           const toggleBtn = document.createElement('button');
           toggleBtn.className = 'btn-toggle-others';
-          toggleBtn.style.cssText = 'background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:8px;padding:7px 16px;color:#475569;font-size:11px;font-weight:600;cursor:pointer;width:100%;transition:all 0.15s ease;';
+          toggleBtn.style.cssText = 'background:#141E34;border:1px dashed rgba(255,255,255,0.15);border-radius:8px;padding:8px 16px;color:#8892B0;font-size:11px;font-weight:600;cursor:pointer;width:100%;transition:all 0.15s ease;';
           toggleBtn.textContent = `▾ Show All Other Logins (${totalOthers})`;
 
           const otherContainer = document.createElement('div');
@@ -2014,14 +2014,14 @@ function renderVaultList(query = '') {
 
           if (otherPwds.length > 0) {
             const pwdHeader = document.createElement('div');
-            pwdHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+            pwdHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#8892B0;text-transform:uppercase;letter-spacing:0.8px;';
             pwdHeader.textContent = `Website Logins (${otherPwds.length})`;
             otherContainer.appendChild(pwdHeader);
             otherPwds.forEach(p => otherContainer.appendChild(renderPwdTile(p, false)));
           }
           if (otherBanks.length > 0) {
             const bankHeader = document.createElement('div');
-            bankHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+            bankHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#8892B0;text-transform:uppercase;letter-spacing:0.8px;';
             bankHeader.textContent = `Bank NetBanking Logins (${otherBanks.length})`;
             otherContainer.appendChild(bankHeader);
             otherBanks.forEach(b => otherContainer.appendChild(renderBankLoginTile(b, false)));
@@ -2046,14 +2046,14 @@ function renderVaultList(query = '') {
       // No domain match (e.g. on new tab or unlisted website) -> list all logins
       if (otherPwds.length > 0) {
         const pwdHeader = document.createElement('div');
-        pwdHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+        pwdHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#8892B0;text-transform:uppercase;letter-spacing:0.8px;';
         pwdHeader.textContent = `Website Logins (${otherPwds.length})`;
         list.appendChild(pwdHeader);
         otherPwds.forEach(p => list.appendChild(renderPwdTile(p, false)));
       }
       if (otherBanks.length > 0) {
         const bankHeader = document.createElement('div');
-        bankHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;';
+        bankHeader.style.cssText = 'padding:8px 4px 4px;font-size:11px;font-weight:bold;color:#8892B0;text-transform:uppercase;letter-spacing:0.8px;';
         bankHeader.textContent = `Bank NetBanking Logins (${otherBanks.length})`;
         list.appendChild(bankHeader);
         otherBanks.forEach(b => list.appendChild(renderBankLoginTile(b, false)));
@@ -2108,14 +2108,14 @@ function renderVaultList(query = '') {
       btn.textContent = 'Checking...';
       chrome.runtime.sendMessage({ action: 'CHECK_BREACH', payload: { password: pwd } }, (res) => {
         if (res && res.isPwned) {
-          btn.style.background = '#FEE2E2';
-          btn.style.color = '#DC2626';
-          btn.style.borderColor = '#FCA5A5';
+          btn.style.background = 'rgba(255, 51, 102, 0.15)';
+          btn.style.color = '#FF3366';
+          btn.style.borderColor = 'rgba(255, 51, 102, 0.4)';
           btn.textContent = `⚠️ Leaked (${res.breachCount})`;
         } else {
-          btn.style.background = '#DCFCE7';
-          btn.style.color = '#15803D';
-          btn.style.borderColor = '#86EFAC';
+          btn.style.background = 'rgba(0, 245, 160, 0.15)';
+          btn.style.color = '#00F5A0';
+          btn.style.borderColor = 'rgba(0, 245, 160, 0.4)';
           btn.textContent = '✅ Safe';
         }
       });
