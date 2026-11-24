@@ -652,91 +652,125 @@ function extractDomain(urlOrHost) {
   return str.replace(/^www\./, '');
 }
 
-const MULTI_TLDS = ['co', 'com', 'org', 'net', 'edu', 'gov', 'ac', 'bank', 'mil', 'nic', 'res', 'gen'];
-const STOP_WORDS = ['bank', 'banking', 'netbanking', 'login', 'portal', 'app', 'account', 'card', 'pass', 'password', 'online', 'store', 'auth', 'web', 'mobile', 'secure', 'retail'];
+const KNOWN_2PART_TLDS = new Set([
+  'in.net', 'co.in', 'com.in', 'net.in', 'org.in', 'gen.in', 'bank.in', 'nic.in', 'ac.in', 'edu.in', 'gov.in',
+  'co.uk', 'org.uk', 'me.uk', 'ltd.uk', 'gov.uk', 'ac.uk',
+  'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au',
+  'co.nz', 'net.nz', 'org.nz', 'com.sg', 'edu.sg', 'com.my', 'co.za', 'co.jp', 'ne.jp',
+  'com.br', 'com.mx', 'com.tr', 'com.pk', 'com.ng', 'com.ph', 'com.tw', 'com.hk'
+]);
 
-function extractBaseBrand(domain) {
-  if (!domain) return '';
-  const clean = extractDomain(domain);
-  const parts = clean.split('.');
-  if (parts.length <= 1) return parts[0];
-  if (parts.length >= 3 && MULTI_TLDS.includes(parts[parts.length - 2])) {
-    return parts[parts.length - 3];
-  }
-  return parts[parts.length - 2];
-}
+const SECOND_LEVEL_PREFIXES = new Set(['co', 'com', 'org', 'net', 'edu', 'gov', 'ac', 'bank', 'nic', 'gen', 'in', 'res', 'ne', 'or', 'go', 'ltd']);
+
+const STOP_WORDS = new Set([
+  'bank', 'banking', 'netbanking', 'login', 'portal', 'app', 'account', 'card', 'pass', 'password', 
+  'online', 'store', 'auth', 'web', 'mobile', 'secure', 'retail', 'india', 'national', 'corp', 'ltd', 
+  'pvt', 'inc', 'llc', 'service', 'services', 'official', 'user', 'admin', 'global',
+  'in', 'net', 'com', 'org', 'co', 'io', 'ai', 'me', 'us', 'uk', 'au', 'ca', 'de', 'fr', 'jp'
+]);
 
 const BANK_DOMAIN_ALIASES = {
-  federal: ['federalbank.co.in', 'fednetbank.com', 'federalbank.com', 'fednet', 'federal', 'federal.bank.in'],
-  hdfc: ['hdfcbank.com', 'hdfcbank.net', 'hdfc.com', 'hdfc', 'hdfc.bank.in'],
-  sbi: ['onlinesbi.sbi', 'onlinesbi.com', 'sbi.co.in', 'statebankofindia.com', 'sbi', 'sbi.bank.in'],
-  rbl: ['rblbank.com', 'rblbank.in', 'rbl', 'rbl.bank.in'],
-  icici: ['icicibank.com', 'icici.com', 'icici', 'icici.bank.in'],
-  axis: ['axisbank.com', 'axisbank.co.in', 'axis', 'axis.bank.in'],
-  kotak: ['kotak.com', 'kotakbank.com', 'kotak', 'kotak.bank.in'],
-  pnb: ['pnbindia.in', 'netpnb.com', 'pnb', 'pnb.bank.in'],
-  bob: ['bankofbaroda.in', 'bobibanking.com', 'bankofbaroda.com', 'bob', 'bob.bank.in'],
-  canara: ['canarabank.com', 'canarabank.in', 'canara', 'canarabank.bank.in'],
-  idbi: ['idbibank.in', 'idbibank.com', 'idbi', 'idbi.bank.in'],
-  indusind: ['indusind.com', 'indusindbank.com', 'indusind', 'indusind.bank.in'],
-  yes: ['yesbank.in', 'yesbank.com', 'yes', 'yesbank.bank.in'],
-  union: ['unionbankofindia.co.in', 'unionbankonline.co.in', 'union', 'unionbank.bank.in'],
-  dbs: ['dbs.com', 'dbs.com.sg', 'dbs'],
-  iob: ['iob.in', 'iobnet.co.in', 'iob', 'iob.bank.in'],
-  sib: ['southindianbank.com', 'sib.co.in', 'sib', 'southindianbank.bank.in'],
-  standardchartered: ['sc.com', 'standardchartered.co.in', 'standardchartered'],
-  citi: ['citibank.co.in', 'citibank.com', 'citi']
+  federal: ['federalbank.co.in', 'fednetbank.com', 'federalbank.com', 'federal.bank.in'],
+  hdfc: ['hdfcbank.com', 'hdfcbank.net', 'hdfc.com', 'hdfc.bank.in'],
+  sbi: ['onlinesbi.sbi', 'onlinesbi.com', 'sbi.co.in', 'statebankofindia.com', 'sbi.bank.in'],
+  rbl: ['rblbank.com', 'rblbank.in', 'rbl.bank.in'],
+  icici: ['icicibank.com', 'icici.com', 'icici.bank.in'],
+  axis: ['axisbank.com', 'axisbank.co.in', 'axis.bank.in'],
+  kotak: ['kotak.com', 'kotakbank.com', 'kotak.bank.in'],
+  pnb: ['pnbindia.in', 'netpnb.com', 'pnb.bank.in'],
+  bob: ['bankofbaroda.in', 'bobibanking.com', 'bankofbaroda.com', 'bob.bank.in'],
+  canara: ['canarabank.com', 'canarabank.in', 'canarabank.bank.in'],
+  idbi: ['idbibank.in', 'idbibank.com', 'idbi.bank.in'],
+  indusind: ['indusind.com', 'indusindbank.com', 'indusind.bank.in'],
+  yes: ['yesbank.in', 'yesbank.com', 'yesbank.bank.in'],
+  union: ['unionbankofindia.co.in', 'unionbankonline.co.in', 'unionbank.bank.in'],
+  dbs: ['dbs.com', 'dbs.com.sg'],
+  iob: ['iob.in', 'iobnet.co.in', 'iob.bank.in'],
+  sib: ['southindianbank.com', 'sib.co.in', 'southindianbank.bank.in'],
+  standardchartered: ['sc.com', 'standardchartered.co.in'],
+  citi: ['citibank.co.in', 'citibank.com']
 };
+
+function getRootDomainAndBrand(hostname) {
+  const clean = extractDomain(hostname);
+  if (!clean) return { rootDomain: '', baseBrand: '' };
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(clean)) {
+    return { rootDomain: clean, baseBrand: clean };
+  }
+  const parts = clean.split('.');
+  if (parts.length <= 1) {
+    return { rootDomain: clean, baseBrand: clean };
+  }
+  const lastTwo = parts.slice(-2).join('.');
+  let is2Part = false;
+  if (KNOWN_2PART_TLDS.has(lastTwo)) {
+    is2Part = true;
+  } else if (parts[parts.length - 1].length === 2 && SECOND_LEVEL_PREFIXES.has(parts[parts.length - 2])) {
+    is2Part = true;
+  }
+
+  let rootDomain, baseBrand;
+  if (is2Part && parts.length >= 3) {
+    rootDomain = parts.slice(-3).join('.');
+    baseBrand = parts[parts.length - 3];
+  } else {
+    rootDomain = parts.slice(-2).join('.');
+    baseBrand = parts[parts.length - 2];
+  }
+  return { rootDomain, baseBrand };
+}
 
 function doesDomainMatch(itemWebsite, pageHost, itemNickname = '') {
   if (!pageHost) return false;
-  const pageDom = extractDomain(pageHost);
-  const pageBrand = extractBaseBrand(pageDom);
+  const cleanPage = extractDomain(pageHost);
+  if (!cleanPage) return false;
+  const { rootDomain: pageRoot, baseBrand: pageBrand } = getRootDomainAndBrand(cleanPage);
 
   // 1. Direct website URL / domain match
   if (itemWebsite && itemWebsite.trim()) {
-    const itemDom = extractDomain(itemWebsite);
-    const itemBrand = extractBaseBrand(itemDom);
-
-    if (itemDom && pageDom) {
-      if (itemDom === pageDom) return true;
-      if (pageDom.endsWith('.' + itemDom) || itemDom.endsWith('.' + pageDom)) return true;
-      if (itemBrand && pageBrand && itemBrand === pageBrand && itemBrand.length >= 3 && !STOP_WORDS.includes(itemBrand)) {
-        return true;
-      }
-    }
-
-    const rawClean = itemWebsite.trim().toLowerCase().replace(/^[a-zA-Z]+:\/\//, '').replace(/^www\./, '');
-    if (rawClean.length >= 3) {
-      if (pageDom.includes(rawClean) || rawClean.includes(pageDom)) return true;
-      if (pageBrand && !STOP_WORDS.includes(pageBrand) && (pageBrand === rawClean || pageBrand.includes(rawClean) || rawClean.includes(pageBrand))) {
-        return true;
+    const cleanItem = extractDomain(itemWebsite);
+    if (cleanItem) {
+      const { rootDomain: itemRoot, baseBrand: itemBrand } = getRootDomainAndBrand(cleanItem);
+      // Exact hostname match
+      if (cleanPage === cleanItem) return true;
+      // Subdomain match (e.g. login.files.automesh.in.net vs files.automesh.in.net)
+      if (cleanPage.endsWith('.' + cleanItem) || cleanItem.endsWith('.' + cleanPage)) return true;
+      // Same root domain (eTLD+1) e.g. files.automesh.in.net and api.automesh.in.net
+      if (pageRoot && itemRoot && pageRoot === itemRoot) return true;
+      // Distinctive brand match (>= 3 chars, not in stop words)
+      if (pageBrand && itemBrand && pageBrand.length >= 3 && itemBrand.length >= 3) {
+        if (pageBrand === itemBrand && !STOP_WORDS.has(pageBrand) && !STOP_WORDS.has(itemBrand)) {
+          return true;
+        }
       }
     }
   }
 
-  // 2. Tokenized Brand Matching (filters out generic words like 'bank', 'banking', 'mobile', etc.)
-  if (itemNickname && itemNickname.trim()) {
-    const nick = itemNickname.trim().toLowerCase();
-    const itemTokens = nick.split(/[^a-z0-9]+/).filter(t => t.length >= 3 && !STOP_WORDS.includes(t));
-    const pageTokens = pageDom.split(/[^a-z0-9]+/).filter(t => t.length >= 3 && !STOP_WORDS.includes(t));
-
-    // Direct distinctive token intersection
-    for (const t of itemTokens) {
-      if (pageTokens.includes(t) || t === pageBrand) return true;
-      if (pageBrand && pageBrand.length >= 3 && !STOP_WORDS.includes(pageBrand)) {
-        if (pageBrand.startsWith(t) || t.startsWith(pageBrand)) return true;
+  // 2. Bank Domain Aliases (ONLY when page actually belongs to one of the bank domains!)
+  for (const [bankKey, aliases] of Object.entries(BANK_DOMAIN_ALIASES)) {
+    const isPageOnBankDomain = aliases.some(a => cleanPage === a || cleanPage.endsWith('.' + a) || pageRoot === a);
+    if (isPageOnBankDomain) {
+      const nick = (itemNickname || '').toLowerCase();
+      const web = (itemWebsite || '').toLowerCase();
+      const tokens = nick.split(/[^a-z0-9]+/).filter(t => t.length >= 3 && !STOP_WORDS.has(t));
+      if (tokens.includes(bankKey) || nick.includes(bankKey) || web.includes(bankKey)) {
+        return true;
       }
+      if (bankKey === 'sbi' && (nick.includes('state bank') || nick.includes('statebank'))) return true;
+      if (bankKey === 'bob' && nick.includes('bank of baroda')) return true;
+      if (bankKey === 'pnb' && nick.includes('punjab national')) return true;
+      if (bankKey === 'iob' && nick.includes('indian overseas')) return true;
+      if (bankKey === 'sib' && nick.includes('south indian')) return true;
+      if (bankKey === 'union' && nick.includes('union bank')) return true;
     }
+  }
 
-    // 3. Known Bank Domain Aliases
-    for (const [bankKey, aliases] of Object.entries(BANK_DOMAIN_ALIASES)) {
-      const bankMatched = itemTokens.includes(bankKey) || nick.includes(bankKey) || (itemWebsite && itemWebsite.toLowerCase().includes(bankKey));
-      if (bankMatched) {
-        if (aliases.some(a => pageDom.includes(a) || pageTokens.includes(a) || (pageBrand && pageBrand === a))) {
-          return true;
-        }
-      }
+  // 3. Distinctive Nickname Token Match (for items where user did not enter a URL)
+  if (itemNickname && itemNickname.trim() && pageBrand && pageBrand.length >= 3 && !STOP_WORDS.has(pageBrand)) {
+    const nick = itemNickname.trim().toLowerCase();
+    const itemTokens = nick.split(/[^a-z0-9]+/).filter(t => t.length >= 3 && !STOP_WORDS.has(t));
+    if (itemTokens.includes(pageBrand)) {
+      return true;
     }
   }
 
