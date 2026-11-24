@@ -1276,6 +1276,39 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
         final primaryAcc = accounts.isNotEmpty ? accounts.first.accountNumber : '';
         final primaryIfsc = accounts.isNotEmpty ? accounts.first.ifscCode : '';
 
+        final newLoginPassword = _nbLoginPasswordCtrl.text.trim();
+        final newProfilePassword = _nbProfilePasswordCtrl.text.trim();
+
+        // Build password version history timeline for NetBanking credentials
+        final history = List<PasswordHistoryEntry>.from(widget.initialItem?.passwordHistory ?? []);
+        if (widget.initialItem != null) {
+          final oldLogin = widget.initialItem!.loginPassword;
+          if (oldLogin.isNotEmpty && oldLogin != newLoginPassword) {
+            history.insert(
+              0,
+              PasswordHistoryEntry(
+                password: oldLogin,
+                changedAt: now,
+                label: 'Login Password',
+              ),
+            );
+          }
+          final oldProfile = widget.initialItem!.profilePassword;
+          if (oldProfile.isNotEmpty && oldProfile != newProfilePassword) {
+            history.insert(
+              0,
+              PasswordHistoryEntry(
+                password: oldProfile,
+                changedAt: now,
+                label: 'Profile Password',
+              ),
+            );
+          }
+          if (history.length > 15) {
+            history.removeRange(15, history.length);
+          }
+        }
+
         final nb = VaultItem(
           id: widget.initialItem?.id ?? const Uuid().v4(),
           type: VaultItemType.netBanking,
@@ -1289,8 +1322,8 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           ifscCode: primaryIfsc,
           accounts: accounts,
           userId: _nbUserIdCtrl.text.trim(), // User ID preserved with exact casing as entered
-          loginPassword: _nbLoginPasswordCtrl.text.trim(), // passwords preserved as-is
-          profilePassword: _nbProfilePasswordCtrl.text.trim(), // passwords preserved as-is
+          loginPassword: newLoginPassword, // passwords preserved as-is
+          profilePassword: newProfilePassword, // passwords preserved as-is
           mpin: _nbMpinCtrl.text.trim(), // pin preserved as-is
           cifNumber: _nbCifCtrl.text.trim().toUpperCase(),
           passwordExpiryMonths: _nbExpiryMonths,
@@ -1298,6 +1331,7 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
           loginPasswordExpiry: _loginPasswordExpiry,
           profilePasswordExpiry: _profilePasswordExpiry,
           mpinExpiry: _mpinExpiry,
+          passwordHistory: history,
         );
 
         if (widget.initialItem == null) {

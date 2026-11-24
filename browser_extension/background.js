@@ -123,6 +123,11 @@ function organizeVaultItems(rawItems) {
         });
       }
 
+      let rawBankHistory = item.password_history || item.passwordHistory || [];
+      if (typeof rawBankHistory === 'string') {
+        try { rawBankHistory = JSON.parse(rawBankHistory); } catch (_) { rawBankHistory = []; }
+      }
+
       bankAccounts.push({
         id: item.id || String(Math.random()),
         bankName: item.bank_name || item.bankName || item.nickname || 'Bank',
@@ -134,6 +139,7 @@ function organizeVaultItems(rawItems) {
         loginPassword: item.login_password || item.loginPassword || item.password || '',
         profilePassword: item.profile_password || item.profilePassword || '',
         mpin: item.mpin || '',
+        passwordHistory: Array.isArray(rawBankHistory) ? rawBankHistory : [],
         notes: item.notes || ''
       });
     }
@@ -894,6 +900,11 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
         });
       }
 
+      let rawBankHistory = item.password_history || item.passwordHistory || [];
+      if (typeof rawBankHistory === 'string') {
+        try { rawBankHistory = JSON.parse(rawBankHistory); } catch (_) { rawBankHistory = []; }
+      }
+
       const bankItem = {
         id: item.id || String(Math.random()),
         bankName: bankName,
@@ -905,6 +916,7 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
         loginPassword: item.login_password || item.loginPassword || item.password || '',
         profilePassword: item.profile_password || item.profilePassword || '',
         mpin: item.mpin || '',
+        passwordHistory: Array.isArray(rawBankHistory) ? rawBankHistory : [],
         notes: item.notes || ''
       };
 
@@ -922,6 +934,7 @@ async function handleGetAutofillSuggestions({ fieldType, domain }) {
           totpSecret: item.totp_secret || item.totpSecret || '',
           totpCode: '',
           totpSeconds: 0,
+          passwordHistory: Array.isArray(rawBankHistory) ? rawBankHistory : [],
           notes: item.notes || '',
           isBankLogin: true
         });

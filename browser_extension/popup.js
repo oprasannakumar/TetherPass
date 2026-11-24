@@ -1355,6 +1355,11 @@ function normalizeRawVaultItems(rawItems) {
         });
       }
 
+      let rawHistory = item.password_history || item.passwordHistory || [];
+      if (typeof rawHistory === 'string') {
+        try { rawHistory = JSON.parse(rawHistory); } catch (_) { rawHistory = []; }
+      }
+
       bankAccounts.push({
         id: item.id || String(Math.random()),
         bankName: item.bank_name || item.bankName || item.nickname || 'Bank',
@@ -1366,6 +1371,7 @@ function normalizeRawVaultItems(rawItems) {
         loginPassword: item.login_password || item.loginPassword || item.password || '',
         profilePassword: item.profile_password || item.profilePassword || '',
         mpin: item.mpin || '',
+        passwordHistory: Array.isArray(rawHistory) ? rawHistory : [],
         notes: item.notes || ''
       });
     }
@@ -2001,6 +2007,11 @@ function renderVaultList(query = '') {
         tile.style.backgroundColor = 'rgba(0, 245, 160, 0.08)';
       }
       const webUrl = bank.website ? (bank.website.startsWith('http') ? bank.website : 'https://' + bank.website) : '';
+      const histList = Array.isArray(bank.passwordHistory) ? bank.passwordHistory : [];
+      const historyBtn = histList.length > 0
+        ? `<button class="copy-chip view-bank-history-btn" style="border-color: rgba(168, 85, 247, 0.4); color: #C084FC;" title="View past passwords">📜 History (${histList.length})</button>`
+        : '';
+
       tile.innerHTML = `
         <div class="tile-header">
           <span class="tile-title">🏦 ${escapeHtml(bank.bankName)} NetBanking</span>
@@ -2013,11 +2024,63 @@ function renderVaultList(query = '') {
           <button class="copy-chip fill-page-chip bank-fill-btn">⚡ Fill Bank Page</button>
           ${bank.userId ? `<button class="copy-chip" data-copy="${escapeHtml(bank.userId)}">Copy Customer ID</button>` : ''}
           ${bank.loginPassword ? `<button class="copy-chip" data-copy="${escapeHtml(bank.loginPassword)}">Copy Password</button>` : ''}
+          ${historyBtn}
           ${bank.mpin ? `<button class="copy-chip" data-copy="${escapeHtml(bank.mpin)}">Copy MPIN</button>` : ''}
           ${bank.cifNumber ? `<button class="copy-chip" data-copy="${escapeHtml(bank.cifNumber)}">Copy CIF</button>` : ''}
           ${webUrl ? `<button class="copy-chip open-site" data-url="${escapeHtml(webUrl)}" data-userid="${escapeHtml(bank.userId || '')}">🌐 Open Portal</button>` : ''}
         </div>
+        ${histList.length > 0 ? `
+          <div class="bank-history-panel" style="display: none; margin-top: 8px; padding: 8px 10px; background: #070A12; border: 1px solid #1E293B; border-radius: 8px; font-size: 11px;">
+            <div style="font-weight: 700; color: #A855F7; margin-bottom: 6px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;">Past Passwords Timeline</div>
+            ${histList.map((h, i) => {
+              const dt = h.changed_at || h.changedAt ? new Date(h.changed_at || h.changedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Previous';
+              const pVal = escapeHtml(h.password || '');
+              const label = h.label ? escapeHtml(h.label) + ' • ' : '';
+              return `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                  <div style="display: flex; flex-direction: column;">
+                    <span style="font-size: 9.5px; color: #8892B0;">${label}v${i + 1} • ${dt}</span>
+                    <span class="hist-bank-pwd-text" data-revealed="false" style="font-family: var(--font-mono); color: #F8FAFC; font-weight: 600;">••••••••</span>
+                  </div>
+                  <div style="display: flex; gap: 4px;">
+                    <button type="button" class="btn-reveal-bank-hist" style="background: none; border: 1px solid #1E293B; border-radius: 4px; color: #8892B0; cursor: pointer; padding: 2px 6px; font-size: 10px;">👁️</button>
+                    <button type="button" class="copy-chip" data-copy="${pVal}" style="padding: 2px 6px; font-size: 10px;">Copy</button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : ''}
       `;
+
+      const histToggleBtn = tile.querySelector('.view-bank-history-btn');
+      const histPanel = tile.querySelector('.bank-history-panel');
+      if (histToggleBtn && histPanel) {
+        histToggleBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isHidden = histPanel.style.display === 'none';
+          histPanel.style.display = isHidden ? 'block' : 'none';
+          histToggleBtn.textContent = isHidden ? `▴ Close History (${histList.length})` : `📜 History (${histList.length})`;
+        });
+
+        histPanel.querySelectorAll('.btn-reveal-bank-hist').forEach((rBtn, idx) => {
+          rBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const textEl = rBtn.closest('div[style*="display: flex; align-items: center"]').querySelector('.hist-bank-pwd-text');
+            const targetPwd = histList[idx]?.password || '';
+            if (textEl && textEl.getAttribute('data-revealed') === 'true') {
+              textEl.textContent = '••••••••';
+              textEl.setAttribute('data-revealed', 'false');
+              rBtn.textContent = '👁️';
+            } else if (textEl) {
+              textEl.textContent = targetPwd;
+              textEl.setAttribute('data-revealed', 'true');
+              rBtn.textContent = '🙈';
+            }
+          });
+        });
+      }
+
       const fillBtn = tile.querySelector('.bank-fill-btn');
       if (fillBtn) {
         fillBtn.addEventListener('click', (e) => {

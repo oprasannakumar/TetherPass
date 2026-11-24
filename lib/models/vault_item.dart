@@ -75,20 +75,24 @@ class BankAccount {
 class PasswordHistoryEntry {
   final String password;
   final DateTime changedAt;
+  final String label;
 
   const PasswordHistoryEntry({
     required this.password,
     required this.changedAt,
+    this.label = '',
   });
 
   Map<String, dynamic> toMap() => {
     'password': password,
     'changed_at': changedAt.toIso8601String(),
+    if (label.isNotEmpty) 'label': label,
   };
 
   factory PasswordHistoryEntry.fromMap(Map<String, dynamic> map) => PasswordHistoryEntry(
     password: map['password'] as String? ?? '',
     changedAt: DateTime.tryParse(map['changed_at'] as String? ?? '') ?? DateTime.now(),
+    label: map['label'] as String? ?? '',
   );
 }
 

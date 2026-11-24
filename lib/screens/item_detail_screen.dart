@@ -856,7 +856,7 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                idx == 0 ? 'Previous Password ($dtStr)' : 'Version ${idx + 1} ($dtStr)',
+                                '${entry.label.isNotEmpty ? "${entry.label} • " : ""}${idx == 0 ? "Previous Password ($dtStr)" : "Version ${idx + 1} ($dtStr)"}',
                                 style: const TextStyle(
                                   color: Color(0xFF94A3B8),
                                   fontSize: 10,
@@ -1735,6 +1735,12 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
                 ],
               ),
             ),
+          ],
+
+          // ── Password Version History Timeline (Login & Profile Passwords) ──
+          if (_item.passwordHistory.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _buildPasswordHistoryTimeline(),
           ],
         ],
       ),
