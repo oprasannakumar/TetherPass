@@ -63,6 +63,10 @@ function organizeVaultItems(rawItems) {
 
     if (isPassword) {
       const totpKey = item.totp_secret || item.totpSecret || '';
+      let rawHistory = item.password_history || item.passwordHistory || [];
+      if (typeof rawHistory === 'string') {
+        try { rawHistory = JSON.parse(rawHistory); } catch (_) { rawHistory = []; }
+      }
       passwords.push({
         id: item.id || String(Math.random()),
         nickname: item.nickname || item.bank_name || 'Website Password',
@@ -70,6 +74,7 @@ function organizeVaultItems(rawItems) {
         username: item.user_id || item.userId || item.username || '',
         password: item.login_password || item.loginPassword || item.password || '',
         totpSecret: totpKey,
+        passwordHistory: Array.isArray(rawHistory) ? rawHistory : [],
         notes: item.notes || ''
       });
     } else if (isCard) {
@@ -949,6 +954,24 @@ async function handleSaveNewPassword({ website, username, password, nickname, to
     return sameDomain && sameUser;
   });
 
+  let history = [];
+  if (existingIndex >= 0) {
+    const existing = memoryVault.items[existingIndex];
+    let rawHist = existing.password_history || existing.passwordHistory || [];
+    if (typeof rawHist === 'string') {
+      try { rawHist = JSON.parse(rawHist); } catch (_) { rawHist = []; }
+    }
+    history = Array.isArray(rawHist) ? [...rawHist] : [];
+    const oldPassword = existing.login_password || existing.loginPassword || existing.password || '';
+    if (oldPassword && oldPassword !== password) {
+      history.unshift({
+        password: oldPassword,
+        changed_at: now
+      });
+      if (history.length > 10) history = history.slice(0, 10);
+    }
+  }
+
   const newItem = {
     id: existingIndex >= 0 ? memoryVault.items[existingIndex].id : 'item_' + Date.now(),
     type: 'password',
@@ -958,6 +981,7 @@ async function handleSaveNewPassword({ website, username, password, nickname, to
     user_id: username,
     login_password: password,
     totp_secret: totpSecret || (existingIndex >= 0 ? (memoryVault.items[existingIndex].totp_secret || '') : ''),
+    password_history: history,
     notes: existingIndex >= 0 ? (memoryVault.items[existingIndex].notes || '') : 'Saved via TetherPass Chrome Extension',
     created_at: existingIndex >= 0 ? memoryVault.items[existingIndex].created_at : now,
     updated_at: now

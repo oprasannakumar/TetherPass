@@ -1295,6 +1295,10 @@ function normalizeRawVaultItems(rawItems) {
     const isCard = !isPassword && (type === 'card' || (!type.includes('bank') && (rawCardNumber.length >= 12 || (item.card_network || item.cardNetwork))));
 
     if (isPassword) {
+      let rawHistory = item.password_history || item.passwordHistory || [];
+      if (typeof rawHistory === 'string') {
+        try { rawHistory = JSON.parse(rawHistory); } catch (_) { rawHistory = []; }
+      }
       passwords.push({
         id: item.id || String(Math.random()),
         nickname: item.nickname || item.bank_name || 'Website Password',
@@ -1302,6 +1306,7 @@ function normalizeRawVaultItems(rawItems) {
         username: item.user_id || item.userId || item.username || '',
         password: item.login_password || item.loginPassword || item.password || '',
         totpSecret: item.totp_secret || item.totpSecret || '',
+        passwordHistory: Array.isArray(rawHistory) ? rawHistory : [],
         notes: item.notes || ''
       });
     } else if (isCard) {
@@ -1906,6 +1911,11 @@ function renderVaultList(query = '') {
       }
       const webUrl = pwd.website ? (pwd.website.startsWith('http') ? pwd.website : 'https://' + pwd.website) : '';
       const totpBtn = pwd.totpCode ? `<button class="copy-chip" style="background:rgba(0,245,160,0.12);color:#00F5A0;border:1px solid rgba(0,245,160,0.4);font-family:var(--font-mono);font-weight:bold;" data-copy="${escapeHtml(pwd.totpCode)}">⚡ ${escapeHtml(pwd.totpCode)} (${pwd.totpSeconds}s)</button>` : '';
+      const histList = Array.isArray(pwd.passwordHistory) ? pwd.passwordHistory : [];
+      const historyBtn = histList.length > 0
+        ? `<button class="copy-chip view-history-btn" style="border-color: rgba(168, 85, 247, 0.4); color: #C084FC;" title="View past passwords">📜 History (${histList.length})</button>`
+        : '';
+
       tile.innerHTML = `
         <div class="tile-header">
           <span class="tile-title">🌐 ${escapeHtml(pwd.nickname)}</span>
@@ -1918,10 +1928,61 @@ function renderVaultList(query = '') {
           ${pwd.username ? `<button class="copy-chip" data-copy="${escapeHtml(pwd.username)}">Copy User</button>` : ''}
           ${pwd.password ? `<button class="copy-chip" data-copy="${escapeHtml(pwd.password)}">Copy Password</button>` : ''}
           ${totpBtn}
+          ${historyBtn}
           ${pwd.password ? `<button class="copy-chip check-leak-btn" data-pwd="${escapeHtml(pwd.password)}">🛡️ Leak Check</button>` : ''}
           ${webUrl ? `<button class="copy-chip open-site" data-url="${escapeHtml(webUrl)}">Open Site</button>` : ''}
         </div>
+        ${histList.length > 0 ? `
+          <div class="pwd-history-panel" style="display: none; margin-top: 8px; padding: 8px 10px; background: #070A12; border: 1px solid #1E293B; border-radius: 8px; font-size: 11px;">
+            <div style="font-weight: 700; color: #A855F7; margin-bottom: 6px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;">Past Passwords Timeline</div>
+            ${histList.map((h, i) => {
+              const dt = h.changed_at || h.changedAt ? new Date(h.changed_at || h.changedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Previous';
+              const pVal = escapeHtml(h.password || '');
+              return `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                  <div style="display: flex; flex-direction: column;">
+                    <span style="font-size: 9.5px; color: #8892B0;">v${i + 1} • ${dt}</span>
+                    <span class="hist-pwd-text" data-revealed="false" style="font-family: var(--font-mono); color: #F8FAFC; font-weight: 600;">••••••••</span>
+                  </div>
+                  <div style="display: flex; gap: 4px;">
+                    <button type="button" class="btn-reveal-hist" style="background: none; border: 1px solid #1E293B; border-radius: 4px; color: #8892B0; cursor: pointer; padding: 2px 6px; font-size: 10px;">👁️</button>
+                    <button type="button" class="copy-chip" data-copy="${pVal}" style="padding: 2px 6px; font-size: 10px;">Copy</button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : ''}
       `;
+
+      const histToggleBtn = tile.querySelector('.view-history-btn');
+      const histPanel = tile.querySelector('.pwd-history-panel');
+      if (histToggleBtn && histPanel) {
+        histToggleBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isHidden = histPanel.style.display === 'none';
+          histPanel.style.display = isHidden ? 'block' : 'none';
+          histToggleBtn.textContent = isHidden ? `▴ Close History (${histList.length})` : `📜 History (${histList.length})`;
+        });
+
+        histPanel.querySelectorAll('.btn-reveal-hist').forEach((rBtn, idx) => {
+          rBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const textEl = rBtn.closest('div[style*="display: flex; align-items: center"]').querySelector('.hist-pwd-text');
+            const targetPwd = histList[idx]?.password || '';
+            if (textEl && textEl.getAttribute('data-revealed') === 'true') {
+              textEl.textContent = '••••••••';
+              textEl.setAttribute('data-revealed', 'false');
+              rBtn.textContent = '👁️';
+            } else if (textEl) {
+              textEl.textContent = targetPwd;
+              textEl.setAttribute('data-revealed', 'true');
+              rBtn.textContent = '🙈';
+            }
+          });
+        });
+      }
+
       const fillBtn = tile.querySelector('.pwd-fill-btn');
       if (fillBtn) {
         fillBtn.addEventListener('click', (e) => {
