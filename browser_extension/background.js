@@ -23,10 +23,13 @@ if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
   }
 }
 
-// Security Enforcement: Proactively purge any legacy decrypted or session records from disk-backed local storage
+// Validate persisted session on startup: purge ONLY if expired or invalid
 if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-  chrome.storage.local.remove(['tetherpass_session', 'cachedBackupPayload'], () => {
-    console.log('[TetherPass Security] Disk-backed local storage sanitized of sensitive records.');
+  chrome.storage.local.get(['tetherpass_session'], (res) => {
+    const s = res?.tetherpass_session;
+    if (s && s.authExpiresAt && Date.now() > s.authExpiresAt) {
+      chrome.storage.local.remove(['tetherpass_session', 'cachedBackupPayload']).catch(() => {});
+    }
   });
 }
 
@@ -134,11 +137,9 @@ function organizeVaultItems(rawItems) {
   return { cards, bankAccounts, passwords };
 }
 
-// ── RAM-Only Session Storage (Kept exclusively in volatile memory; NEVER written to disk) ──
+// ── Session Storage: Store in volatile RAM session storage and disk-backed storage until expiration ──
 async function persistSession() {
   const suggestions = organizeVaultItems(memoryVault.items);
-  // Master password and decrypted items must NEVER touch persistent disk storage.
-  // We keep session data exclusively in chrome.storage.session (RAM only).
   const sessionData = {
     isAuthorized: memoryVault.isAuthorized,
     isUnlocked: memoryVault.isUnlocked,
@@ -160,14 +161,15 @@ async function persistSession() {
     console.warn('[TetherPass] Session storage write error:', err);
   }
 
-  // Active Anti-Disk-Leak Safeguard:
-  // Ensure that under no condition does chrome.storage.local (LevelDB disk cache)
-  // hold any session records or decrypted payloads.
+  // Persist to local storage so that closing and reopening the browser does NOT drop
+  // the active session while its approved duration has time remaining (matching mobile session state)
   try {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      await chrome.storage.local.remove(['tetherpass_session', 'cachedBackupPayload']);
+      await chrome.storage.local.set({ tetherpass_session: sessionData });
     }
-  } catch (_) {}
+  } catch (err) {
+    console.warn('[TetherPass] Local storage write error:', err);
+  }
 }
 
 async function restoreSessionIfNeeded() {
@@ -182,12 +184,17 @@ async function restoreSessionIfNeeded() {
     return true;
   }
 
-  // Restore session strictly from chrome.storage.session (volatile RAM only)
+  // Restore session from chrome.storage.session, falling back to chrome.storage.local across browser restarts
   try {
     let sess = null;
     if (typeof chrome !== 'undefined' && chrome.storage?.session) {
       const data = await chrome.storage.session.get('tetherpass_session');
       sess = data?.tetherpass_session;
+    }
+
+    if (!sess && typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const localData = await chrome.storage.local.get('tetherpass_session');
+      sess = localData?.tetherpass_session;
     }
 
     if (sess && sess.isAuthorized && sess.isUnlocked) {
@@ -208,6 +215,12 @@ async function restoreSessionIfNeeded() {
         activeRequestId: sess.activeRequestId || null,
         sessionId: sess.sessionId || null,
       };
+
+      // Ensure session storage is also synced for fast RAM access
+      if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+        chrome.storage.session.set({ tetherpass_session: sess }).catch(() => {});
+      }
+
       return true;
     }
   } catch (err) {
@@ -285,6 +298,12 @@ async function lockVault(reason = 'Vault locked') {
       const sessData = await chrome.storage.session.get('tetherpass_session');
       sessionIdToLock = sessData?.tetherpass_session?.sessionId || sessData?.tetherpass_session?.activeRequestId;
     } catch (_) {}
+    if (!sessionIdToLock) {
+      try {
+        const localData = await chrome.storage.local.get('tetherpass_session');
+        sessionIdToLock = localData?.tetherpass_session?.sessionId || localData?.tetherpass_session?.activeRequestId;
+      } catch (_) {}
+    }
   }
 
   // Clear in-memory state immediately for zero-latency lock

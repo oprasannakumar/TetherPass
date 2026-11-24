@@ -161,27 +161,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initDesktopDeviceName();
   await loadSavedGoogleAccount();
 
-  // Instant 0ms session recovery from RAM session storage (Zero disk footprint, volatile memory only)
+  // Instant session recovery from session storage or local storage across browser restarts
   try {
+    let sess = null;
     if (typeof chrome !== 'undefined' && chrome.storage?.session) {
       const data = await chrome.storage.session.get(['tetherpass_session']);
-      const sess = data?.tetherpass_session;
-      const now = Date.now();
-      if (currentGoogleAccount && sess && sess.isAuthorized && sess.isUnlocked && (!sess.authExpiresAt || now < sess.authExpiresAt)) {
-        applyUnlockedUI(sess);
-      } else {
-        applyLockedUI(true);
-      }
+      sess = data?.tetherpass_session;
+    }
+    if (!sess && typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const localData = await chrome.storage.local.get(['tetherpass_session']);
+      sess = localData?.tetherpass_session;
+    }
+    const now = Date.now();
+    if (currentGoogleAccount && sess && sess.isAuthorized && sess.isUnlocked && (!sess.authExpiresAt || now < sess.authExpiresAt)) {
+      applyUnlockedUI(sess);
     } else {
       applyLockedUI(true);
     }
   } catch (_) {
     applyLockedUI(true);
-  }
-
-  // Security Enforcement: Ensure no leftover session or backup records remain in disk-backed storage
-  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-    chrome.storage.local.remove(['tetherpass_session', 'cachedBackupPayload']).catch(() => {});
   }
 
   await refreshStatus();
