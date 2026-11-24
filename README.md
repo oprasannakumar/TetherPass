@@ -10,8 +10,9 @@ TetherPass includes a companion **Manifest V3 Browser Extension** for Windows, a
 
 ## 📦 Pre-built Android APK Download
 
-You can directly install TetherPass on your Android phone without needing to compile:
-- **Universal Release Binary**: [`apk/TetherPass_v2.apk`](apk/TetherPass_v2.apk)
+You can directly install TetherPass on your Android phone:
+- **⬇️ Direct Download Latest APK**: [**TetherPass.apk (v1.2.1)**](https://github.com/oprasannakumar/TetherPass/releases/latest/download/TetherPass.apk)
+- **🏷️ All Releases & Release Notes**: [GitHub Releases Page](https://github.com/oprasannakumar/TetherPass/releases)
 
 ---
 
