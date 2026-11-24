@@ -5,7 +5,7 @@
  */
 
 let currentVaultItems = [];
-let currentTab = 'cards';
+let currentTab = 'credit';
 let currentGoogleAccount = null;
 let currentOAuthToken = null;
 let localBackupPayload = null;
@@ -1643,7 +1643,8 @@ function hideMessages() {
 }
 
 function updateCounts() {
-  const cardsCount = document.getElementById('cardsCount');
+  const creditCount = document.getElementById('creditCount');
+  const debitCount = document.getElementById('debitCount');
   const banksCount = document.getElementById('banksCount');
   const pwdCount = document.getElementById('pwdCount');
 
@@ -1652,7 +1653,11 @@ function updateCounts() {
   const passwords = currentVaultItems.passwords || [];
   const pwdBanks = banks.filter(b => b.loginPassword || b.profilePassword || b.mpin);
 
-  if (cardsCount) cardsCount.textContent = cards.length;
+  const creditCards = cards.filter(c => !c.isDebit);
+  const debitCards = cards.filter(c => c.isDebit);
+
+  if (creditCount) creditCount.textContent = creditCards.length;
+  if (debitCount) debitCount.textContent = debitCards.length;
   if (banksCount) banksCount.textContent = banks.reduce((sum, b) => sum + (b.accounts?.length || 1), 0);
   if (pwdCount) pwdCount.textContent = passwords.length + pwdBanks.length;
 }
@@ -1663,8 +1668,10 @@ function renderVaultList(query = '') {
 
   list.innerHTML = '';
 
-  if (currentTab === 'cards') {
+  if (currentTab === 'credit' || currentTab === 'debit') {
+    const isDebitTab = currentTab === 'debit';
     const cards = (currentVaultItems.cards || []).filter(c => {
+      if (isDebitTab ? !c.isDebit : c.isDebit) return false;
       if (!query) return true;
       return (c.bankName || '').toLowerCase().includes(query) ||
              (c.nickname || '').toLowerCase().includes(query) ||
@@ -1672,7 +1679,7 @@ function renderVaultList(query = '') {
     });
 
     if (cards.length === 0) {
-      list.innerHTML = '<div style="padding:20px;text-align:center;color:#8892B0;font-size:12px;">No matching cards found.</div>';
+      list.innerHTML = `<div style="padding:20px;text-align:center;color:#8892B0;font-size:12px;">No matching ${isDebitTab ? 'debit' : 'credit'} cards found.</div>`;
       return;
     }
 
@@ -1680,14 +1687,17 @@ function renderVaultList(query = '') {
       const tile = document.createElement('div');
       tile.className = 'card-tile';
       const rawNum = String(card.cardNumber || '').replace(/\s+/g, '');
-      const formattedNum = rawNum.replace(/(\d{4})/g, '$1 ').trim();
+      const last4 = rawNum.length >= 4 ? rawNum.slice(-4) : (rawNum || '••••');
 
       tile.innerHTML = `
         <div class="tile-header">
           <span class="tile-title">${escapeHtml(card.nickname)} (${escapeHtml(card.bankName)})</span>
-          <span class="tile-badge">${card.isDebit ? 'DEBIT' : 'CREDIT'}</span>
+          <span class="tile-badge ${card.isDebit ? 'badge-debit' : ''}">${card.isDebit ? 'DEBIT' : 'CREDIT'}</span>
         </div>
-        <div class="tile-number">${formattedNum || '•••• •••• •••• ••••'}</div>
+        <div class="tile-number" style="display:flex;align-items:center;gap:6px;">
+          <span style="color:var(--text-dim);font-weight:400;letter-spacing:2px;">•••• •••• ••••</span>
+          <span style="color:var(--electric-mint);font-weight:800;background:rgba(0,245,160,0.12);padding:1px 6px;border-radius:4px;border:1px solid rgba(0,245,160,0.3);letter-spacing:1px;">${last4}</span>
+        </div>
         <div class="tile-actions">
           <button class="copy-chip fill-page-chip" title="Autofill this card into current active web page">⚡ Fill Page</button>
           <button class="copy-chip" data-copy="${rawNum}">Copy Number</button>
