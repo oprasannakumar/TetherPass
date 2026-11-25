@@ -1821,6 +1821,8 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                   textInputAction: TextInputAction.next,
                   maxLength: 4,
                   obscureText: true,
+                  autocorrect: false,
+                  enableSuggestions: false,
                   onTap: _checkClipboardForCvv,
                   onChanged: (val) {
                     if (_cardCvvError != null) setState(() => _cardCvvError = null);
@@ -2658,6 +2660,13 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
                 TextField(
                   controller: _pwdPasswordCtrl,
                   obscureText: !_pwdPasswordVisible,
+                  keyboardType: _pwdPasswordVisible ? TextInputType.text : TextInputType.visiblePassword,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textCapitalization: TextCapitalization.none,
+                  onChanged: (val) {
+                    if (_pwdPasswordError != null) setState(() => _pwdPasswordError = null);
+                  },
                   style: CyberTypography.monoData.copyWith(color: Colors.white, fontSize: 14, letterSpacing: 1.2),
                   decoration: InputDecoration(
                     labelText: 'Password',

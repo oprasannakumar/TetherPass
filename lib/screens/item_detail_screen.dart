@@ -84,7 +84,13 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
 
   void _copyToClipboard(String label, String value) {
     if (value.isEmpty) return;
-    ClipboardService.copySecure(context, value, label: label);
+    try {
+      ClipboardService.copySecure(context, value, label: label).catchError((e) {
+        debugPrint('[ItemDetailScreen] copySecure error: $e');
+      });
+    } catch (e) {
+      debugPrint('[ItemDetailScreen] _copyToClipboard synchronous error: $e');
+    }
   }
 
   Future<void> _launchPortal(String rawUrl) async {
@@ -567,47 +573,51 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
           const SizedBox(height: 12),
 
           // Password Field with Eye toggle and copy
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.lock_outline_rounded, color: Color(0xFF818CF8), size: 18),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('PASSWORD', style: TextStyle(color: hintColor, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                      const SizedBox(height: 2),
-                      _isLoginPasswordRevealed
-                          ? Text(
-                              _item.loginPassword.isEmpty ? '—' : _item.loginPassword,
-                              style: const TextStyle(color: Color(0xFFFFB300), fontFamily: 'Courier', fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1),
-                            )
-                          : const Text(
-                              '••••••••••••',
-                              style: TextStyle(color: Colors.white70, fontSize: 16, letterSpacing: 3),
-                            ),
-                    ],
+          InkWell(
+            onTap: () => _copyToClipboard('Password', _item.loginPassword),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.lock_outline_rounded, color: Color(0xFF818CF8), size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('PASSWORD', style: TextStyle(color: hintColor, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                        const SizedBox(height: 2),
+                        _isLoginPasswordRevealed
+                            ? Text(
+                                _item.loginPassword.isEmpty ? '—' : _item.loginPassword,
+                                style: const TextStyle(color: Color(0xFFFFB300), fontFamily: 'Courier', fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+                              )
+                            : const Text(
+                                '••••••••••••',
+                                style: TextStyle(color: Colors.white70, fontSize: 16, letterSpacing: 3),
+                              ),
+                      ],
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: Icon(_isLoginPasswordRevealed ? Icons.visibility_rounded : Icons.visibility_off_rounded, size: 18, color: Colors.white70),
-                  tooltip: _isLoginPasswordRevealed ? 'Hide' : 'Reveal',
-                  onPressed: () => setState(() => _isLoginPasswordRevealed = !_isLoginPasswordRevealed),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.copy_rounded, size: 18, color: Colors.white70),
-                  tooltip: 'Copy Password',
-                  onPressed: () => _copyToClipboard('Password', _item.loginPassword),
-                ),
-              ],
+                  IconButton(
+                    icon: Icon(_isLoginPasswordRevealed ? Icons.visibility_rounded : Icons.visibility_off_rounded, size: 18, color: Colors.white70),
+                    tooltip: _isLoginPasswordRevealed ? 'Hide' : 'Reveal',
+                    onPressed: () => setState(() => _isLoginPasswordRevealed = !_isLoginPasswordRevealed),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy_rounded, size: 18, color: Colors.white70),
+                    tooltip: 'Copy Password',
+                    onPressed: () => _copyToClipboard('Password', _item.loginPassword),
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -830,7 +840,12 @@ ${_item.notes.isNotEmpty ? '📝 Notes: ${_item.notes}' : ''}
                 children: List.generate(_item.passwordHistory.length, (idx) {
                   final entry = _item.passwordHistory[idx];
                   final isRevealed = _revealedHistoryIndexes.contains(idx);
-                  final dtStr = DateFormat('dd MMM yyyy, hh:mm a').format(entry.changedAt);
+                  String dtStr;
+                  try {
+                    dtStr = DateFormat('dd MMM yyyy, hh:mm a').format(entry.changedAt);
+                  } catch (_) {
+                    dtStr = entry.changedAt.toString().split('.')[0];
+                  }
 
                   return Container(
                     margin: const EdgeInsets.only(top: 8),
