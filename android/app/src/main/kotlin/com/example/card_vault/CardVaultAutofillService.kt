@@ -28,257 +28,299 @@ class CardVaultAutofillService : AutofillService() {
         cancellationSignal: CancellationSignal,
         callback: FillCallback
     ) {
-        val fillContext = request.fillContexts.lastOrNull()
-        val structure = fillContext?.structure
-        if (structure == null) {
-            callback.onSuccess(null)
-            return
-        }
-
-        val targetPackage = structure.activityComponent?.packageName?.lowercase() ?: ""
-
-        val detector = AutofillFieldDetector()
-        for (i in 0 until structure.windowNodeCount) {
-            val window = structure.getWindowNodeAt(i)
-            detector.traverse(window.rootViewNode)
-        }
-
-        // 1. If vault is locked in RAM or app is not running, NEVER prompt or show autofill
-        if (!AutofillBridge.isUnlocked) {
-            callback.onSuccess(null)
-            return
-        }
-
-        // 2. Strict Payment Page detection (must have card number field or expiry + cvv)
-        val hasTotpFields = detector.totp != null
-        val hasCardFields = (detector.cardNumber != null || (detector.expiry != null && detector.cvv != null)) &&
-                !hasTotpFields
-
-        // 3. Strict Login Page detection (must have password field or 2FA/TOTP field)
-        // Standalone email/phone fields without a password field are NOT login pages!
-        val hasLoginFields = detector.password != null || hasTotpFields
-
-        if (!hasCardFields && !hasLoginFields) {
-            callback.onSuccess(null)
-            return
-        }
-
-        val cards = AutofillBridge.getCards()
-        val passwords = AutofillBridge.getPasswords()
-        if (cards.isEmpty() && passwords.isEmpty()) {
-            callback.onSuccess(null)
-            return
-        }
-
-        val responseBuilder = FillResponse.Builder()
-        val inlineRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            request.inlineSuggestionsRequest
-        } else null
-
-        val specs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlineRequest != null) {
-            inlineRequest.inlinePresentationSpecs
-        } else null
-
-        // ── 0. 2FA / TOTP VERIFICATION CODES AUTOFILL ──
-        if (hasTotpFields && passwords.isNotEmpty()) {
-            val passwordsWithTotp = passwords.filter { it.totpSecret.isNotEmpty() }
-            val matchingTotp = passwordsWithTotp.filter { pwd ->
-                val cleanWeb = cleanDomain(pwd.website)
-                val domainRoot = extractDomainRoot(pwd.website)
-                val nick = pwd.nickname.lowercase().trim()
-
-                val webMatch = detector.webDomains.any { dom ->
-                    cleanWeb.isNotEmpty() && (
-                        dom == cleanWeb ||
-                        dom.endsWith(".$cleanWeb") ||
-                        cleanWeb.endsWith(".$dom") ||
-                        (domainRoot.length >= 3 && dom.contains(domainRoot))
-                    )
-                }
-
-                val pkgMatch = targetPackage.isNotEmpty() && (
-                    (domainRoot.length >= 3 && targetPackage.contains(domainRoot)) ||
-                    (nick.length >= 3 && targetPackage.contains(nick))
-                )
-
-                webMatch || pkgMatch
-            }.let { filtered ->
-                if (filtered.isNotEmpty()) filtered else passwordsWithTotp
+        try {
+            val fillContext = request.fillContexts.lastOrNull()
+            val structure = fillContext?.structure
+            if (structure == null) {
+                callback.onSuccess(null)
+                return
             }
 
-            for (pwd in matchingTotp) {
-                val totpCode = TotpGenerator.generateCurrentCode(pwd.totpSecret) ?: continue
-                val datasetBuilder = Dataset.Builder()
-                val displayTitle = "⚡ $totpCode"
-                val displaySub = if (pwd.nickname.isNotEmpty()) pwd.nickname else pwd.website.ifEmpty { "2FA Code" }
+            val targetPackage = structure.activityComponent?.packageName?.lowercase() ?: ""
 
-                var inlinePresentation: InlinePresentation? = null
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && specs != null && specs.isNotEmpty()) {
-                    try {
-                        val spec = specs[0]
-                        val emptyIntent = PendingIntent.getActivity(
-                            applicationContext,
-                            0,
-                            Intent(),
-                            PendingIntent.FLAG_IMMUTABLE
+            // NEVER attempt to autofill TetherPass inside itself (creating/editing credentials or cards)
+            if (targetPackage.isEmpty() || targetPackage == packageName.lowercase() || targetPackage == applicationContext.packageName.lowercase()) {
+                callback.onSuccess(null)
+                return
+            }
+
+            val detector = AutofillFieldDetector()
+            for (i in 0 until structure.windowNodeCount) {
+                val window = structure.getWindowNodeAt(i)
+                detector.traverse(window.rootViewNode)
+            }
+
+            // 1. If vault is locked in RAM or app is not running, NEVER prompt or show autofill
+            if (!AutofillBridge.isUnlocked) {
+                callback.onSuccess(null)
+                return
+            }
+
+            // 2. Strict Payment Page detection (must have card number field or expiry + cvv)
+            val hasTotpFields = detector.totp != null
+            val hasCardFields = (detector.cardNumber != null || (detector.expiry != null && detector.cvv != null)) &&
+                    !hasTotpFields
+
+            // 3. Strict Login Page detection (must have password field or 2FA/TOTP field)
+            val hasLoginFields = detector.password != null || hasTotpFields
+
+            if (!hasCardFields && !hasLoginFields) {
+                callback.onSuccess(null)
+                return
+            }
+
+            val cards = AutofillBridge.getCards()
+            val passwords = AutofillBridge.getPasswords()
+            if (cards.isEmpty() && passwords.isEmpty()) {
+                callback.onSuccess(null)
+                return
+            }
+
+            val responseBuilder = FillResponse.Builder()
+            var hasDatasets = false
+
+            val inlineRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                request.inlineSuggestionsRequest
+            } else null
+
+            val specs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlineRequest != null) {
+                inlineRequest.inlinePresentationSpecs
+            } else null
+
+            // ── 0. 2FA / TOTP VERIFICATION CODES AUTOFILL ──
+            if (hasTotpFields && passwords.isNotEmpty()) {
+                val passwordsWithTotp = passwords.filter { it.totpSecret.isNotEmpty() }
+                val matchingTotp = passwordsWithTotp.filter { pwd ->
+                    val cleanWeb = cleanDomain(pwd.website)
+                    val domainRoot = extractDomainRoot(pwd.website)
+                    val nick = pwd.nickname.lowercase().trim()
+
+                    val webMatch = detector.webDomains.any { dom ->
+                        cleanWeb.isNotEmpty() && (
+                            dom == cleanWeb ||
+                            dom.endsWith(".$cleanWeb") ||
+                            cleanWeb.endsWith(".$dom") ||
+                            (domainRoot.length >= 3 && dom.contains(domainRoot))
                         )
-                        val contentBuilder = InlineSuggestionUi.newContentBuilder(emptyIntent)
-                            .setTitle(displayTitle)
-                            .setContentDescription(displayTitle)
-                            .setSubtitle(displaySub)
+                    }
 
-                        val slice = contentBuilder.build().slice
-                        inlinePresentation = InlinePresentation(slice, spec, false)
-                    } catch (_: Exception) {}
-                }
-
-                val afVal = AutofillValue.forText(totpCode)
-                val fieldRemoteViews = RemoteViews(packageName, R.layout.autofill_dropdown_item).apply {
-                    setTextViewText(R.id.autofill_title, displayTitle)
-                    setTextViewText(R.id.autofill_subtitle, "🔐 $displaySub")
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
-                    datasetBuilder.setValue(detector.totp!!.id, afVal, fieldRemoteViews, inlinePresentation)
-                } else {
-                    datasetBuilder.setValue(detector.totp!!.id, afVal, fieldRemoteViews)
-                }
-
-                responseBuilder.addDataset(datasetBuilder.build())
-            }
-        }
-
-        // ── 1. LOGIN CREDENTIALS AUTOFILL (Only when username or password input is present) ──
-        val hasDirectLoginFields = detector.username != null || detector.password != null
-        if (hasDirectLoginFields && passwords.isNotEmpty()) {
-            val matchingPasswords = passwords.filter { pwd ->
-                val cleanWeb = cleanDomain(pwd.website)
-                val domainRoot = extractDomainRoot(pwd.website)
-                val nick = pwd.nickname.lowercase().trim()
-
-                // Check webDomain (if inside browser like Chrome, Firefox, or WebView)
-                val webMatch = detector.webDomains.any { dom ->
-                    cleanWeb.isNotEmpty() && (
-                        dom == cleanWeb ||
-                        dom.endsWith(".$cleanWeb") ||
-                        cleanWeb.endsWith(".$dom") ||
-                        (domainRoot.length >= 3 && dom.contains(domainRoot))
+                    val pkgMatch = targetPackage.isNotEmpty() && (
+                        (domainRoot.length >= 3 && targetPackage.contains(domainRoot)) ||
+                        (nick.length >= 3 && targetPackage.contains(nick))
                     )
+
+                    webMatch || pkgMatch
+                }.let { filtered ->
+                    if (filtered.isNotEmpty()) filtered else passwordsWithTotp
                 }
 
-                // Check package name (e.g. in.amazon.mShop.android.shopping contains "amazon")
-                val pkgMatch = targetPackage.isNotEmpty() && (
-                    (domainRoot.length >= 3 && targetPackage.contains(domainRoot)) ||
-                    (nick.length >= 3 && targetPackage.contains(nick))
-                )
+                for (pwd in matchingTotp) {
+                    val totpCode = TotpGenerator.generateCurrentCode(pwd.totpSecret) ?: continue
+                    val datasetBuilder = Dataset.Builder()
+                    val displayTitle = "⚡ $totpCode"
+                    val displaySub = if (pwd.nickname.isNotEmpty()) pwd.nickname else pwd.website.ifEmpty { "2FA Code" }
 
-                webMatch || pkgMatch
-            }.let { filtered ->
-                if (filtered.isEmpty()) passwords else filtered
-            }
+                    var inlinePresentation: InlinePresentation? = null
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && specs != null && specs.isNotEmpty()) {
+                        try {
+                            val spec = specs[0]
+                            val emptyIntent = PendingIntent.getActivity(
+                                applicationContext,
+                                0,
+                                Intent(),
+                                PendingIntent.FLAG_IMMUTABLE
+                            )
+                            val contentBuilder = InlineSuggestionUi.newContentBuilder(emptyIntent)
+                                .setTitle(displayTitle)
+                                .setContentDescription(displayTitle)
+                                .setSubtitle(displaySub)
 
-            for (pwd in matchingPasswords) {
-                val datasetBuilder = Dataset.Builder()
-                val displayTitle = if (pwd.nickname.isNotEmpty()) pwd.nickname else pwd.website.ifEmpty { "Login" }
-                val displaySub = if (pwd.username.isNotEmpty()) pwd.username else "Password"
+                            val slice = contentBuilder.build().slice
+                            inlinePresentation = InlinePresentation(slice, spec, false)
+                        } catch (_: Exception) {}
+                    }
 
-                var inlinePresentation: InlinePresentation? = null
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && specs != null && specs.isNotEmpty()) {
-                    try {
-                        val spec = specs[0]
-                        val emptyIntent = PendingIntent.getActivity(
-                            applicationContext,
-                            0,
-                            Intent(),
-                            PendingIntent.FLAG_IMMUTABLE
-                        )
-                        val contentBuilder = InlineSuggestionUi.newContentBuilder(emptyIntent)
-                            .setTitle(displayTitle)
-                            .setContentDescription(displayTitle)
-                            .setSubtitle(displaySub)
-
-                        val slice = contentBuilder.build().slice
-                        inlinePresentation = InlinePresentation(slice, spec, false)
-                    } catch (_: Exception) {}
-                }
-
-                fun applyLoginField(field: FieldInfo?, value: String) {
-                    if (field == null || value.isEmpty()) return
-                    val afVal = AutofillValue.forText(value)
+                    val afVal = AutofillValue.forText(totpCode)
                     val fieldRemoteViews = RemoteViews(packageName, R.layout.autofill_dropdown_item).apply {
                         setTextViewText(R.id.autofill_title, displayTitle)
-                        setTextViewText(R.id.autofill_subtitle, "👤 $displaySub")
+                        setTextViewText(R.id.autofill_subtitle, "🔐 $displaySub")
                     }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
-                        datasetBuilder.setValue(field.id, afVal, fieldRemoteViews, inlinePresentation)
-                    } else {
-                        datasetBuilder.setValue(field.id, afVal, fieldRemoteViews)
+                    if (detector.totp != null) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
+                            datasetBuilder.setValue(detector.totp!!.id, afVal, fieldRemoteViews, inlinePresentation)
+                        } else {
+                            datasetBuilder.setValue(detector.totp!!.id, afVal, fieldRemoteViews)
+                        }
+                        try {
+                            responseBuilder.addDataset(datasetBuilder.build())
+                            hasDatasets = true
+                        } catch (e: Exception) {
+                            Log.e("CardVaultAutofill", "Error building TOTP dataset", e)
+                        }
                     }
                 }
-
-                applyLoginField(detector.username, pwd.username)
-                applyLoginField(detector.password, pwd.password)
-
-                responseBuilder.addDataset(datasetBuilder.build())
             }
-        }
 
-        // ── 2. PAYMENT CARDS AUTOFILL ──
-        if (hasCardFields && cards.isNotEmpty()) {
-            for (card in cards) {
-                val datasetBuilder = Dataset.Builder()
-                val last4 = if (card.cardNumber.length >= 4) card.cardNumber.takeLast(4) else card.cardNumber
-                val sub = if (card.expiry.isNotEmpty()) "•••• $last4  |  Exp: ${card.expiry}" else "•••• $last4"
+            // ── 1. LOGIN CREDENTIALS AUTOFILL (Only when username or password input is present) ──
+            val hasDirectLoginFields = detector.username != null || detector.password != null
+            if (hasDirectLoginFields && passwords.isNotEmpty()) {
+                val matchingPasswords = passwords.filter { pwd ->
+                    val cleanWeb = cleanDomain(pwd.website)
+                    val domainRoot = extractDomainRoot(pwd.website)
+                    val nick = pwd.nickname.lowercase().trim()
 
-                var inlinePresentation: InlinePresentation? = null
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && specs != null && specs.isNotEmpty()) {
-                    try {
-                        val spec = specs[0]
-                        val emptyIntent = PendingIntent.getActivity(
-                            applicationContext,
-                            0,
-                            Intent(),
-                            PendingIntent.FLAG_IMMUTABLE
+                    // Check webDomain (if inside browser like Chrome, Firefox, or WebView)
+                    val webMatch = detector.webDomains.any { dom ->
+                        cleanWeb.isNotEmpty() && (
+                            dom == cleanWeb ||
+                            dom.endsWith(".$cleanWeb") ||
+                            cleanWeb.endsWith(".$dom") ||
+                            (domainRoot.length >= 3 && dom.contains(domainRoot))
                         )
-                        val contentBuilder = InlineSuggestionUi.newContentBuilder(emptyIntent)
-                            .setTitle(card.nickname)
-                            .setContentDescription(card.nickname)
-                            .setSubtitle("•••• $last4")
+                    }
 
-                        val slice = contentBuilder.build().slice
-                        inlinePresentation = InlinePresentation(slice, spec, false)
-                    } catch (_: Exception) {}
+                    // Check package name (e.g. in.amazon.mShop.android.shopping contains "amazon")
+                    val pkgMatch = targetPackage.isNotEmpty() && (
+                        (domainRoot.length >= 3 && targetPackage.contains(domainRoot)) ||
+                        (nick.length >= 3 && targetPackage.contains(nick))
+                    )
+
+                    webMatch || pkgMatch
+                }.let { filtered ->
+                    if (filtered.isNotEmpty()) filtered else passwords
                 }
 
-                val expiryParts = card.expiry.split('/')
-                val expiryMonth = if (expiryParts.isNotEmpty()) expiryParts[0].trim() else ""
-                val expiryYear = if (expiryParts.size > 1) expiryParts[1].trim() else ""
+                for (pwd in matchingPasswords) {
+                    val datasetBuilder = Dataset.Builder()
+                    val displayTitle = if (pwd.nickname.isNotEmpty()) pwd.nickname else pwd.website.ifEmpty { "Login" }
+                    val displaySub = if (pwd.username.isNotEmpty()) pwd.username else "Password"
 
-                fun applyField(field: FieldInfo?, value: String, isM: Boolean = false, isY: Boolean = false) {
-                    if (field == null || value.isEmpty()) return
-                    val afVal = getAutofillValue(field, value, isM, isY) ?: return
-                    val fieldRemoteViews = RemoteViews(packageName, R.layout.autofill_dropdown_item).apply {
-                        setTextViewText(R.id.autofill_title, card.nickname)
-                        setTextViewText(R.id.autofill_subtitle, sub)
+                    var inlinePresentation: InlinePresentation? = null
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && specs != null && specs.isNotEmpty()) {
+                        try {
+                            val spec = specs[0]
+                            val emptyIntent = PendingIntent.getActivity(
+                                applicationContext,
+                                0,
+                                Intent(),
+                                PendingIntent.FLAG_IMMUTABLE
+                            )
+                            val contentBuilder = InlineSuggestionUi.newContentBuilder(emptyIntent)
+                                .setTitle(displayTitle)
+                                .setContentDescription(displayTitle)
+                                .setSubtitle(displaySub)
+
+                            val slice = contentBuilder.build().slice
+                            inlinePresentation = InlinePresentation(slice, spec, false)
+                        } catch (_: Exception) {}
                     }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
-                        datasetBuilder.setValue(field.id, afVal, fieldRemoteViews, inlinePresentation)
-                    } else {
-                        datasetBuilder.setValue(field.id, afVal, fieldRemoteViews)
+
+                    fun applyLoginField(field: FieldInfo?, value: String): Boolean {
+                        if (field == null || value.isEmpty()) return false
+                        val afVal = AutofillValue.forText(value)
+                        val fieldRemoteViews = RemoteViews(packageName, R.layout.autofill_dropdown_item).apply {
+                            setTextViewText(R.id.autofill_title, displayTitle)
+                            setTextViewText(R.id.autofill_subtitle, "👤 $displaySub")
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
+                            datasetBuilder.setValue(field.id, afVal, fieldRemoteViews, inlinePresentation)
+                        } else {
+                            datasetBuilder.setValue(field.id, afVal, fieldRemoteViews)
+                        }
+                        return true
+                    }
+
+                    var fieldsSet = 0
+                    if (applyLoginField(detector.username, pwd.username)) fieldsSet++
+                    if (applyLoginField(detector.password, pwd.password)) fieldsSet++
+
+                    // ONLY build dataset if at least one field was actually set!
+                    if (fieldsSet > 0) {
+                        try {
+                            responseBuilder.addDataset(datasetBuilder.build())
+                            hasDatasets = true
+                        } catch (e: Exception) {
+                            Log.e("CardVaultAutofill", "Error building login dataset", e)
+                        }
                     }
                 }
-
-                applyField(detector.cardNumber, card.cardNumber)
-                applyField(detector.holder, card.cardHolder)
-                applyField(detector.expiry, card.expiry)
-                applyField(detector.expiryMonth, expiryMonth, isM = true)
-                applyField(detector.expiryYear, expiryYear, isY = true)
-                applyField(detector.cvv, card.cvv)
-
-                responseBuilder.addDataset(datasetBuilder.build())
             }
-        }
 
-        callback.onSuccess(responseBuilder.build())
+            // ── 2. PAYMENT CARDS AUTOFILL ──
+            if (hasCardFields && cards.isNotEmpty()) {
+                for (card in cards) {
+                    val datasetBuilder = Dataset.Builder()
+                    val last4 = if (card.cardNumber.length >= 4) card.cardNumber.takeLast(4) else card.cardNumber
+                    val sub = if (card.expiry.isNotEmpty()) "•••• $last4  |  Exp: ${card.expiry}" else "•••• $last4"
+
+                    var inlinePresentation: InlinePresentation? = null
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && specs != null && specs.isNotEmpty()) {
+                        try {
+                            val spec = specs[0]
+                            val emptyIntent = PendingIntent.getActivity(
+                                applicationContext,
+                                0,
+                                Intent(),
+                                PendingIntent.FLAG_IMMUTABLE
+                            )
+                            val contentBuilder = InlineSuggestionUi.newContentBuilder(emptyIntent)
+                                .setTitle(card.nickname)
+                                .setContentDescription(card.nickname)
+                                .setSubtitle("•••• $last4")
+
+                            val slice = contentBuilder.build().slice
+                            inlinePresentation = InlinePresentation(slice, spec, false)
+                        } catch (_: Exception) {}
+                    }
+
+                    val expiryParts = card.expiry.split('/')
+                    val expiryMonth = if (expiryParts.isNotEmpty()) expiryParts[0].trim() else ""
+                    val expiryYear = if (expiryParts.size > 1) expiryParts[1].trim() else ""
+
+                    fun applyField(field: FieldInfo?, value: String, isM: Boolean = false, isY: Boolean = false): Boolean {
+                        if (field == null || value.isEmpty()) return false
+                        val afVal = getAutofillValue(field, value, isM, isY) ?: return false
+                        val fieldRemoteViews = RemoteViews(packageName, R.layout.autofill_dropdown_item).apply {
+                            setTextViewText(R.id.autofill_title, card.nickname)
+                            setTextViewText(R.id.autofill_subtitle, sub)
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && inlinePresentation != null) {
+                            datasetBuilder.setValue(field.id, afVal, fieldRemoteViews, inlinePresentation)
+                        } else {
+                            datasetBuilder.setValue(field.id, afVal, fieldRemoteViews)
+                        }
+                        return true
+                    }
+
+                    var cardFieldsSet = 0
+                    if (applyField(detector.cardNumber, card.cardNumber)) cardFieldsSet++
+                    if (applyField(detector.holder, card.cardHolder)) cardFieldsSet++
+                    if (applyField(detector.expiry, card.expiry)) cardFieldsSet++
+                    if (applyField(detector.expiryMonth, expiryMonth, isM = true)) cardFieldsSet++
+                    if (applyField(detector.expiryYear, expiryYear, isY = true)) cardFieldsSet++
+                    if (applyField(detector.cvv, card.cvv)) cardFieldsSet++
+
+                    // ONLY build dataset if at least one field was actually set!
+                    if (cardFieldsSet > 0) {
+                        try {
+                            responseBuilder.addDataset(datasetBuilder.build())
+                            hasDatasets = true
+                        } catch (e: Exception) {
+                            Log.e("CardVaultAutofill", "Error building card dataset", e)
+                        }
+                    }
+                }
+            }
+
+            if (hasDatasets) {
+                callback.onSuccess(responseBuilder.build())
+            } else {
+                callback.onSuccess(null)
+            }
+        } catch (e: Throwable) {
+            Log.e("CardVaultAutofill", "Fatal error in onFillRequest", e)
+            callback.onSuccess(null)
+        }
     }
 
     private fun getAutofillValue(
