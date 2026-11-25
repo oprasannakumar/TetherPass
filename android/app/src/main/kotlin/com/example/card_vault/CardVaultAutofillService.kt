@@ -16,6 +16,7 @@ import android.service.autofill.SaveRequest
 import android.text.InputType
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
+import android.util.Log
 import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
 import androidx.autofill.inline.v1.InlineSuggestionUi
