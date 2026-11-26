@@ -44,17 +44,17 @@ class TotpQrScannerDialog extends StatefulWidget {
     BuildContext context, {
     QrScannerTarget target = QrScannerTarget.totp2FA,
   }) async {
-    final reason = target == QrScannerTarget.desktopPairing
-        ? 'Scan fingerprint to authorize Desktop Pairing Scanner'
-        : 'Scan fingerprint to authorize QR Code Scanner';
+    // Only Desktop Pairing Scanner requires biometric authorization.
+    // 2FA TOTP QR scanning opens immediately without authentication.
+    if (target == QrScannerTarget.desktopPairing) {
+      final authorized = await BiometricAuthHelper.authenticate(
+        context,
+        reason: 'Scan fingerprint to authorize Desktop Pairing Scanner',
+        title: 'Scanner Biometric Authorization',
+      );
 
-    final authorized = await BiometricAuthHelper.authenticate(
-      context,
-      reason: reason,
-      title: 'Scanner Biometric Authorization',
-    );
-
-    if (!authorized || !context.mounted) return null;
+      if (!authorized || !context.mounted) return null;
+    }
 
     return showModalBottomSheet<TotpQrScanResult>(
       context: context,

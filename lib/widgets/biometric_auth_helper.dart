@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
+import '../services/auto_lock_service.dart';
 import '../services/vault_security_service.dart';
 import '../theme/cyber_theme.dart';
 
@@ -15,19 +16,26 @@ class BiometricAuthHelper {
     String title = 'Scanner Biometric Authorization',
   }) async {
     try {
+      AutoLockService.isAuthenticating = true;
       final auth = context.read<AuthService>();
       final sec = context.read<VaultSecurityService>();
       final isBio = await sec.isBiometricEnabled();
       final canAuth = await auth.canAuthenticate();
+      final hasBioHardware = await auth.isBiometricAvailable();
 
-      if (isBio && canAuth) {
+      if (hasBioHardware || (isBio && canAuth)) {
         final success = await auth.authenticate(
           reason: reason,
           title: title,
         );
+        AutoLockService.isAuthenticating = false;
         if (success) return true;
       }
-    } catch (_) {}
+    } catch (_) {
+      AutoLockService.isAuthenticating = false;
+    } finally {
+      AutoLockService.isAuthenticating = false;
+    }
 
     if (!context.mounted) return false;
 
