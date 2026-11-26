@@ -10,6 +10,7 @@ import '../services/vault_security_service.dart';
 import '../theme/cyber_theme.dart';
 import '../widgets/totp_qr_scanner_dialog.dart';
 import '../widgets/tether_sync_dialog.dart';
+import '../widgets/biometric_auth_helper.dart';
 
 /// Desktop Tether Relay Screen matching the "Cyber-Vault" dark cybersecurity glassmorphic design.
 /// Communicates with live Google Drive sessions, real paired devices, and instant QR pairing.
@@ -236,8 +237,17 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
     final targetDevice = deviceName ?? 'Workstation Desktop (Windows MV3)';
     final drive = context.read<DriveService>();
     final sec = context.read<VaultSecurityService>();
-    final masterPwd = await sec.getMasterPassword();
-    if (!mounted) return;
+    var masterPwd = await sec.getMasterPassword();
+    if ((masterPwd == null || masterPwd.isEmpty) && mounted) {
+      final verified = await BiometricAuthHelper.promptMasterPassword(
+        context,
+        reason: 'Enter Master Password to authorize desktop pairing.',
+      );
+      if (verified) {
+        masterPwd = await sec.getMasterPassword();
+      }
+    }
+    if (masterPwd == null || masterPwd.isEmpty || !mounted) return;
 
     final ok = await TetherSyncDialog.run<bool>(
       context: context,

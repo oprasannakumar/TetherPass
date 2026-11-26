@@ -19,13 +19,13 @@ class AuthService {
     return biometrics.isNotEmpty;
   }
 
-  Future<bool> authenticate({String? reason}) async {
+  Future<bool> authenticate({String? reason, String? title}) async {
     try {
       return await _auth.authenticate(
         localizedReason: reason ?? 'Scan fingerprint to unlock TetherPass',
-        authMessages: const [
+        authMessages: [
           AndroidAuthMessages(
-            signInTitle: 'TetherPass Biometric Unlock',
+            signInTitle: title ?? 'TetherPass Biometric Unlock',
             cancelButton: 'Cancel',
           ),
         ],

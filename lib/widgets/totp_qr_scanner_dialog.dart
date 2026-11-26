@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/totp_service.dart';
 import '../theme/cyber_theme.dart';
+import 'biometric_auth_helper.dart';
 
 /// Result obtained from scanning a 2FA QR code
 class TotpQrScanResult {
@@ -42,7 +43,19 @@ class TotpQrScannerDialog extends StatefulWidget {
   static Future<TotpQrScanResult?> scan(
     BuildContext context, {
     QrScannerTarget target = QrScannerTarget.totp2FA,
-  }) {
+  }) async {
+    final reason = target == QrScannerTarget.desktopPairing
+        ? 'Scan fingerprint to authorize Desktop Pairing Scanner'
+        : 'Scan fingerprint to authorize QR Code Scanner';
+
+    final authorized = await BiometricAuthHelper.authenticate(
+      context,
+      reason: reason,
+      title: 'Scanner Biometric Authorization',
+    );
+
+    if (!authorized || !context.mounted) return null;
+
     return showModalBottomSheet<TotpQrScanResult>(
       context: context,
       isScrollControlled: true,

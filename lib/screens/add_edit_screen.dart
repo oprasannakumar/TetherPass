@@ -20,6 +20,7 @@ import '../theme/cyber_theme.dart';
 import '../widgets/card_input_formatter.dart';
 import '../widgets/card_widget.dart';
 import '../widgets/totp_qr_scanner_dialog.dart';
+import '../widgets/biometric_auth_helper.dart';
 
 class AddEditScreen extends StatefulWidget {
   final VaultItem? initialItem;
@@ -405,6 +406,13 @@ class _AddEditScreenState extends State<AddEditScreen> with SingleTickerProvider
   }
 
   Future<void> _startCardScan() async {
+    final authorized = await BiometricAuthHelper.authenticate(
+      context,
+      reason: 'Scan fingerprint to authorize Smart Card Scanner',
+      title: 'Scanner Biometric Authorization',
+    );
+    if (!authorized || !mounted) return;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: CyberColors.cardSurface,
