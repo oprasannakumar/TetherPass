@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../services/device_identity_service.dart';
 import '../services/drive_service.dart';
@@ -269,6 +272,52 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
     }
   }
 
+  Future<void> _exportExtensionZip({required bool share}) async {
+    HapticFeedback.lightImpact();
+    try {
+      final byteData = await rootBundle.load('assets/extension/tetherpass_extension.zip');
+      final bytes = byteData.buffer.asUint8List();
+
+      if (share) {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/TetherPass-Browser-Extension-v1.2.1.zip');
+        await file.writeAsBytes(bytes, flush: true);
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          subject: 'TetherPass Browser Extension',
+          text: 'TetherPass Browser Extension package for Chrome/Edge/Brave. Extract and Load Unpacked in chrome://extensions.',
+        );
+      } else {
+        File? savedFile;
+        final downloadDir = Directory('/storage/emulated/0/Download');
+        if (await downloadDir.exists()) {
+          try {
+            final target = File('${downloadDir.path}/TetherPass-Browser-Extension-v1.2.1.zip');
+            await target.writeAsBytes(bytes, flush: true);
+            savedFile = target;
+          } catch (_) {}
+        }
+        if (savedFile == null) {
+          final docsDir = await getApplicationDocumentsDirectory();
+          final target = File('${docsDir.path}/TetherPass-Browser-Extension-v1.2.1.zip');
+          await target.writeAsBytes(bytes, flush: true);
+          savedFile = target;
+        }
+
+        if (mounted) {
+          _showCyberSnackBar(
+            '✓ Extension saved to: ${savedFile.path}',
+            isSuccess: true,
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showCyberSnackBar('Failed to export extension: $e', isSuccess: false);
+      }
+    }
+  }
+
   Future<void> _renameDevice(String deviceId, String currentName) async {
     final ctrl = TextEditingController(text: currentName);
     final newName = await showDialog<String>(
@@ -468,6 +517,11 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
             onPressed: _isRefreshing ? null : _manualRefresh,
           ),
           IconButton(
+            icon: const Icon(Icons.download_rounded, color: CyberColors.laserCyan),
+            tooltip: 'Get Browser Extension (.zip)',
+            onPressed: () => _exportExtensionZip(share: true),
+          ),
+          IconButton(
             icon: const Icon(Icons.qr_code_scanner_rounded, color: CyberColors.electricMint),
             tooltip: 'Scan Desktop Extension QR',
             onPressed: _scanDesktopQrCode,
@@ -491,7 +545,11 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
               _buildQrPairingCard(),
               const SizedBox(height: 16),
 
-              // ── 3. Source Google Drive Channel ──────────────────────────
+              // ── 3. Embedded Browser Extension Package (.zip) ────────────
+              _buildExtensionPackageCard(),
+              const SizedBox(height: 16),
+
+              // ── 4. Source Google Drive Channel ──────────────────────────
               _buildDriveChannelCard(drive),
               const SizedBox(height: 16),
 
@@ -700,7 +758,156 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
     );
   }
 
-  // ─── 3. Source Google Drive Channel ───────────────────────────────────────
+  // ─── Browser Extension File & Setup Package Card ──────────────────────────
+  Widget _buildExtensionPackageCard() {
+    return CyberGlassCard(
+      padding: const EdgeInsets.all(16),
+      borderRadius: 16,
+      borderColor: const Color(0xFF1E293B),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: CyberColors.laserCyan.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: CyberColors.laserCyan.withValues(alpha: 0.35)),
+                ),
+                child: const Icon(Icons.extension_rounded, color: CyberColors.laserCyan, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'BROWSER EXTENSION PACKAGE',
+                            style: CyberTypography.hudTitle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: CyberColors.electricMint.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: CyberColors.electricMint.withValues(alpha: 0.4)),
+                          ),
+                          child: Text(
+                            'v1.2.1 OFFLINE',
+                            style: CyberTypography.mono(color: CyberColors.electricMint, fontSize: 9.5, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Ready-to-use package bundled in this app. Export & load into Chrome, Edge, or Brave without searching GitHub.',
+                      style: CyberTypography.body(color: CyberColors.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: CyberColors.laserCyan,
+                    side: BorderSide(color: CyberColors.laserCyan.withValues(alpha: 0.4)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.share_rounded, size: 16),
+                  label: Text('SEND TO PC', style: CyberTypography.mono(fontWeight: FontWeight.bold, fontSize: 11)),
+                  onPressed: () => _exportExtensionZip(share: true),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: CyberColors.elevatedSurface,
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Color(0xFF334155)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.download_rounded, size: 16, color: CyberColors.electricMint),
+                  label: Text('DOWNLOAD (.ZIP)', style: CyberTypography.mono(fontWeight: FontWeight.bold, fontSize: 11)),
+                  onPressed: () => _exportExtensionZip(share: false),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: CyberColors.elevatedSurface.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'QUICK SETUP ON COMPUTER:',
+                  style: CyberTypography.mono(color: CyberColors.textDim, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                _buildGuideStep('1', 'Send or extract the zip file on your PC or Mac.'),
+                _buildGuideStep('2', 'Open chrome://extensions or edge://extensions.'),
+                _buildGuideStep('3', 'Enable "Developer mode" (toggle in top right).'),
+                _buildGuideStep('4', 'Click "Load unpacked" & choose the extracted folder.'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuideStep(String number, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 16,
+            height: 16,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: CyberColors.laserCyan.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Text(number, style: const TextStyle(fontSize: 9.5, color: CyberColors.laserCyan, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: CyberTypography.body(color: Colors.white70, fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── 4. Source Google Drive Channel ───────────────────────────────────────
   Widget _buildDriveChannelCard(DriveService drive) {
     return CyberGlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
