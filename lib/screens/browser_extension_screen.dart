@@ -280,7 +280,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
 
       if (share) {
         final tempDir = await getTemporaryDirectory();
-        final file = File('${tempDir.path}/TetherPass-Browser-Extension-v1.2.1.zip');
+        final file = File('${tempDir.path}/TetherPass-Browser-Extension-v1.2.2.zip');
         await file.writeAsBytes(bytes, flush: true);
         await Share.shareXFiles(
           [XFile(file.path)],
@@ -292,14 +292,14 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
         final downloadDir = Directory('/storage/emulated/0/Download');
         if (await downloadDir.exists()) {
           try {
-            final target = File('${downloadDir.path}/TetherPass-Browser-Extension-v1.2.1.zip');
+            final target = File('${downloadDir.path}/TetherPass-Browser-Extension-v1.2.2.zip');
             await target.writeAsBytes(bytes, flush: true);
             savedFile = target;
           } catch (_) {}
         }
         if (savedFile == null) {
           final docsDir = await getApplicationDocumentsDirectory();
-          final target = File('${docsDir.path}/TetherPass-Browser-Extension-v1.2.1.zip');
+          final target = File('${docsDir.path}/TetherPass-Browser-Extension-v1.2.2.zip');
           await target.writeAsBytes(bytes, flush: true);
           savedFile = target;
         }
@@ -805,7 +805,7 @@ class _BrowserExtensionScreenState extends State<BrowserExtensionScreen>
                             border: Border.all(color: CyberColors.electricMint.withValues(alpha: 0.4)),
                           ),
                           child: Text(
-                            'v1.2.1 OFFLINE',
+                            'v1.2.2 OFFLINE',
                             style: CyberTypography.mono(color: CyberColors.electricMint, fontSize: 9.5, fontWeight: FontWeight.bold),
                           ),
                         ),
